@@ -1,0 +1,187 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'commands.dart';
+import 'models.dart';
+
+/// Encodes companion protocol frames (App → Radio).
+///
+/// Frame format: `[direction '<'][lengthLSB][lengthMSB][payload...]`
+class CompanionEncoder {
+  /// Build a raw companion frame.
+  static Uint8List _frame(int command, [Uint8List? payload]) {
+    final payloadData = payload ?? Uint8List(0);
+    final totalLen = 1 + payloadData.length; // command + payload
+    if (totalLen > maxPayload) {
+      throw ArgumentError('Payload exceeds max size ($maxPayload bytes)');
+    }
+    final buf = BytesBuilder();
+    buf.addByte(dirAppToRadio);
+    buf.addByte(totalLen & 0xFF);
+    buf.addByte((totalLen >> 8) & 0xFF);
+    buf.addByte(command);
+    buf.add(payloadData);
+    return buf.toBytes();
+  }
+
+  /// APP_START — initialize connection with the radio.
+  static Uint8List appStart(String appName) {
+    final reserved = Uint8List(7);
+    final nameBytes = utf8.encode(appName);
+    final payload = BytesBuilder();
+    payload.add(reserved);
+    payload.add(nameBytes);
+    return _frame(cmdAppStart, payload.toBytes());
+  }
+
+  /// SEND_MSG — send a private text message.
+  static Uint8List sendMessage(
+    Uint8List recipientPrefix,
+    String text, {
+    int attempt = 0,
+    int? timestamp,
+  }) {
+    final ts = timestamp ?? _nowEpoch();
+    final payload = BytesBuilder();
+    payload.addByte(txtPlain);
+    payload.addByte(attempt);
+    payload.add(_uint32LE(ts));
+    payload.add(recipientPrefix.sublist(0, 6));
+    payload.add(utf8.encode(text));
+    return _frame(cmdSendMsg, payload.toBytes());
+  }
+
+  /// SEND_CHAN_MSG — send a channel text message.
+  static Uint8List sendChannelMessage(
+    int channelIndex,
+    String text, {
+    int? timestamp,
+  }) {
+    final ts = timestamp ?? _nowEpoch();
+    final payload = BytesBuilder();
+    payload.addByte(txtPlain);
+    payload.addByte(channelIndex);
+    payload.add(_uint32LE(ts));
+    payload.add(utf8.encode(text));
+    return _frame(cmdSendChanMsg, payload.toBytes());
+  }
+
+  /// GET_CONTACTS — request the full contact list.
+  static Uint8List getContacts({int? sinceTimestamp}) {
+    if (sinceTimestamp != null) {
+      return _frame(cmdGetContacts, _uint32LE(sinceTimestamp));
+    }
+    return _frame(cmdGetContacts);
+  }
+
+  /// GET_DEVICE_TIME — query the radio's clock.
+  static Uint8List getDeviceTime() => _frame(cmdGetDeviceTime);
+
+  /// SET_DEVICE_TIME — set the radio's clock.
+  static Uint8List setDeviceTime(int timestamp) {
+    return _frame(cmdSetDeviceTime, _uint32LE(timestamp));
+  }
+
+  /// SEND_ADVERT — broadcast node identity.
+  static Uint8List sendAdvert({bool flood = false}) {
+    return _frame(cmdSendAdvert, Uint8List.fromList([flood ? 1 : 0]));
+  }
+
+  /// SET_ADVERT_NAME — set display name.
+  static Uint8List setAdvertName(String name) {
+    return _frame(cmdSetAdvertName, Uint8List.fromList(utf8.encode(name)));
+  }
+
+  /// SYNC_NEXT — get next pending message.
+  static Uint8List syncNext() => _frame(cmdSyncNext);
+
+  /// SET_RADIO_PARAMS — configure LoRa radio.
+  static Uint8List setRadioParams(RadioConfig config) {
+    final payload = BytesBuilder();
+    payload.add(_uint32LE(config.frequencyHz));
+    payload.add(_uint32LE(config.bandwidthHz));
+    payload.addByte(config.spreadingFactor);
+    payload.addByte(config.codingRate);
+    return _frame(cmdSetRadioParams, payload.toBytes());
+  }
+
+  /// SET_TX_POWER — set transmit power.
+  static Uint8List setTxPower(int powerDbm) {
+    return _frame(cmdSetTxPower, Uint8List.fromList([powerDbm & 0xFF]));
+  }
+
+  /// GET_BATT_AND_STORAGE — query battery and storage info.
+  static Uint8List getBattAndStorage() => _frame(cmdGetBattAndStorage);
+
+  /// DEVICE_QUERY — get device info.
+  static Uint8List deviceQuery({int appVersion = 3}) {
+    return _frame(cmdDeviceQuery, Uint8List.fromList([appVersion]));
+  }
+
+  /// GET_CHANNEL — get channel info by index.
+  static Uint8List getChannel(int index) {
+    return _frame(cmdGetChannel, Uint8List.fromList([index]));
+  }
+
+  /// SET_CHANNEL — create or update a channel.
+  /// Name is null-padded to 32 bytes; secret must be exactly 16 bytes.
+  static Uint8List setChannel(int index, String name, Uint8List secret) {
+    if (secret.length != 16) {
+      throw ArgumentError('Channel secret must be exactly 16 bytes');
+    }
+    final payload = BytesBuilder();
+    payload.addByte(index);
+    final nameBytes = utf8.encode(name);
+    final nameBuf = Uint8List(32);
+    final copyLen = nameBytes.length < 32 ? nameBytes.length : 32;
+    nameBuf.setRange(0, copyLen, nameBytes);
+    payload.add(nameBuf);
+    payload.add(secret);
+    return _frame(cmdSetChannel, payload.toBytes());
+  }
+
+  /// REBOOT — restart the radio.
+  static Uint8List reboot() => _frame(cmdReboot);
+
+  /// REMOVE_CONTACT — delete a contact by public key.
+  static Uint8List removeContact(Uint8List publicKey) {
+    return _frame(cmdRemoveContact, publicKey);
+  }
+
+  /// RESET_PATH — clear cached path to a contact.
+  static Uint8List resetPath(Uint8List publicKey) {
+    return _frame(cmdResetPath, publicKey);
+  }
+
+  /// SEND_TRACE_PATH — trace route to peer.
+  static Uint8List sendTracePath(Uint8List publicKey) {
+    return _frame(cmdSendTracePath, publicKey);
+  }
+
+  /// SET_ADVERT_LATLON — set GPS coordinates.
+  static Uint8List setAdvertLatLon(double lat, double lon) {
+    final payload = BytesBuilder();
+    payload.add(_int32LE((lat * 1e6).round()));
+    payload.add(_int32LE((lon * 1e6).round()));
+    return _frame(cmdSetAdvertLatLon, payload.toBytes());
+  }
+
+  /// SEND_LOGIN — authenticate with password.
+  static Uint8List sendLogin(String password) {
+    return _frame(cmdSendLogin, Uint8List.fromList(utf8.encode(password)));
+  }
+
+  // --- Utility ---
+
+  static int _nowEpoch() => DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+  static Uint8List _uint32LE(int value) {
+    final data = ByteData(4)..setUint32(0, value, Endian.little);
+    return data.buffer.asUint8List();
+  }
+
+  static Uint8List _int32LE(int value) {
+    final data = ByteData(4)..setInt32(0, value, Endian.little);
+    return data.buffer.asUint8List();
+  }
+}

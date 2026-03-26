@@ -1,0 +1,5 @@
+<!-- Placeholder: Replace with MeshCore PT app icon SVG -->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <circle cx="24" cy="24" r="20" fill="#2E7D32"/>
+  <text x="24" y="30" text-anchor="middle" fill="white" font-size="16" font-family="sans-serif">MC</text>
+</svg>

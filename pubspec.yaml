@@ -1,0 +1,51 @@
+name: mcapppt
+description: "MeshCore Companion App - Comunidade Portuguesa"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.7.0
+  flutter: ^3.29.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # BLE
+  flutter_blue_plus: ^1.35.0
+
+  # Serial / USB — flutter_libserialport for Windows/Linux/macOS (COM ports)
+  # usb_serial kept for Android USB OTG (Phase 2)
+  flutter_libserialport: ^0.6.0
+
+  # State management
+  flutter_riverpod: ^2.6.1
+
+  # Local storage (Isar planned for Phase 2)
+  path_provider: ^2.1.5
+  shared_preferences: ^2.3.4
+
+  # Routing
+  go_router: ^14.8.1
+
+  # UI
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  flutter_svg: ^2.0.17
+
+  # Utilities
+  intl: ^0.20.0
+  equatable: ^2.0.7
+  convert: ^3.1.2
+  collection: ^1.19.1
+  logger: ^2.5.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
