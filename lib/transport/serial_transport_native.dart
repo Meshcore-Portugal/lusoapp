@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_libserialport/flutter_libserialport.dart';
@@ -107,7 +108,15 @@ class SerialTransport implements RadioTransport {
   }
 
   /// List all available serial/COM ports on this machine.
+  ///
+  /// Returns an empty list on Android and iOS — flutter_libserialport uses
+  /// POSIX /dev/tty* paths which are inaccessible on those platforms due to
+  /// SELinux restrictions. Use BLE on mobile.
   static Future<List<RadioDevice>> listDevices() async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      _log.d('Serial port enumeration skipped on mobile platform');
+      return [];
+    }
     try {
       final portNames = SerialPort.availablePorts;
       final devices = <RadioDevice>[];

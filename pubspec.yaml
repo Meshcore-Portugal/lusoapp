@@ -15,6 +15,7 @@ dependencies:
 
   # BLE
   flutter_blue_plus: ^1.35.0
+  permission_handler: ^11.3.1
 
   # Serial / USB — flutter_libserialport for Windows/Linux/macOS (COM ports)
   # usb_serial kept for Android USB OTG (Phase 2)

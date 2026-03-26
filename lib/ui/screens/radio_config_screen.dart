@@ -57,7 +57,8 @@ class _RadioConfigScreenState extends ConsumerState<RadioConfigScreen> {
 
   void _populateFrom(RadioConfig? config) {
     if (config == null) return;
-    _freqController.text = (config.frequencyHz / 1e6).toStringAsFixed(4);
+    // Raw firmware value is freq_MHz × 1000 (kHz units), so divide by 1e3 for MHz.
+    _freqController.text = (config.frequencyHz / 1e3).toStringAsFixed(4);
     _txPowerController.text = '${config.txPowerDbm}';
     _bandwidthHz = config.bandwidthHz;
     _spreadingFactor = config.spreadingFactor;
@@ -83,7 +84,8 @@ class _RadioConfigScreenState extends ConsumerState<RadioConfigScreen> {
 
     setState(() => _saving = true);
 
-    final freqHz = ((double.tryParse(_freqController.text) ?? 0) * 1e6).round();
+    // Store as kHz (freq_MHz × 1000) to match firmware raw format.
+    final freqHz = ((double.tryParse(_freqController.text) ?? 0) * 1e3).round();
     final txPower = int.tryParse(_txPowerController.text) ?? 0;
 
     final config = RadioConfig(
@@ -123,7 +125,7 @@ class _RadioConfigScreenState extends ConsumerState<RadioConfigScreen> {
     // If the radio just pushed a fresh config and we haven't dirtied the form,
     // keep the form in sync.
     if (!_dirty && config != null) {
-      final freqText = (config.frequencyHz / 1e6).toStringAsFixed(4);
+      final freqText = (config.frequencyHz / 1e3).toStringAsFixed(4);
       if (_freqController.text != freqText) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!_dirty && mounted) _populateFrom(config);
@@ -139,6 +141,13 @@ class _RadioConfigScreenState extends ConsumerState<RadioConfigScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // ---------------------------------------------------------------
+            // Current config summary
+            // ---------------------------------------------------------------
+            if (config != null) _ConfigSummaryCard(config: config),
+
+            if (config != null) const SizedBox(height: 16),
+
             // ---------------------------------------------------------------
             // Device info card
             // ---------------------------------------------------------------
@@ -221,8 +230,8 @@ class _RadioConfigScreenState extends ConsumerState<RadioConfigScreen> {
                           return 'Insere a frequência';
                         }
                         final d = double.tryParse(v);
-                        if (d == null || d < 100 || d > 1100) {
-                          return 'Frequência inválida (100–1100 MHz)';
+                        if (d == null || d < 150 || d > 2500) {
+                          return 'Frequência inválida (150–2500 MHz)';
                         }
                         return null;
                       },
@@ -387,6 +396,125 @@ class _RadioConfigScreenState extends ConsumerState<RadioConfigScreen> {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Summary card showing active radio settings at a glance
+// ---------------------------------------------------------------------------
+
+class _ConfigSummaryCard extends StatelessWidget {
+  const _ConfigSummaryCard({required this.config});
+  final RadioConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final freqMHz = config.frequencyHz / 1e3; // kHz units → MHz
+    final bwKHz = config.bandwidthHz / 1e3;
+
+    return Card(
+      color: theme.colorScheme.primaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.radio,
+                  size: 18,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Configuração Activa',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                _SummaryChip(
+                  icon: Icons.podcasts,
+                  label: '${freqMHz.toStringAsFixed(4)} MHz',
+                ),
+                _SummaryChip(
+                  icon: Icons.swap_horiz,
+                  label: '${bwKHz % 1 == 0 ? bwKHz.toInt() : bwKHz} kHz',
+                ),
+                _SummaryChip(
+                  icon: Icons.layers,
+                  label: 'SF${config.spreadingFactor}',
+                ),
+                _SummaryChip(
+                  icon: Icons.code,
+                  label: _crLabel(config.codingRate),
+                ),
+                _SummaryChip(
+                  icon: Icons.bolt,
+                  label: '${config.txPowerDbm} dBm',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _crLabel(int cr) {
+    switch (cr) {
+      case 5:
+        return '4/5';
+      case 6:
+        return '4/6';
+      case 7:
+        return '4/7';
+      case 8:
+        return '4/8';
+      default:
+        return 'CR$cr';
+    }
+  }
+}
+
+class _SummaryChip extends StatelessWidget {
+  const _SummaryChip({required this.icon, required this.label});
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withAlpha(30),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: theme.colorScheme.onPrimaryContainer),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onPrimaryContainer,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

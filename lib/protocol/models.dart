@@ -84,13 +84,16 @@ class RadioConfig extends Equatable {
     required this.txPowerDbm,
   });
 
+  // frequencyHz stores the raw 32-bit firmware value which is freq_MHz * 1000
+  // (i.e. kHz units). The field name is kept for compatibility.
   final int frequencyHz;
   final int bandwidthHz;
   final int spreadingFactor; // 5-12
   final int codingRate; // 5-8
   final int txPowerDbm;
 
-  double get frequencyMHz => frequencyHz / 1e6;
+  /// Frequency in MHz. Raw firmware value is in kHz units (freq_MHz × 1000).
+  double get frequencyMHz => frequencyHz / 1e3;
   double get bandwidthKHz => bandwidthHz / 1e3;
 
   RadioConfig copyWith({

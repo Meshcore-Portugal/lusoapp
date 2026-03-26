@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../providers/radio_providers.dart';
 import '../../transport/transport.dart';
@@ -14,10 +16,7 @@ import '../../transport/transport.dart';
 enum _ConnectType { ble, serialCompanion, serialKiss }
 
 class _ConnectTarget {
-  const _ConnectTarget({
-    required this.device,
-    required this.type,
-  });
+  const _ConnectTarget({required this.device, required this.type});
   final RadioDevice device;
   final _ConnectType type;
 
@@ -72,15 +71,49 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       _targets.clear();
     });
 
+    // Request Bluetooth permissions on Android before attempting any scan.
+    // Without these, startScan silently returns no results on Android 6+.
+    if (Platform.isAndroid) {
+      final statuses =
+          await [
+            Permission.bluetoothScan,
+            Permission.bluetoothConnect,
+            Permission.location,
+          ].request();
+
+      final denied = statuses.values.any(
+        (s) => s.isDenied || s.isPermanentlyDenied,
+      );
+      if (denied) {
+        if (mounted) {
+          setState(() => _scanning = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Permissões Bluetooth necessárias para procurar dispositivos.',
+              ),
+              action: SnackBarAction(
+                label: 'Definições',
+                onPressed: openAppSettings,
+              ),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     // BLE scan — yields one entry per device (always Companion protocol)
     _bleScanSub = BleTransport.scan(
       timeout: const Duration(seconds: 10),
     ).listen(
       (device) {
         if (mounted) {
-          setState(() => _targets.add(
-                _ConnectTarget(device: device, type: _ConnectType.ble),
-              ));
+          setState(
+            () => _targets.add(
+              _ConnectTarget(device: device, type: _ConnectType.ble),
+            ),
+          );
         }
       },
       onDone: () {
@@ -91,19 +124,26 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       },
     );
 
-    // Serial devices — yields TWO entries per port: Companion and KISS TNC
-    try {
-      final serialDevices = await SerialTransport.listDevices();
-      if (mounted) {
-        setState(() {
-          for (final d in serialDevices) {
-            _targets.add(_ConnectTarget(device: d, type: _ConnectType.serialCompanion));
-            _targets.add(_ConnectTarget(device: d, type: _ConnectType.serialKiss));
-          }
-        });
+    // Serial devices — not available on mobile (SELinux / no POSIX TTY access).
+    // Only enumerate on desktop platforms.
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      try {
+        final serialDevices = await SerialTransport.listDevices();
+        if (mounted) {
+          setState(() {
+            for (final d in serialDevices) {
+              _targets.add(
+                _ConnectTarget(device: d, type: _ConnectType.serialCompanion),
+              );
+              _targets.add(
+                _ConnectTarget(device: d, type: _ConnectType.serialKiss),
+              );
+            }
+          });
+        }
+      } catch (_) {
+        // Serial not available on this platform (e.g. web)
       }
-    } catch (_) {
-      // Serial not available on this platform (e.g. web)
     }
   }
 
@@ -150,7 +190,11 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
           child: Column(
             children: [
               const SizedBox(height: 48),
-              Icon(Icons.cell_tower, size: 80, color: theme.colorScheme.primary),
+              Icon(
+                Icons.cell_tower,
+                size: 80,
+                color: theme.colorScheme.primary,
+              ),
               const SizedBox(height: 16),
               Text(
                 'MeshCore PT',
@@ -179,13 +223,14 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               else ...[
                 FilledButton.icon(
                   onPressed: _scanning ? null : _startScan,
-                  icon: _scanning
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.search),
+                  icon:
+                      _scanning
+                          ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Icon(Icons.search),
                   label: Text(
                     _scanning ? 'A procurar...' : 'Procurar Dispositivos',
                   ),
@@ -193,49 +238,54 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                 const SizedBox(height: 24),
 
                 Expanded(
-                  child: _targets.isEmpty
-                      ? Center(
-                          child: Text(
-                            _scanning
-                                ? 'A procurar rádios MeshCore...'
-                                : 'Toque em "Procurar" para encontrar dispositivos',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurface.withAlpha(120),
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount: _targets.length,
-                          itemBuilder: (context, index) {
-                            final target = _targets[index];
-                            final rssiSuffix = target.type == _ConnectType.ble &&
-                                    target.device.rssi != null
-                                ? ' (${target.device.rssi} dBm)'
-                                : '';
-                            return Card(
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor:
-                                      theme.colorScheme.primaryContainer,
-                                  child: Icon(
-                                    target.icon,
-                                    color: theme.colorScheme.onPrimaryContainer,
-                                  ),
+                  child:
+                      _targets.isEmpty
+                          ? Center(
+                            child: Text(
+                              _scanning
+                                  ? 'A procurar rádios MeshCore...'
+                                  : 'Toque em "Procurar" para encontrar dispositivos',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurface.withAlpha(
+                                  120,
                                 ),
-                                title: Text(target.device.name),
-                                subtitle: Text(
-                                  '${target.typeLabel}$rssiSuffix',
-                                ),
-                                trailing: const Icon(
-                                  Icons.arrow_forward_ios,
-                                  size: 16,
-                                ),
-                                onTap: () => _connectTo(target),
                               ),
-                            );
-                          },
-                        ),
+                            ),
+                          )
+                          : ListView.builder(
+                            itemCount: _targets.length,
+                            itemBuilder: (context, index) {
+                              final target = _targets[index];
+                              final rssiSuffix =
+                                  target.type == _ConnectType.ble &&
+                                          target.device.rssi != null
+                                      ? ' (${target.device.rssi} dBm)'
+                                      : '';
+                              return Card(
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor:
+                                        theme.colorScheme.primaryContainer,
+                                    child: Icon(
+                                      target.icon,
+                                      color:
+                                          theme.colorScheme.onPrimaryContainer,
+                                    ),
+                                  ),
+                                  title: Text(target.device.name),
+                                  subtitle: Text(
+                                    '${target.typeLabel}$rssiSuffix',
+                                  ),
+                                  trailing: const Icon(
+                                    Icons.arrow_forward_ios,
+                                    size: 16,
+                                  ),
+                                  onTap: () => _connectTo(target),
+                                ),
+                              );
+                            },
+                          ),
                 ),
               ],
             ],
@@ -245,4 +295,3 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     );
   }
 }
-
