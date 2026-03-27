@@ -48,5 +48,14 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^5.0.0
 
+# Replace the real permission_handler_windows (which requires the NuGet package
+# Microsoft.Windows.CppWinRT and fails in offline/restricted environments) with
+# a pure-Dart stub.  The stub returns PermissionStatus.granted for everything;
+# it is never called at runtime because all permission_handler usage in this app
+# is guarded by Platform.isAndroid checks.
+dependency_overrides:
+  permission_handler_windows:
+    path: local_packages/permission_handler_windows
+
 flutter:
   uses-material-design: true

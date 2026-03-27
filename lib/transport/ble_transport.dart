@@ -123,7 +123,15 @@ class BleTransport implements RadioTransport {
     //
     // requestMtu(247) on native gives 244 usable bytes, larger than the
     // protocol's MAX_FRAME_SIZE=172, so a single write is always sufficient.
-    await _rxChar!.write(data, withoutResponse: false);
+    //
+    // Use Write Without Response when the characteristic supports it (NUS RX
+    // always does).  This eliminates the ATT Write Response round-trip
+    // (~1 BLE connection interval per command) so the full _sendAndWait
+    // timeout is available for the firmware's notification reply.
+    // We still get delivery confirmation implicitly: if the write is lost we
+    // time out waiting for the response notification and can retry.
+    final withoutResponse = _rxChar!.properties.writeWithoutResponse;
+    await _rxChar!.write(data, withoutResponse: withoutResponse);
   }
 
   @override
@@ -189,32 +197,65 @@ class BleTransport implements RadioTransport {
   /// it declares the UUID in `optionalServices`, which is required by the
   /// Web Bluetooth security model before [discoverServices] is allowed.
   /// Removing it (acceptAllDevices) causes a SecurityError on discoverServices.
+  ///
+  /// **Web note:** On web, [FlutterBluePlus.startScan] calls the browser's
+  /// `requestDevice()` which blocks until the user picks a device, emits the
+  /// result to [FlutterBluePlus.onScanResults], then returns.  We must
+  /// subscribe to [onScanResults] *before* calling [startScan]; otherwise the
+  /// result has already been emitted by the time the `await for` loop starts
+  /// and is silently missed.
   static Stream<RadioDevice> scan({
     Duration timeout = const Duration(seconds: 10),
-  }) async* {
+  }) {
+    final controller = StreamController<RadioDevice>();
     final seen = <String>{};
 
-    await FlutterBluePlus.startScan(
-      withServices: [BleUuids.service],
-      timeout: timeout,
-    );
-
-    await for (final result in FlutterBluePlus.onScanResults) {
-      for (final r in result) {
-        if (!seen.contains(r.device.remoteId.str)) {
-          seen.add(r.device.remoteId.str);
-          yield RadioDevice(
-            id: r.device.remoteId.str,
-            name:
-                r.device.platformName.isNotEmpty
-                    ? r.device.platformName
-                    : 'MeshCore (${r.device.remoteId.str.substring(0, 8)})',
-            type: RadioDeviceType.ble,
-            rssi: r.rssi,
-          );
+    Future<void> doScan() async {
+      // Subscribe to results BEFORE startScan — critical on web where
+      // startScan blocks inside the browser requestDevice() picker and emits
+      // the chosen device before returning.
+      final sub = FlutterBluePlus.onScanResults.listen((results) {
+        for (final r in results) {
+          if (!seen.contains(r.device.remoteId.str)) {
+            seen.add(r.device.remoteId.str);
+            if (!controller.isClosed) {
+              controller.add(
+                RadioDevice(
+                  id: r.device.remoteId.str,
+                  name:
+                      r.device.platformName.isNotEmpty
+                          ? r.device.platformName
+                          : 'MeshCore (${r.device.remoteId.str.substring(0, 8)})',
+                  type: RadioDeviceType.ble,
+                  rssi: r.rssi,
+                ),
+              );
+            }
+          }
         }
+      });
+
+      try {
+        await FlutterBluePlus.startScan(
+          withServices: [BleUuids.service],
+          timeout: timeout,
+        );
+      } catch (e) {
+        _log.e('BLE startScan failed: $e');
       }
+
+      // On native the scan keeps running for `timeout`; wait for it to stop.
+      // On web startScan already returned after the picker resolved — done.
+      if (!kIsWeb) {
+        await FlutterBluePlus.isScanning.where((scanning) => !scanning).first;
+      }
+
+      await sub.cancel();
+      await controller.close();
     }
+
+    doScan();
+    return controller.stream;
   }
 
   /// Create a BLE transport from a scanned device ID.

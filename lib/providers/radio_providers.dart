@@ -17,6 +17,13 @@ final transportStateProvider = StateProvider<TransportState>(
 );
 
 // ---------------------------------------------------------------------------
+// Connection progress (step label + step index 0-5)
+// ---------------------------------------------------------------------------
+
+final connectionStepProvider = StateProvider<String>((_) => '');
+final connectionProgressProvider = StateProvider<int>((_) => 0);
+
+// ---------------------------------------------------------------------------
 // Radio service — the central singleton managing the connection
 // ---------------------------------------------------------------------------
 
@@ -30,8 +37,14 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   ConnectionNotifier(this._ref) : super(TransportState.disconnected);
   final Ref _ref;
 
+  void _setStep(int step, String label) {
+    _ref.read(connectionProgressProvider.notifier).state = step;
+    _ref.read(connectionStepProvider.notifier).state = label;
+  }
+
   Future<bool> connectBle(String deviceId) async {
     state = TransportState.connecting;
+    _setStep(0, 'A ligar via Bluetooth...');
     try {
       final transport = BleTransport.fromDeviceId(deviceId);
       final service = RadioService(transport);
@@ -41,15 +54,19 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
       _setupListeners(service);
       final ok = await service.connect();
       if (ok) {
-        state = TransportState.connected;
+        // Keep state = connecting while we fetch initial data so the progress
+        // card remains visible.  Only flip to connected when fully ready.
         await _fetchInitialData(service);
+        state = TransportState.connected;
         return true;
       }
       _ref.read(radioServiceProvider.notifier).state = null;
       state = TransportState.error;
+      _setStep(0, '');
       return false;
     } catch (e) {
       state = TransportState.error;
+      _setStep(0, '');
       return false;
     }
   }
@@ -59,10 +76,12 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     ConnectionMode mode = ConnectionMode.companion,
   }) async {
     state = TransportState.connecting;
+    _setStep(0, 'A ligar via USB série...');
     try {
       final baseTransport = await SerialTransport.fromDeviceId(deviceId);
       if (baseTransport == null) {
         state = TransportState.error;
+        _setStep(0, '');
         return false;
       }
       final RadioTransport transport =
@@ -75,15 +94,19 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
       _setupListeners(service);
       final ok = await service.connect();
       if (ok) {
-        state = TransportState.connected;
+        // Keep state = connecting while we fetch initial data so the progress
+        // card remains visible.  Only flip to connected when fully ready.
         await _fetchInitialData(service);
+        state = TransportState.connected;
         return true;
       }
       _ref.read(radioServiceProvider.notifier).state = null;
       state = TransportState.error;
+      _setStep(0, '');
       return false;
     } catch (e) {
       state = TransportState.error;
+      _setStep(0, '');
       return false;
     }
   }
@@ -95,6 +118,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
       _ref.read(radioServiceProvider.notifier).state = null;
     }
     _ref.read(unreadCountsProvider.notifier).reset();
+    _setStep(0, '');
     state = TransportState.disconnected;
   }
 
@@ -175,10 +199,20 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   Future<void> _fetchInitialData(RadioService service) async {
     final log = Logger(printer: SimplePrinter(printTime: false));
 
-    // Give radio time to process APP_START and return SelfInfo.
-    await Future.delayed(const Duration(milliseconds: 300));
+    // 0. Wait for SelfInfo — the radio sends it automatically after APP_START.
+    //    Rather than a fixed 300 ms delay, we watch for the response and
+    //    proceed as soon as it arrives (typically 50–100 ms over BLE).
+    //    500 ms fallback ensures we still continue even if it never comes.
+    _setStep(1, 'A aguardar resposta do rádio...');
+    await _sendAndWait(
+      service,
+      () async {}, // no command needed — just listen
+      (r) => r is SelfInfoResponse,
+      timeout: const Duration(milliseconds: 500),
+    );
 
     // 1. Device info — we need maxChannels before requesting channels.
+    _setStep(2, 'A obter informação do dispositivo...');
     final devResp = await _sendAndWait(
       service,
       () => service.requestDeviceInfo(),
@@ -190,6 +224,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     await service.requestBattAndStorage();
 
     // 3. Contacts — wait for the end-of-contacts marker.
+    _setStep(3, 'A sincronizar contactos...');
     final contactsResp = await _sendAndWait(
       service,
       () => service.requestContacts(),
@@ -198,15 +233,33 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     );
     log.d('Contacts: ${contactsResp?.runtimeType ?? "TIMEOUT"}');
 
-    // 4. Channels — send each request with a 150 ms gap.
-    //    Responses arrive asynchronously; _setupListeners handles them.
-    //    Do NOT suppress MsgWaitingPush here — auto-sync runs freely.
+    // 4. Channels — request each one and wait for its response before sending
+    //    the next (spec: "send one command at a time").
+    //    Timeout 500 ms: BLE writeWithoutResponse + notification RTT is
+    //    typically 20–60 ms; 500 ms gives ample headroom on slow connections.
+    //    Also terminates on ErrorResponse so we never block the full timeout
+    //    for a channel slot the firmware rejects.
+    _setStep(4, 'A sincronizar canais...');
     final maxChannels = service.deviceInfo?.maxChannels ?? 8;
     for (var i = 0; i < maxChannels; i++) {
-      await service.requestChannel(i);
-      await Future.delayed(const Duration(milliseconds: 150));
+      await _sendAndWait(
+        service,
+        () => service.requestChannel(i),
+        (r) =>
+            (r is ChannelInfoResponse && r.channel.index == i) ||
+            r is ErrorResponse,
+        timeout: const Duration(milliseconds: 500),
+      );
     }
-    log.d('Channel requests sent (maxChannels=$maxChannels)');
+    log.d('Channels done (maxChannels=$maxChannels)');
+
+    // 5. Drain any messages queued while the app was disconnected.
+    //    The spec says to send CMD_SYNC_NEXT_MESSAGE during initialisation.
+    //    RadioService._processResponse() continues the chain automatically
+    //    (each received message triggers the next sync until the queue is empty).
+    await service.syncNextMessage();
+
+    _setStep(5, 'Ligado!');
   }
 }
 

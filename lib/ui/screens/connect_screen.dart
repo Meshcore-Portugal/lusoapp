@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -58,6 +59,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   bool _scanning = false;
   final List<_ConnectTarget> _targets = [];
   StreamSubscription<RadioDevice>? _bleScanSub;
+  _ConnectTarget? _connectingTarget;
 
   @override
   void dispose() {
@@ -73,7 +75,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
 
     // Request Bluetooth permissions on Android before attempting any scan.
     // Without these, startScan silently returns no results on Android 6+.
-    if (Platform.isAndroid) {
+    // Platform.isAndroid must not be called on web (dart:io throws there).
+    if (!kIsWeb && Platform.isAndroid) {
       final statuses =
           await [
             Permission.bluetoothScan,
@@ -124,9 +127,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       },
     );
 
-    // Serial devices — not available on mobile (SELinux / no POSIX TTY access).
-    // Only enumerate on desktop platforms.
-    if (!Platform.isAndroid && !Platform.isIOS) {
+    // Serial devices — not available on mobile or web.
+    if (!kIsWeb && !Platform.isAndroid && !Platform.isIOS) {
       try {
         final serialDevices = await SerialTransport.listDevices();
         if (mounted) {
@@ -148,6 +150,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   }
 
   Future<void> _connectTo(_ConnectTarget target) async {
+    setState(() => _connectingTarget = target);
     final connection = ref.read(connectionProvider.notifier);
     bool ok;
 
@@ -169,6 +172,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     if (ok && mounted) {
       context.go('/channels');
     } else if (mounted) {
+      setState(() => _connectingTarget = null);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Falha ao ligar ao dispositivo'),
@@ -181,7 +185,13 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(connectionProvider);
+    final stepLabel = ref.watch(connectionStepProvider);
+    final stepIndex = ref.watch(connectionProgressProvider);
     final theme = Theme.of(context);
+
+    // Total steps: 0=connecting transport, 1=waiting, 2=device info,
+    // 3=contacts, 4=channels, 5=done.
+    const totalSteps = 5;
 
     return Scaffold(
       body: SafeArea(
@@ -213,12 +223,12 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               const SizedBox(height: 48),
 
               if (state == TransportState.connecting)
-                const Column(
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 16),
-                    Text('A ligar...'),
-                  ],
+                _ConnectingCard(
+                  target: _connectingTarget,
+                  stepLabel: stepLabel,
+                  stepIndex: stepIndex,
+                  totalSteps: totalSteps,
+                  theme: theme,
                 )
               else ...[
                 FilledButton.icon(
@@ -235,6 +245,16 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                     _scanning ? 'A procurar...' : 'Procurar Dispositivos',
                   ),
                 ),
+                if (kIsWeb) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'O browser irá mostrar um seletor de dispositivos Bluetooth.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withAlpha(140),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
 
                 Expanded(
@@ -290,6 +310,159 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Connecting progress card
+// ---------------------------------------------------------------------------
+
+class _ConnectingCard extends StatelessWidget {
+  const _ConnectingCard({
+    required this.target,
+    required this.stepLabel,
+    required this.stepIndex,
+    required this.totalSteps,
+    required this.theme,
+  });
+
+  final _ConnectTarget? target;
+  final String stepLabel;
+  final int stepIndex;
+  final int totalSteps;
+  final ThemeData theme;
+
+  static const _stepLabels = [
+    'A ligar...',
+    'A aguardar rádio...',
+    'Informação do dispositivo',
+    'Contactos',
+    'Canais',
+    'Concluído',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    // Step 0 means we just started the transport connection — use indeterminate
+    // bar. Steps 1–5 show determinate progress.
+    final progress = stepIndex == 0 ? null : stepIndex / totalSteps;
+
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Device name + icon
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircleAvatar(
+                  backgroundColor: theme.colorScheme.primaryContainer,
+                  child: Icon(
+                    target?.icon ?? Icons.bluetooth,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    target?.device.name ?? 'A ligar...',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // Progress bar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(value: progress, minHeight: 6),
+            ),
+            const SizedBox(height: 12),
+
+            // Current step label (animated crossfade)
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: Text(
+                stepLabel.isNotEmpty ? stepLabel : 'A ligar...',
+                key: ValueKey(stepLabel),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface.withAlpha(180),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Step checklist
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: List.generate(_stepLabels.length - 1, (i) {
+                // Step indices 1–5 correspond to label indices 1–5
+                final done = stepIndex > i;
+                final active = stepIndex == i + 1;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        child:
+                            done
+                                ? Icon(
+                                  Icons.check_circle,
+                                  key: const ValueKey('done'),
+                                  size: 18,
+                                  color: theme.colorScheme.primary,
+                                )
+                                : active
+                                ? SizedBox(
+                                  key: const ValueKey('active'),
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                )
+                                : Icon(
+                                  Icons.radio_button_unchecked,
+                                  key: const ValueKey('pending'),
+                                  size: 18,
+                                  color: theme.colorScheme.onSurface.withAlpha(
+                                    80,
+                                  ),
+                                ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        _stepLabels[i + 1],
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color:
+                              done
+                                  ? theme.colorScheme.primary
+                                  : active
+                                  ? theme.colorScheme.onSurface
+                                  : theme.colorScheme.onSurface.withAlpha(100),
+                          fontWeight:
+                              active ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ),
+          ],
         ),
       ),
     );

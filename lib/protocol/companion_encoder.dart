@@ -141,7 +141,9 @@ class CompanionEncoder {
   }
 
   /// REBOOT — restart the radio.
-  static Uint8List reboot() => _frame(cmdReboot);
+  /// Spec: cmd byte followed by ASCII text "reboot".
+  static Uint8List reboot() =>
+      _frame(cmdReboot, Uint8List.fromList(utf8.encode('reboot')));
 
   /// REMOVE_CONTACT — delete a contact by public key.
   static Uint8List removeContact(Uint8List publicKey) {
@@ -153,9 +155,24 @@ class CompanionEncoder {
     return _frame(cmdResetPath, publicKey);
   }
 
-  /// SEND_TRACE_PATH — trace route to peer.
-  static Uint8List sendTracePath(Uint8List publicKey) {
-    return _frame(cmdSendTracePath, publicKey);
+  /// SEND_TRACE_PATH — initiate a trace along a given path.
+  /// Spec: {code, tag: int32, auth_code: int32, flags: byte, path: bytes}
+  /// [tag] is a random 32-bit value set by the initiator, reflected in PUSH_CODE_TRACE_DATA.
+  /// [authCode] is optional authentication (use 0 for unauthenticated traces).
+  /// [path] is the sequence of path-hashes the trace should follow (empty = direct).
+  static Uint8List sendTracePath({
+    required int tag,
+    int authCode = 0,
+    Uint8List? path,
+  }) {
+    final payload = BytesBuilder();
+    payload.add(_int32LE(tag));
+    payload.add(_int32LE(authCode));
+    payload.addByte(0); // flags: zero for now
+    if (path != null) {
+      payload.add(path);
+    }
+    return _frame(cmdSendTracePath, payload.toBytes());
   }
 
   /// SET_ADVERT_LATLON — set GPS coordinates.
@@ -166,9 +183,17 @@ class CompanionEncoder {
     return _frame(cmdSetAdvertLatLon, payload.toBytes());
   }
 
-  /// SEND_LOGIN — authenticate with password.
-  static Uint8List sendLogin(String password) {
-    return _frame(cmdSendLogin, Uint8List.fromList(utf8.encode(password)));
+  /// SEND_LOGIN — authenticate with a repeater or room server.
+  /// Spec: {code, pub_key: bytes(32), password: varchar}
+  /// [peerPublicKey] is the 32-byte public key of the target repeater/room server.
+  static Uint8List sendLogin(Uint8List peerPublicKey, String password) {
+    if (peerPublicKey.length < 32) {
+      throw ArgumentError('peerPublicKey must be at least 32 bytes');
+    }
+    final payload = BytesBuilder();
+    payload.add(peerPublicKey.sublist(0, 32));
+    payload.add(utf8.encode(password));
+    return _frame(cmdSendLogin, payload.toBytes());
   }
 
   // --- Utility ---

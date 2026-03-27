@@ -130,8 +130,10 @@ class RadioService {
     await _send(CompanionEncoder.resetPath(publicKey));
   }
 
-  Future<void> tracePath(Uint8List publicKey) async {
-    await _send(CompanionEncoder.sendTracePath(publicKey));
+  Future<void> tracePath(int tag, {int authCode = 0, Uint8List? path}) async {
+    await _send(
+      CompanionEncoder.sendTracePath(tag: tag, authCode: authCode, path: path),
+    );
   }
 
   Future<void> setLocation(double lat, double lon) async {
@@ -142,8 +144,8 @@ class RadioService {
     await _send(CompanionEncoder.reboot());
   }
 
-  Future<void> login(String password) async {
-    await _send(CompanionEncoder.sendLogin(password));
+  Future<void> login(Uint8List peerPublicKey, String password) async {
+    await _send(CompanionEncoder.sendLogin(peerPublicKey, password));
   }
 
   // --- Internal ---

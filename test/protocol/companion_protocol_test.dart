@@ -107,8 +107,14 @@ void main() {
       final frame2Payload = Uint8List.fromList([respNoMoreMessages]);
 
       final buffer = Uint8List.fromList([
-        dirRadioToApp, 1, 0, ...frame1Payload,
-        dirRadioToApp, 1, 0, ...frame2Payload,
+        dirRadioToApp,
+        1,
+        0,
+        ...frame1Payload,
+        dirRadioToApp,
+        1,
+        0,
+        ...frame2Payload,
       ]);
 
       final (frames, remaining) = CompanionDecoder.extractFrames(buffer);
@@ -132,8 +138,10 @@ void main() {
 
   group('RadioConfig', () {
     test('frequencyMHz calculates correctly', () {
+      // frequencyHz stores the wire-protocol value: freq_MHz * 1000.
+      // 869.618 MHz is stored as 869618 on the wire.
       const config = RadioConfig(
-        frequencyHz: 869618000,
+        frequencyHz: 869618,
         bandwidthHz: 62500,
         spreadingFactor: 10,
         codingRate: 5,
@@ -145,7 +153,7 @@ void main() {
 
     test('copyWith creates modified copy', () {
       const config = RadioConfig(
-        frequencyHz: 869618000,
+        frequencyHz: 869618,
         bandwidthHz: 62500,
         spreadingFactor: 10,
         codingRate: 5,
@@ -153,7 +161,7 @@ void main() {
       );
       final modified = config.copyWith(txPowerDbm: 20);
       expect(modified.txPowerDbm, 20);
-      expect(modified.frequencyHz, 869618000);
+      expect(modified.frequencyHz, 869618);
     });
   });
 

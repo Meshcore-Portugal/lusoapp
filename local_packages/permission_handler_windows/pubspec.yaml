@@ -1,0 +1,19 @@
+name: permission_handler_windows
+description: Pure-Dart stub for permission_handler_windows. Replaces the real package to avoid the NuGet/WinRT C++ build requirement on Windows. All permissions return granted — only called when Platform.isAndroid anyway.
+version: 0.2.1
+
+environment:
+  sdk: ^3.7.0
+  flutter: ^3.29.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  permission_handler_platform_interface: ^4.3.0
+
+flutter:
+  plugin:
+    implements: permission_handler_platform_interface
+    platforms:
+      windows:
+        dartPluginClass: PermissionHandlerWindows

@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -182,7 +182,7 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
                   if (service == null || contact == null) return;
                   switch (value) {
                     case 'trace':
-                      service.tracePath(contact.publicKey);
+                      service.tracePath(Random().nextInt(0x7FFFFFFF));
                     case 'reset_path':
                       service.resetPath(contact.publicKey);
                   }
