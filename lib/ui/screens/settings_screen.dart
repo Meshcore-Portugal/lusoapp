@@ -45,8 +45,8 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 12),
                   ListTile(
-                    title: const Text('Nome do No'),
-                    subtitle: Text(selfInfo?.name ?? 'Nao conectado'),
+                    title: const Text('Nome do Nó'),
+                    subtitle: Text(selfInfo?.name ?? 'Não conectado'),
                     trailing: const Icon(Icons.edit),
                     onTap: () => _editName(context, ref),
                   ),
@@ -107,7 +107,7 @@ class SettingsScreen extends ConsumerWidget {
                       Icon(Icons.link, color: theme.colorScheme.primary),
                       const SizedBox(width: 8),
                       Text(
-                        'Ligacao',
+                        'Ligação',
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -131,7 +131,7 @@ class SettingsScreen extends ConsumerWidget {
                   if (connectionState == TransportState.connected)
                     ListTile(
                       title: const Text('Desligar'),
-                      subtitle: const Text('Terminar ligacao ao radio'),
+                      subtitle: const Text('Terminar ligação ao rádio'),
                       leading: const Icon(Icons.link_off),
                       onTap: () async {
                         await ref
@@ -343,7 +343,7 @@ class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
 
             // Master enable
             SwitchListTile(
-              title: const Text('Activar notificacoes'),
+              title: const Text('Activar notificações'),
               subtitle: const Text('Mostrar alertas para novas mensagens'),
               value: settings.enabled,
               onChanged: (v) => notifier.update(settings.copyWith(enabled: v)),
@@ -362,7 +362,7 @@ class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Permissao de notificacao nao concedida.',
+                        'Permissão de notificação não concedida.',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: Colors.orange,
                         ),
@@ -404,7 +404,7 @@ class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
             SwitchListTile(
               title: const Text('Apenas em segundo plano'),
               subtitle: const Text(
-                'So notificar quando a app nao esta em primeiro plano',
+                'Só notificar quando a app não está em primeiro plano',
               ),
               value: settings.onlyWhenBackground,
               onChanged:

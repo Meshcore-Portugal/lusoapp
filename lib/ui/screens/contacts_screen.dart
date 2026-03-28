@@ -556,9 +556,9 @@ class _ContactTile extends ConsumerWidget {
     final now = DateTime.now();
     final diff = now.difference(dt);
     if (diff.inMinutes < 1) return 'Agora';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m atras';
-    if (diff.inHours < 24) return '${diff.inHours}h atras';
-    return '${diff.inDays}d atras';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m atrás';
+    if (diff.inHours < 24) return '${diff.inHours}h atrás';
+    return '${diff.inDays}d atrás';
   }
 }
 

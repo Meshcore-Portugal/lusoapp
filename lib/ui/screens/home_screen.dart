@@ -134,7 +134,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const NavigationDestination(
             icon: Icon(Icons.settings_outlined),
             selectedIcon: Icon(Icons.settings),
-            label: 'Definicoes',
+            label: 'Definições',
           ),
         ],
       ),
