@@ -218,11 +218,13 @@ class BleTransport implements RadioTransport {
 
   /// Scan for MeshCore BLE devices.
   ///
-  /// Passing [BleUuids.service] in [withServices] serves double duty on web:
-  /// it tells the Web Bluetooth browser picker to filter to NUS devices AND
-  /// it declares the UUID in `optionalServices`, which is required by the
-  /// Web Bluetooth security model before [discoverServices] is allowed.
-  /// Removing it (acceptAllDevices) causes a SecurityError on discoverServices.
+  /// On web, [withServices] only goes into the browser picker `filters`.
+  /// [webOptionalServices] is the separate parameter that populates
+  /// `optionalServices` in `requestDevice()`, which the Web Bluetooth
+  /// security model requires before [discoverServices] is allowed.
+  /// Without it, `discoverServices()` throws a SecurityError even if the
+  /// device was selected successfully from the picker.
+  /// Both must include [BleUuids.service] for the NUS service to be accessible.
   ///
   /// **Web note:** On web, [FlutterBluePlus.startScan] calls the browser's
   /// `requestDevice()` which blocks until the user picks a device, emits the
@@ -264,6 +266,10 @@ class BleTransport implements RadioTransport {
       try {
         await FlutterBluePlus.startScan(
           withServices: [BleUuids.service],
+          // Required on web: declares service UUIDs in requestDevice()
+          // optionalServices so discoverServices() is not blocked by the
+          // browser security model (separate from the picker filters above).
+          webOptionalServices: [BleUuids.service],
           timeout: timeout,
         );
       } catch (e) {
