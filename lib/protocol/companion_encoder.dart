@@ -145,6 +145,41 @@ class CompanionEncoder {
   static Uint8List reboot() =>
       _frame(cmdReboot, Uint8List.fromList(utf8.encode('reboot')));
 
+  /// ADD_UPDATE_CONTACT — manually add or update a contact entry on the radio.
+  /// Builds the full 147-byte contact struct that mirrors the radio's storage layout.
+  static Uint8List addUpdateContact(Contact contact) {
+    final payload = BytesBuilder();
+    // bytes 0-31: public key (32 bytes, zero-padded if shorter)
+    final pubKeyBuf = Uint8List(32);
+    final keyLen =
+        contact.publicKey.length < 32 ? contact.publicKey.length : 32;
+    pubKeyBuf.setRange(0, keyLen, contact.publicKey);
+    payload.add(pubKeyBuf);
+    // byte 32: type
+    payload.addByte(contact.type);
+    // byte 33: flags
+    payload.addByte(contact.flags);
+    // byte 34: pathLen
+    payload.addByte(contact.pathLen);
+    // bytes 35-98: path (64 bytes, zeros for manually added contacts)
+    payload.add(Uint8List(64));
+    // bytes 99-130: name (UTF-8, null-padded to 32 bytes)
+    final nameBytes = utf8.encode(contact.name);
+    final nameBuf = Uint8List(32);
+    final nameCopyLen = nameBytes.length < 32 ? nameBytes.length : 32;
+    nameBuf.setRange(0, nameCopyLen, nameBytes);
+    payload.add(nameBuf);
+    // bytes 131-134: lastAdvert timestamp
+    payload.add(_uint32LE(contact.lastAdvertTimestamp));
+    // bytes 135-138: latitude (int32 LE, scaled by 1e6)
+    payload.add(_int32LE(((contact.latitude ?? 0.0) * 1e6).round()));
+    // bytes 139-142: longitude (int32 LE, scaled by 1e6)
+    payload.add(_int32LE(((contact.longitude ?? 0.0) * 1e6).round()));
+    // bytes 143-146: lastModified
+    payload.add(_uint32LE(contact.lastModified ?? _nowEpoch()));
+    return _frame(cmdAddUpdateContact, payload.toBytes());
+  }
+
   /// REMOVE_CONTACT — delete a contact by public key.
   static Uint8List removeContact(Uint8List publicKey) {
     return _frame(cmdRemoveContact, publicKey);

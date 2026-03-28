@@ -30,6 +30,12 @@ try {
     # Clean
     Log "Cleaning previous build..."
     flutter clean
+    # Also clear stale CMake cache to prevent wrong install prefix (C:/Program Files/...)
+    $cmakeCache = Join-Path $ProjectDir "build\windows\x64\CMakeCache.txt"
+    if (Test-Path $cmakeCache) {
+        Remove-Item -Path $cmakeCache -Force
+        Log "Cleared stale CMake cache"
+    }
 
     # Dependencies
     Log "Getting dependencies..."

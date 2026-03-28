@@ -38,6 +38,9 @@ class KissTransport implements RadioTransport {
   Stream<Uint8List> get dataStream => _dataController.stream;
 
   @override
+  Stream<void> get connectionLost => _inner.connectionLost;
+
+  @override
   Future<bool> connect() async {
     final ok = await _inner.connect();
     if (!ok) return false;

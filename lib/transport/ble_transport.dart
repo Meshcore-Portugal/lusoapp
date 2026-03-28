@@ -24,8 +24,14 @@ class BleTransport implements RadioTransport {
   BluetoothCharacteristic? _rxChar;
   BluetoothCharacteristic? _txChar;
   StreamSubscription<List<int>>? _notifySub;
+  StreamSubscription<BluetoothConnectionState>? _connStateSub;
   final _dataController = StreamController<Uint8List>.broadcast();
+  final _connectionLostController = StreamController<void>.broadcast();
   bool _connected = false;
+
+  /// Set to true when disconnect() is called by the app, so the
+  /// connectionState listener doesn't fire a spurious connectionLost event.
+  bool _userDisconnected = false;
 
   @override
   String get displayName => 'BLE: ${_device.platformName}';
@@ -40,7 +46,11 @@ class BleTransport implements RadioTransport {
   Stream<Uint8List> get dataStream => _dataController.stream;
 
   @override
+  Stream<void> get connectionLost => _connectionLostController.stream;
+
+  @override
   Future<bool> connect() async {
+    _userDisconnected = false;
     try {
       _log.i('BLE connecting to ${_device.platformName} (web=$kIsWeb)');
 
@@ -91,6 +101,18 @@ class BleTransport implements RadioTransport {
 
       _connected = true;
       _log.i('BLE connected: ${_device.platformName}');
+
+      // Monitor for unexpected disconnects (not triggered by dispose/disconnect).
+      _connStateSub = _device.connectionState.listen((s) {
+        if (s == BluetoothConnectionState.disconnected &&
+            _connected &&
+            !_userDisconnected) {
+          _log.w('BLE connection lost unexpectedly');
+          _connected = false;
+          _connectionLostController.add(null);
+        }
+      });
+
       return true;
     } catch (e) {
       _log.e('BLE connect failed: $e');
@@ -103,9 +125,12 @@ class BleTransport implements RadioTransport {
 
   @override
   Future<void> disconnect() async {
+    _userDisconnected = true;
     _connected = false;
     await _notifySub?.cancel();
     _notifySub = null;
+    await _connStateSub?.cancel();
+    _connStateSub = null;
     try {
       await _device.disconnect();
     } catch (_) {}
@@ -138,6 +163,7 @@ class BleTransport implements RadioTransport {
   Future<void> dispose() async {
     await disconnect();
     await _dataController.close();
+    await _connectionLostController.close();
   }
 
   /// Enable notifications on a characteristic, handling the flutter_blue_plus

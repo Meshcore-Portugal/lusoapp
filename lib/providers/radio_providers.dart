@@ -4,8 +4,11 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 
+import '../protocol/cayenne_lpp.dart';
 import '../protocol/protocol.dart';
+import '../services/notification_service.dart';
 import '../services/radio_service.dart';
+import '../services/storage_service.dart';
 import '../transport/transport.dart';
 
 // ---------------------------------------------------------------------------
@@ -30,6 +33,12 @@ final connectionProgressProvider = StateProvider<int>((_) => 0);
 final radioServiceProvider = StateProvider<RadioService?>((_) => null);
 
 // ---------------------------------------------------------------------------
+// Last connected device (loaded on app start from SharedPreferences)
+// ---------------------------------------------------------------------------
+
+final lastDeviceProvider = StateProvider<LastDevice?>((_) => null);
+
+// ---------------------------------------------------------------------------
 // Connection manager
 // ---------------------------------------------------------------------------
 
@@ -37,27 +46,36 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   ConnectionNotifier(this._ref) : super(TransportState.disconnected);
   final Ref _ref;
 
+  StreamSubscription<void>? _connectionLostSub;
+
   void _setStep(int step, String label) {
     _ref.read(connectionProgressProvider.notifier).state = step;
     _ref.read(connectionStepProvider.notifier).state = label;
   }
 
-  Future<bool> connectBle(String deviceId) async {
+  Future<bool> connectBle(String deviceId, String deviceName) async {
     state = TransportState.connecting;
     _setStep(0, 'A ligar via Bluetooth...');
     try {
       final transport = BleTransport.fromDeviceId(deviceId);
       final service = RadioService(transport);
-      // Wire up listeners BEFORE connect() so we don't miss the radio's
-      // immediate response to APP_START (SelfInfo, etc.).
       _ref.read(radioServiceProvider.notifier).state = service;
       _setupListeners(service);
       final ok = await service.connect();
       if (ok) {
-        // Keep state = connecting while we fetch initial data so the progress
-        // card remains visible.  Only flip to connected when fully ready.
         await _fetchInitialData(service);
         state = TransportState.connected;
+        await StorageService.instance.saveLastDevice(
+          id: deviceId,
+          type: 'ble',
+          name: deviceName,
+        );
+        _ref.read(lastDeviceProvider.notifier).state = LastDevice(
+          id: deviceId,
+          type: 'ble',
+          name: deviceName,
+        );
+        _setupAutoReconnect(service, () => connectBle(deviceId, deviceName));
         return true;
       }
       _ref.read(radioServiceProvider.notifier).state = null;
@@ -72,7 +90,8 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   }
 
   Future<bool> connectSerial(
-    String deviceId, {
+    String deviceId,
+    String deviceName, {
     ConnectionMode mode = ConnectionMode.companion,
   }) async {
     state = TransportState.connecting;
@@ -89,15 +108,24 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
               ? KissTransport(baseTransport)
               : baseTransport;
       final service = RadioService(transport);
-      // Wire up listeners BEFORE connect() so we don't miss early responses.
       _ref.read(radioServiceProvider.notifier).state = service;
       _setupListeners(service);
       final ok = await service.connect();
       if (ok) {
-        // Keep state = connecting while we fetch initial data so the progress
-        // card remains visible.  Only flip to connected when fully ready.
         await _fetchInitialData(service);
         state = TransportState.connected;
+        final typeStr =
+            mode == ConnectionMode.kiss ? 'serialKiss' : 'serialCompanion';
+        await StorageService.instance.saveLastDevice(
+          id: deviceId,
+          type: typeStr,
+          name: deviceName,
+        );
+        _ref.read(lastDeviceProvider.notifier).state = LastDevice(
+          id: deviceId,
+          type: typeStr,
+          name: deviceName,
+        );
         return true;
       }
       _ref.read(radioServiceProvider.notifier).state = null;
@@ -112,6 +140,8 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   }
 
   Future<void> disconnect() async {
+    await _connectionLostSub?.cancel();
+    _connectionLostSub = null;
     final service = _ref.read(radioServiceProvider);
     if (service != null) {
       await service.dispose();
@@ -122,38 +152,129 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     state = TransportState.disconnected;
   }
 
+  /// Subscribe to unexpected connection loss and attempt one auto-reconnect.
+  void _setupAutoReconnect(
+    RadioService service,
+    Future<bool> Function() reconnector,
+  ) {
+    _connectionLostSub?.cancel();
+    _connectionLostSub = service.connectionLost.listen((_) async {
+      if (state != TransportState.connected) return;
+      _ref.read(radioServiceProvider.notifier).state = null;
+      _setStep(0, 'Conexão perdida. A reconectar...');
+      state = TransportState.connecting;
+      await Future.delayed(const Duration(seconds: 2));
+      final ok = await reconnector();
+      if (!ok) {
+        state = TransportState.error;
+        _setStep(0, 'Reconexão falhou.');
+      }
+    });
+  }
+
   void _setupListeners(RadioService service) {
     service.responses.listen((response) {
       switch (response) {
         case ContactResponse():
         case EndContactsResponse():
           _ref.read(contactsProvider.notifier).refresh(service.contacts);
+        case ContactDeletedPush():
+          // Radio confirmed deletion — refresh from the service's now-updated list.
+          _ref.read(contactsProvider.notifier).refresh(service.contacts);
         case ChannelInfoResponse():
           _ref.read(channelsProvider.notifier).refresh(service.channels);
         case PrivateMessageResponse(:final message):
           _ref.read(messagesProvider.notifier).addMessage(message);
+          if (!message.isOutgoing) {
+            _ref.read(networkStatsProvider.notifier).incrementRx();
+          }
           if (message.senderKey != null) {
             _ref
                 .read(unreadCountsProvider.notifier)
                 .incrementContact(_hex6(message.senderKey!));
           }
+          if (!message.isOutgoing) {
+            final senderHex6 =
+                message.senderKey != null ? _hex6(message.senderKey!) : null;
+            final contacts = _ref.read(contactsProvider);
+            final contact =
+                senderHex6 != null
+                    ? contacts
+                        .where((c) => _hex6(c.publicKey) == senderHex6)
+                        .firstOrNull
+                    : null;
+            final senderName = contact?.name ?? senderHex6 ?? 'Desconhecido';
+            NotificationService.instance.showPrivateMessage(
+              senderName: senderName,
+              text: message.text,
+              isAppInForeground: AppLifecycleObserver.isInForeground,
+            );
+          }
         case ChannelMessageResponse(:final message):
           _ref.read(messagesProvider.notifier).addMessage(message);
+          if (!message.isOutgoing) {
+            _ref.read(networkStatsProvider.notifier).incrementRx();
+          }
           if (message.channelIndex != null) {
             _ref
                 .read(unreadCountsProvider.notifier)
                 .incrementChannel(message.channelIndex!);
+          }
+          if (!message.isOutgoing) {
+            final channels = _ref.read(channelsProvider);
+            final idx = message.channelIndex ?? 0;
+            final channel = channels.where((c) => c.index == idx).firstOrNull;
+            final channelName =
+                (channel != null && channel.name.isNotEmpty)
+                    ? channel.name
+                    : 'Canal $idx';
+            NotificationService.instance.showChannelMessage(
+              channelName: channelName,
+              senderName: message.senderName ?? 'Desconhecido',
+              text: message.text,
+              isAppInForeground: AppLifecycleObserver.isInForeground,
+            );
           }
         case SelfInfoResponse(:final info):
           _ref.read(selfInfoProvider.notifier).state = info;
           _ref.read(radioConfigProvider.notifier).state = info.radioConfig;
         case BattAndStorageResponse(:final batteryMv):
           _ref.read(batteryProvider.notifier).state = batteryMv;
+          _ref.read(batteryHistoryProvider.notifier).add(batteryMv);
         case DeviceInfoResponse(:final info):
           _ref.read(deviceInfoProvider.notifier).state = info;
         case SendConfirmedPush():
-          // Could notify UI of confirmed send
-          break;
+          _ref.read(messagesProvider.notifier).confirmLastOutgoing();
+        case SentResponse():
+          _ref.read(networkStatsProvider.notifier).incrementTx();
+        case ErrorResponse():
+          _ref.read(networkStatsProvider.notifier).incrementError();
+        case AdvertPush():
+          _ref.read(networkStatsProvider.notifier).incrementHeard();
+        case TelemetryPush(:final data):
+          final readings = CayenneLPP.decode(data);
+          if (readings.isNotEmpty) {
+            _ref.read(telemetryProvider.notifier).add(readings);
+          }
+        case TraceDataPush(:final data):
+          final contacts = _ref.read(contactsProvider);
+          final result = parseTraceDataPush(data, contacts);
+          if (result != null) {
+            _ref.read(traceResultProvider.notifier).state = result;
+          }
+        case StatusResponsePush(:final data):
+          final stats = RepeaterStats.fromPushData(data);
+          if (stats != null) {
+            final current = Map<String, RepeaterStats>.from(
+              _ref.read(repeaterStatusProvider),
+            );
+            current[stats.pubKeyPrefixHex] = stats;
+            _ref.read(repeaterStatusProvider.notifier).state = current;
+          }
+        case LoginSuccessPush():
+          _ref.read(loginResultProvider.notifier).state = true;
+        case LoginFailPush():
+          _ref.read(loginResultProvider.notifier).state = false;
         default:
           break;
       }
@@ -280,9 +401,34 @@ final batteryProvider = StateProvider<int>((_) => 0);
 // Contacts
 class ContactsNotifier extends StateNotifier<List<Contact>> {
   ContactsNotifier() : super([]);
+  bool _loaded = false;
+
+  /// Load cached contacts from storage (called once on app start).
+  Future<void> loadFromStorage() async {
+    if (_loaded) return;
+    _loaded = true;
+    final stored = await StorageService.instance.loadContacts();
+    if (stored.isNotEmpty) state = stored;
+  }
 
   void refresh(List<Contact> contacts) {
     state = List.from(contacts);
+    StorageService.instance.saveContacts(contacts);
+  }
+
+  void remove(Uint8List publicKey) {
+    final next =
+        state.where((c) => !_keysEqual(c.publicKey, publicKey)).toList();
+    state = next;
+    StorageService.instance.saveContacts(next);
+  }
+
+  static bool _keysEqual(Uint8List a, Uint8List b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 }
 
@@ -310,12 +456,96 @@ final channelsProvider =
 class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   MessagesNotifier() : super([]);
 
+  final Set<String> _loadedKeys = {};
+
   void addMessage(ChatMessage message) {
     state = [...state, message];
+    _saveForMessage(message);
   }
 
   void addOutgoing(ChatMessage message) {
     state = [...state, message];
+    _saveForMessage(message);
+  }
+
+  /// Mark the most recent unconfirmed outgoing message as confirmed.
+  /// Called when a [SendConfirmedPush] arrives from the radio.
+  void confirmLastOutgoing() {
+    for (var i = state.length - 1; i >= 0; i--) {
+      final msg = state[i];
+      if (msg.isOutgoing && !msg.confirmed) {
+        final updated = msg.copyWith(confirmed: true);
+        final newList = List<ChatMessage>.from(state);
+        newList[i] = updated;
+        state = newList;
+        _saveForMessage(updated);
+        return;
+      }
+    }
+  }
+
+  /// Lazily load persisted messages for a private contact key (hex6).
+  /// No-op if already loaded. Safe to call on every screen open.
+  Future<void> ensureLoadedForContact(String hex6) async {
+    final key = 'contact_$hex6';
+    if (_loadedKeys.contains(key)) return;
+    _loadedKeys.add(key);
+    final stored = await StorageService.instance.loadMessages(key);
+    if (stored.isEmpty) return;
+    _mergeStored(stored);
+  }
+
+  /// Lazily load persisted messages for a channel index.
+  Future<void> ensureLoadedForChannel(int index) async {
+    final key = 'ch_$index';
+    if (_loadedKeys.contains(key)) return;
+    _loadedKeys.add(key);
+    final stored = await StorageService.instance.loadMessages(key);
+    if (stored.isEmpty) return;
+    _mergeStored(stored);
+  }
+
+  void _mergeStored(List<ChatMessage> stored) {
+    // Deduplicate by (timestamp, isOutgoing, text hashCode).
+    final existing = {for (final m in state) _msgId(m)};
+    final incoming =
+        stored.where((m) => !existing.contains(_msgId(m))).toList();
+    if (incoming.isEmpty) return;
+    final merged = [...incoming, ...state]
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    state = merged;
+  }
+
+  String _msgId(ChatMessage m) =>
+      '${m.timestamp}_${m.isOutgoing ? 1 : 0}_${m.text.hashCode}';
+
+  void _saveForMessage(ChatMessage msg) {
+    final String storageKey;
+    if (msg.channelIndex != null) {
+      storageKey = 'ch_${msg.channelIndex}';
+    } else if (msg.senderKey != null) {
+      storageKey = 'contact_${_hex6(msg.senderKey!)}';
+    } else {
+      return;
+    }
+    // Collect all messages for this key.
+    final forKey =
+        state.where((m) {
+          if (msg.channelIndex != null) {
+            return m.channelIndex == msg.channelIndex;
+          }
+          if (m.senderKey == null) return false;
+          return _prefixMatch6(m.senderKey!, msg.senderKey!);
+        }).toList();
+    StorageService.instance.saveMessages(storageKey, forKey);
+  }
+
+  bool _prefixMatch6(Uint8List a, Uint8List b) {
+    final len = (a.length < b.length ? a.length : b.length).clamp(0, 6);
+    for (var i = 0; i < len; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return len > 0;
   }
 
   /// Get messages for a specific contact (private).
@@ -407,12 +637,200 @@ final unreadCountsProvider =
       (ref) => UnreadCountsNotifier(),
     );
 
+// ---------------------------------------------------------------------------
+// Notification settings
+// ---------------------------------------------------------------------------
+
+class NotificationSettingsNotifier extends StateNotifier<NotificationSettings> {
+  NotificationSettingsNotifier() : super(const NotificationSettings());
+
+  Future<void> loadFromStorage() async {
+    final s = await StorageService.instance.loadNotificationSettings();
+    state = s;
+    NotificationService.instance.settings = s;
+  }
+
+  void update(NotificationSettings settings) {
+    state = settings;
+    NotificationService.instance.settings = settings;
+    StorageService.instance.saveNotificationSettings(settings);
+  }
+}
+
+final notificationSettingsProvider =
+    StateNotifierProvider<NotificationSettingsNotifier, NotificationSettings>(
+      (ref) => NotificationSettingsNotifier(),
+    );
+
 /// Returns the first 6 bytes of [key] as a lowercase hex string.
 String _hex6(Uint8List key) =>
     key.take(6).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+
+// ---------------------------------------------------------------------------
+// Battery history
+// ---------------------------------------------------------------------------
+
+class BatteryReading {
+  const BatteryReading({required this.timestamp, required this.millivolts});
+  final DateTime timestamp;
+  final int millivolts;
+  double get volts => millivolts / 1000.0;
+}
+
+class BatteryHistoryNotifier extends StateNotifier<List<BatteryReading>> {
+  BatteryHistoryNotifier() : super([]);
+
+  static const _maxEntries = 120;
+
+  void add(int millivolts) {
+    if (millivolts <= 0) return;
+    final entry = BatteryReading(
+      timestamp: DateTime.now(),
+      millivolts: millivolts,
+    );
+    final updated = [...state, entry];
+    state =
+        updated.length > _maxEntries
+            ? updated.sublist(updated.length - _maxEntries)
+            : updated;
+  }
+}
+
+final batteryHistoryProvider =
+    StateNotifierProvider<BatteryHistoryNotifier, List<BatteryReading>>(
+      (ref) => BatteryHistoryNotifier(),
+    );
+
+// ---------------------------------------------------------------------------
+// Network statistics
+// ---------------------------------------------------------------------------
+
+class NetworkStats {
+  const NetworkStats({
+    this.rxMessages = 0,
+    this.txMessages = 0,
+    this.errors = 0,
+    this.heardNodes = 0,
+  });
+  final int rxMessages;
+  final int txMessages;
+  final int errors;
+  final int heardNodes;
+
+  NetworkStats copyWith({
+    int? rxMessages,
+    int? txMessages,
+    int? errors,
+    int? heardNodes,
+  }) => NetworkStats(
+    rxMessages: rxMessages ?? this.rxMessages,
+    txMessages: txMessages ?? this.txMessages,
+    errors: errors ?? this.errors,
+    heardNodes: heardNodes ?? this.heardNodes,
+  );
+}
+
+class NetworkStatsNotifier extends StateNotifier<NetworkStats> {
+  NetworkStatsNotifier() : super(const NetworkStats());
+
+  void incrementRx() =>
+      state = state.copyWith(rxMessages: state.rxMessages + 1);
+  void incrementTx() =>
+      state = state.copyWith(txMessages: state.txMessages + 1);
+  void incrementError() => state = state.copyWith(errors: state.errors + 1);
+  void incrementHeard() =>
+      state = state.copyWith(heardNodes: state.heardNodes + 1);
+  void reset() => state = const NetworkStats();
+}
+
+final networkStatsProvider =
+    StateNotifierProvider<NetworkStatsNotifier, NetworkStats>(
+      (ref) => NetworkStatsNotifier(),
+    );
+
+// ---------------------------------------------------------------------------
+// Telemetry (CayenneLPP sensor readings)
+// ---------------------------------------------------------------------------
+
+class TelemetryEntry {
+  const TelemetryEntry({required this.timestamp, required this.readings});
+  final DateTime timestamp;
+  final List<CayenneReading> readings;
+}
+
+class TelemetryNotifier extends StateNotifier<List<TelemetryEntry>> {
+  TelemetryNotifier() : super([]);
+
+  static const _maxEntries = 50;
+
+  void add(List<CayenneReading> readings) {
+    if (readings.isEmpty) return;
+    final entry = TelemetryEntry(timestamp: DateTime.now(), readings: readings);
+    final updated = [entry, ...state];
+    state =
+        updated.length > _maxEntries
+            ? updated.sublist(0, _maxEntries)
+            : updated;
+  }
+}
+
+final telemetryProvider =
+    StateNotifierProvider<TelemetryNotifier, List<TelemetryEntry>>(
+      (ref) => TelemetryNotifier(),
+    );
 
 // ---------------------------------------------------------------------------
 // Scanned devices
 // ---------------------------------------------------------------------------
 
 final scannedDevicesProvider = StateProvider<List<RadioDevice>>((_) => []);
+
+// ---------------------------------------------------------------------------
+// Trace result
+// ---------------------------------------------------------------------------
+
+/// Latest parsed [TraceResult] received from a PUSH_CODE_TRACE_DATA (0x89).
+/// Updated whenever a new trace push arrives; null until first trace received.
+final traceResultProvider = StateProvider<TraceResult?>((ref) => null);
+
+// ---------------------------------------------------------------------------
+// Repeater remote-admin
+// ---------------------------------------------------------------------------
+
+/// Map of repeater pub-key-prefix hex → latest [RepeaterStats] received.
+final repeaterStatusProvider = StateProvider<Map<String, RepeaterStats>>(
+  (_) => {},
+);
+
+/// Login result: null = no attempt, true = success, false = fail.
+/// Reset to null by the admin sheet before each new login attempt.
+final loginResultProvider = StateProvider<bool?>((_) => null);
+
+// ---------------------------------------------------------------------------
+// Contact favorites (app-side, not stored on radio)
+// ---------------------------------------------------------------------------
+
+class FavoritesNotifier extends StateNotifier<Set<String>> {
+  FavoritesNotifier() : super({});
+
+  Future<void> loadFromStorage() async {
+    state = await StorageService.instance.loadFavorites();
+  }
+
+  void toggle(String keyHex) {
+    final next = Set<String>.from(state);
+    if (next.contains(keyHex)) {
+      next.remove(keyHex);
+    } else {
+      next.add(keyHex);
+    }
+    state = next;
+    StorageService.instance.saveFavorites(next);
+  }
+
+  bool isFavorite(String keyHex) => state.contains(keyHex);
+}
+
+final favoritesProvider = StateNotifierProvider<FavoritesNotifier, Set<String>>(
+  (ref) => FavoritesNotifier(),
+);

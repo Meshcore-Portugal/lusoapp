@@ -5,6 +5,7 @@ import 'screens/connect_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/channels_list_screen.dart';
 import 'screens/channel_chat_screen.dart';
+import 'screens/map_screen.dart';
 import 'screens/private_chat_screen.dart';
 import 'screens/radio_config_screen.dart';
 import 'screens/contacts_screen.dart';
@@ -36,6 +37,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/contacts',
             builder: (context, state) => const ContactsScreen(),
           ),
+          GoRoute(path: '/map', builder: (context, state) => const MapScreen()),
           GoRoute(
             path: '/chat/:keyHex',
             builder: (context, state) {

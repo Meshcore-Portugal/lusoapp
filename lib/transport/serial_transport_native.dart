@@ -35,6 +35,9 @@ class SerialTransport implements RadioTransport {
   bool get isConnected => _connected;
 
   @override
+  Stream<void> get connectionLost => Stream.empty();
+
+  @override
   Stream<Uint8List> get dataStream => _dataController.stream;
 
   @override

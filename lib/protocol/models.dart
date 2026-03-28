@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:equatable/equatable.dart';
 
@@ -41,6 +42,30 @@ class Contact extends Equatable {
 
   @override
   List<Object?> get props => [publicKey, type, name];
+
+  Map<String, dynamic> toJson() => {
+    'publicKey': base64Encode(publicKey),
+    'type': type,
+    'flags': flags,
+    'pathLen': pathLen,
+    'name': name,
+    'lastAdvertTimestamp': lastAdvertTimestamp,
+    'latitude': latitude,
+    'longitude': longitude,
+    'lastModified': lastModified,
+  };
+
+  factory Contact.fromJson(Map<String, dynamic> json) => Contact(
+    publicKey: base64Decode(json['publicKey'] as String),
+    type: json['type'] as int,
+    flags: json['flags'] as int,
+    pathLen: json['pathLen'] as int,
+    name: json['name'] as String,
+    lastAdvertTimestamp: json['lastAdvertTimestamp'] as int,
+    latitude: (json['latitude'] as num?)?.toDouble(),
+    longitude: (json['longitude'] as num?)?.toDouble(),
+    lastModified: json['lastModified'] as int?,
+  );
 }
 
 /// A chat message (private or channel).
@@ -69,6 +94,57 @@ class ChatMessage extends Equatable {
 
   bool get isChannel => channelIndex != null;
   bool get isPrivate => channelIndex == null;
+
+  ChatMessage copyWith({
+    String? text,
+    int? timestamp,
+    bool? isOutgoing,
+    Uint8List? senderKey,
+    int? channelIndex,
+    String? senderName,
+    bool? confirmed,
+    double? snr,
+    int? pathLen,
+  }) {
+    return ChatMessage(
+      text: text ?? this.text,
+      timestamp: timestamp ?? this.timestamp,
+      isOutgoing: isOutgoing ?? this.isOutgoing,
+      senderKey: senderKey ?? this.senderKey,
+      channelIndex: channelIndex ?? this.channelIndex,
+      senderName: senderName ?? this.senderName,
+      confirmed: confirmed ?? this.confirmed,
+      snr: snr ?? this.snr,
+      pathLen: pathLen ?? this.pathLen,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'text': text,
+    'timestamp': timestamp,
+    'isOutgoing': isOutgoing,
+    'senderKey': senderKey != null ? base64Encode(senderKey!) : null,
+    'channelIndex': channelIndex,
+    'senderName': senderName,
+    'confirmed': confirmed,
+    'snr': snr,
+    'pathLen': pathLen,
+  };
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
+    text: json['text'] as String,
+    timestamp: json['timestamp'] as int,
+    isOutgoing: json['isOutgoing'] as bool,
+    senderKey:
+        json['senderKey'] != null
+            ? base64Decode(json['senderKey'] as String)
+            : null,
+    channelIndex: json['channelIndex'] as int?,
+    senderName: json['senderName'] as String?,
+    confirmed: json['confirmed'] as bool? ?? false,
+    snr: (json['snr'] as num?)?.toDouble(),
+    pathLen: json['pathLen'] as int?,
+  );
 
   @override
   List<Object?> get props => [text, timestamp, isOutgoing, channelIndex];
@@ -180,6 +256,159 @@ class SelfInfo extends Equatable {
 
   @override
   List<Object?> get props => [publicKey, name, radioConfig];
+}
+
+// ---------------------------------------------------------------------------
+// Trace path models
+// ---------------------------------------------------------------------------
+
+/// A single hop in a MeshCore trace route.
+class TraceHop {
+  const TraceHop({
+    required this.hashHex,
+    required this.snrDb,
+    this.name,
+    this.latitude,
+    this.longitude,
+  });
+
+  final String hashHex; // node hash as hex string (1–8 bytes)
+  final double snrDb; // receive SNR at this hop (dB)
+  final String? name; // matched contact name, if known
+  final double? latitude;
+  final double? longitude;
+
+  bool get hasGps => latitude != null && longitude != null;
+}
+
+/// Parsed result from a PUSH_CODE_TRACE_DATA (0x89) push.
+class TraceResult {
+  const TraceResult({
+    required this.tag,
+    required this.hops,
+    required this.finalSnrDb,
+    required this.timestamp,
+  });
+
+  final int tag;
+  final List<TraceHop> hops;
+  final double finalSnrDb; // SNR of the last link into our radio
+  final DateTime timestamp;
+
+  int get hopCount => hops.length;
+}
+
+// ---------------------------------------------------------------------------
+// Repeater remote-admin stats
+// ---------------------------------------------------------------------------
+
+/// Statistics returned by a repeater in response to a status request (0x1B).
+/// Binary layout: [reserved:1][pub_key_prefix:6][RepeaterStats:56]
+/// All integers are little-endian.
+class RepeaterStats {
+  const RepeaterStats({
+    required this.pubKeyPrefixHex,
+    required this.batteryMv,
+    required this.txQueueLen,
+    required this.noiseFloor,
+    required this.lastRssi,
+    required this.packetsRecv,
+    required this.packetsSent,
+    required this.airTimeSecs,
+    required this.uptimeSecs,
+    required this.sentFlood,
+    required this.sentDirect,
+    required this.recvFlood,
+    required this.recvDirect,
+    required this.errEvents,
+    required this.lastSnrDb,
+    required this.directDups,
+    required this.floodDups,
+    this.rxAirTimeSecs,
+    this.recvErrors,
+    required this.receivedAt,
+  });
+
+  final String pubKeyPrefixHex; // 6-byte hex key identifying the repeater
+  final int batteryMv;
+  final int txQueueLen;
+  final int noiseFloor; // dBm
+  final int lastRssi; // dBm
+  final int packetsRecv;
+  final int packetsSent;
+  final int airTimeSecs; // cumulative TX air time
+  final int uptimeSecs;
+  final int sentFlood;
+  final int sentDirect;
+  final int recvFlood;
+  final int recvDirect;
+  final int errEvents;
+  final double lastSnrDb; // SNR×4 converted to dB
+  final int directDups;
+  final int floodDups;
+  final int? rxAirTimeSecs; // present only in full repeater stats (not room)
+  final int? recvErrors;
+  final DateTime receivedAt;
+
+  String get uptimeFormatted {
+    final h = uptimeSecs ~/ 3600;
+    final m = (uptimeSecs % 3600) ~/ 60;
+    final s = uptimeSecs % 60;
+    if (h > 0) return '${h}h ${m}m';
+    if (m > 0) return '${m}m ${s}s';
+    return '${s}s';
+  }
+
+  double get batteryVolts => batteryMv / 1000.0;
+
+  /// Parse from the raw push data (after 0x87 code stripped).
+  /// data[0] = reserved, data[1..6] = pub_key_prefix, data[7..] = struct.
+  static RepeaterStats? fromPushData(Uint8List data) {
+    if (data.length < 51) return null; // minimum: 7 header + 44 common fields
+
+    final bd = ByteData.sublistView(data);
+    final prefixHex =
+        data
+            .sublist(1, 7)
+            .map((b) => b.toRadixString(16).padLeft(2, '0'))
+            .join();
+
+    const base = 7; // struct starts at offset 7
+    int readU16(int off) => bd.getUint16(base + off, Endian.little);
+    int readI16(int off) => bd.getInt16(base + off, Endian.little);
+    int readU32(int off) => bd.getUint32(base + off, Endian.little);
+
+    final snrRaw = readI16(42);
+    int? rxAirTime;
+    int? recvErrors;
+    if (data.length >= base + 56) {
+      rxAirTime = readU32(48);
+      recvErrors = readU32(52);
+    }
+
+    return RepeaterStats(
+      pubKeyPrefixHex: prefixHex,
+      batteryMv: readU16(0),
+      txQueueLen: readU16(2),
+      noiseFloor: readI16(4),
+      lastRssi: readI16(6),
+      packetsRecv: readU32(8),
+      packetsSent: readU32(12),
+      airTimeSecs: readU32(16),
+      uptimeSecs: readU32(20),
+      sentFlood: readU32(24),
+      sentDirect: readU32(28),
+      recvFlood: readU32(32),
+      recvDirect: readU32(36),
+      errEvents: readU16(40),
+      lastSnrDb: snrRaw / 4.0,
+      directDups: readU16(44),
+      floodDups: readU16(46),
+      rxAirTimeSecs: rxAirTime,
+      recvErrors: recvErrors,
+      receivedAt: DateTime.now(),
+    );
+  }
 }
 
 /// Channel information returned by PACKET_CHANNEL_INFO (0x12).

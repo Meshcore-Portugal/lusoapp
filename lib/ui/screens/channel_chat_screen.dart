@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -17,16 +18,20 @@ class ChannelChatScreen extends ConsumerStatefulWidget {
 class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
+  ChatMessage? _replyingTo;
 
   @override
   void initState() {
     super.initState();
-    // Mark channel as read when this screen is opened.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref
           .read(unreadCountsProvider.notifier)
           .markChannelRead(widget.channelIndex);
+      // Load persisted messages for this channel on first open.
+      ref
+          .read(messagesProvider.notifier)
+          .ensureLoadedForChannel(widget.channelIndex);
     });
   }
 
@@ -44,14 +49,18 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
     final service = ref.read(radioServiceProvider);
     if (service == null) return;
 
-    service.sendChannelMessage(widget.channelIndex, text);
+    final replyPrefix =
+        _replyingTo != null ? '@${_senderFromMessage(_replyingTo!)}: ' : '';
+    final fullText = '$replyPrefix$text';
+
+    service.sendChannelMessage(widget.channelIndex, fullText);
 
     // Add outgoing message to local state
     ref
         .read(messagesProvider.notifier)
         .addOutgoing(
           ChatMessage(
-            text: text,
+            text: fullText,
             timestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000,
             isOutgoing: true,
             channelIndex: widget.channelIndex,
@@ -59,6 +68,7 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
         );
 
     _textController.clear();
+    if (_replyingTo != null) setState(() => _replyingTo = null);
     _scrollToBottom();
   }
 
@@ -74,14 +84,25 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
     });
   }
 
+  /// Extracts the sender name from a received channel message.
+  /// Channel messages arrive as "SenderName: message text" with no separate
+  /// senderName field, so we parse the part before the first ': '.
+  String _senderFromMessage(ChatMessage msg) {
+    if (msg.senderName != null) return msg.senderName!;
+    final idx = msg.text.indexOf(': ');
+    if (idx > 0) return msg.text.substring(0, idx);
+    return 'Canal';
+  }
+
   @override
   Widget build(BuildContext context) {
     // While this screen is visible, clear unread badge for this channel
-    // whenever new messages arrive.
-    ref.listen<List<ChatMessage>>(messagesProvider, (_, __) {
+    // whenever new messages arrive, and tail-scroll to the latest message.
+    ref.listen<List<ChatMessage>>(messagesProvider, (prev, next) {
       ref
           .read(unreadCountsProvider.notifier)
           .markChannelRead(widget.channelIndex);
+      if (prev != null && next.length > prev.length) _scrollToBottom();
     });
 
     final channels = ref.watch(channelsProvider);
@@ -154,7 +175,13 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
                     itemCount: channelMessages.length,
                     itemBuilder: (context, index) {
                       final msg = channelMessages[index];
-                      return _MessageBubble(message: msg);
+                      return _MessageBubble(
+                        message: msg,
+                        onReply:
+                            msg.isOutgoing
+                                ? null
+                                : () => setState(() => _replyingTo = msg),
+                      );
                     },
                   ),
         ),
@@ -164,6 +191,11 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
           controller: _textController,
           onSend: _sendMessage,
           hintText: 'Mensagem para o canal...',
+          replyTo: _replyingTo,
+          onCancelReply:
+              _replyingTo != null
+                  ? () => setState(() => _replyingTo = null)
+                  : null,
         ),
       ],
     );
@@ -225,7 +257,7 @@ class ChannelsTabScreen extends ConsumerWidget {
               channel.name.isNotEmpty ? channel.name : 'Canal ${channel.index}',
             ),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.go('/channels/${channel.index}'),
+            onTap: () => context.pushReplacement('/channels/${channel.index}'),
           ),
         );
       },
@@ -238,8 +270,9 @@ class ChannelsTabScreen extends ConsumerWidget {
 // ---------------------------------------------------------------------------
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.message});
+  const _MessageBubble({required this.message, this.onReply});
   final ChatMessage message;
+  final VoidCallback? onReply;
 
   @override
   Widget build(BuildContext context) {
@@ -249,7 +282,7 @@ class _MessageBubble extends StatelessWidget {
     final timeStr =
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
 
-    return Align(
+    final bubble = Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 2),
@@ -280,16 +313,55 @@ class _MessageBubble extends StatelessWidget {
               ),
             Text(message.text),
             const SizedBox(height: 4),
-            Text(
-              timeStr,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurface.withAlpha(100),
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  timeStr,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withAlpha(100),
+                  ),
+                ),
+                if (!isMe && message.snr != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    'SNR ${message.snr!.toStringAsFixed(1)} dB',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withAlpha(90),
+                    ),
+                  ),
+                ],
+                if (isMe) ...[
+                  const SizedBox(width: 6),
+                  Icon(
+                    message.confirmed ? Icons.done_all : Icons.done,
+                    size: 18,
+                    color:
+                        message.confirmed
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface.withAlpha(140),
+                    shadows:
+                        message.confirmed
+                            ? [
+                              Shadow(
+                                color: theme.colorScheme.primary.withAlpha(80),
+                                blurRadius: 4,
+                              ),
+                            ]
+                            : null,
+                  ),
+                ],
+              ],
             ),
           ],
         ),
       ),
     );
+
+    if (!isMe && onReply != null) {
+      return _SwipeToReplyWrapper(onReply: onReply!, child: bubble);
+    }
+    return bubble;
   }
 }
 
@@ -298,11 +370,15 @@ class _ChatInputBar extends StatelessWidget {
     required this.controller,
     required this.onSend,
     this.hintText = 'Escreva uma mensagem...',
+    this.replyTo,
+    this.onCancelReply,
   });
 
   final TextEditingController controller;
   final VoidCallback onSend;
   final String hintText;
+  final ChatMessage? replyTo;
+  final VoidCallback? onCancelReply;
 
   @override
   Widget build(BuildContext context) {
@@ -317,29 +393,174 @@ class _ChatInputBar extends StatelessWidget {
         ),
       ),
       child: SafeArea(
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: TextField(
-                controller: controller,
-                decoration: InputDecoration(
-                  hintText: hintText,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
+            if (replyTo != null && onCancelReply != null)
+              _ReplyStrip(
+                message: replyTo!,
+                onCancel: onCancelReply!,
+                theme: theme,
+              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    decoration: InputDecoration(
+                      hintText: hintText,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                    ),
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => onSend(),
                   ),
                 ),
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => onSend(),
-              ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  onPressed: onSend,
+                  icon: const Icon(Icons.send),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            IconButton.filled(onPressed: onSend, icon: const Icon(Icons.send)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Swipe-to-reply + reply strip widgets
+// ---------------------------------------------------------------------------
+
+class _SwipeToReplyWrapper extends StatefulWidget {
+  const _SwipeToReplyWrapper({required this.child, required this.onReply});
+  final Widget child;
+  final VoidCallback onReply;
+
+  @override
+  State<_SwipeToReplyWrapper> createState() => _SwipeToReplyWrapperState();
+}
+
+class _SwipeToReplyWrapperState extends State<_SwipeToReplyWrapper> {
+  double _offset = 0;
+  bool _fired = false;
+  static const _kThreshold = 64.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final progress = (_offset / _kThreshold).clamp(0.0, 1.0);
+    return GestureDetector(
+      onHorizontalDragUpdate: (d) {
+        if (d.delta.dx > 0) {
+          setState(() {
+            _offset = (_offset + d.delta.dx).clamp(0.0, _kThreshold * 1.3);
+            if (_offset >= _kThreshold && !_fired) {
+              _fired = true;
+              HapticFeedback.lightImpact();
+              widget.onReply();
+            }
+          });
+        }
+      },
+      onHorizontalDragEnd:
+          (_) => setState(() {
+            _offset = 0;
+            _fired = false;
+          }),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 4,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: Opacity(
+                opacity: progress,
+                child: Transform.scale(
+                  scale: 0.6 + 0.4 * progress,
+                  child: Icon(
+                    Icons.reply,
+                    color: theme.colorScheme.primary,
+                    size: 24,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Transform.translate(offset: Offset(_offset, 0), child: widget.child),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReplyStrip extends StatelessWidget {
+  const _ReplyStrip({
+    required this.message,
+    required this.onCancel,
+    required this.theme,
+  });
+  final ChatMessage message;
+  final VoidCallback onCancel;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final senderLabel =
+        message.isOutgoing ? 'Você' : (message.senderName ?? 'Contacto');
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border(
+          left: BorderSide(color: theme.colorScheme.primary, width: 3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.reply, size: 16, color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  senderLabel,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  message.text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 16),
+            onPressed: onCancel,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+          ),
+        ],
       ),
     );
   }

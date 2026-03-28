@@ -18,6 +18,13 @@
     <!-- Declare BLE as optional so the app works on devices without BT -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
+    <!-- Camera — required for QR code scanning -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- Notifications — required for flutter_local_notifications on Android 13+ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:label="mcapppt"
         android:name="${applicationName}"

@@ -1,0 +1,22 @@
+name: geolocator_windows
+description: Pure-Dart stub for geolocator_windows. Replaces the real package
+  to avoid the NuGet/WinRT C++ build requirement (Microsoft.Windows.CppWinRT).
+  All GPS calls return "denied" — the map screen only calls Geolocator on
+  Android/iOS anyway (guarded by defaultTargetPlatform check).
+version: 0.2.5
+
+environment:
+  sdk: ^3.7.0
+  flutter: ^3.29.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  geolocator_platform_interface: ^4.2.6
+
+flutter:
+  plugin:
+    implements: geolocator
+    platforms:
+      windows:
+        dartPluginClass: GeolocatorWindows

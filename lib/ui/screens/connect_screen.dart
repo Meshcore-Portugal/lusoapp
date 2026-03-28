@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../providers/radio_providers.dart';
+import '../../services/storage_service.dart';
 import '../../transport/transport.dart';
 
 // ---------------------------------------------------------------------------
@@ -152,19 +153,22 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   Future<void> _connectTo(_ConnectTarget target) async {
     setState(() => _connectingTarget = target);
     final connection = ref.read(connectionProvider.notifier);
+    final name = target.device.name;
     bool ok;
 
     switch (target.type) {
       case _ConnectType.ble:
-        ok = await connection.connectBle(target.device.id);
+        ok = await connection.connectBle(target.device.id, name);
       case _ConnectType.serialCompanion:
         ok = await connection.connectSerial(
           target.device.id,
+          name,
           mode: ConnectionMode.companion,
         );
       case _ConnectType.serialKiss:
         ok = await connection.connectSerial(
           target.device.id,
+          name,
           mode: ConnectionMode.kiss,
         );
     }
@@ -176,6 +180,50 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Falha ao ligar ao dispositivo'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _connectToLastDevice(LastDevice last) async {
+    setState(() {
+      _connectingTarget = _ConnectTarget(
+        device: RadioDevice(
+          id: last.id,
+          name: last.name,
+          type:
+              last.type == 'ble' ? RadioDeviceType.ble : RadioDeviceType.serial,
+        ),
+        type:
+            last.type == 'ble'
+                ? _ConnectType.ble
+                : last.type == 'serialKiss'
+                ? _ConnectType.serialKiss
+                : _ConnectType.serialCompanion,
+      );
+    });
+    final connection = ref.read(connectionProvider.notifier);
+    bool ok;
+    if (last.type == 'ble') {
+      ok = await connection.connectBle(last.id, last.name);
+    } else {
+      ok = await connection.connectSerial(
+        last.id,
+        last.name,
+        mode:
+            last.type == 'serialKiss'
+                ? ConnectionMode.kiss
+                : ConnectionMode.companion,
+      );
+    }
+    if (ok && mounted) {
+      context.go('/channels');
+    } else if (mounted) {
+      setState(() => _connectingTarget = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Falha ao ligar ao último dispositivo'),
           backgroundColor: Colors.red,
         ),
       );
@@ -229,8 +277,55 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                   stepIndex: stepIndex,
                   totalSteps: totalSteps,
                   theme: theme,
+                  contactCount: ref.watch(contactsProvider).length,
+                  channelCount:
+                      ref
+                          .watch(channelsProvider)
+                          .where((c) => c.name.isNotEmpty)
+                          .length,
                 )
               else ...[
+                // Last device quick-connect
+                Builder(
+                  builder: (context) {
+                    final lastDevice = ref.watch(lastDeviceProvider);
+                    if (lastDevice == null) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Card(
+                        color: theme.colorScheme.secondaryContainer,
+                        child: ListTile(
+                          leading: Icon(
+                            lastDevice.type == 'ble'
+                                ? Icons.bluetooth
+                                : Icons.usb,
+                            color: theme.colorScheme.onSecondaryContainer,
+                          ),
+                          title: Text(
+                            'Ligar novamente',
+                            style: TextStyle(
+                              color: theme.colorScheme.onSecondaryContainer,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          subtitle: Text(
+                            lastDevice.name,
+                            style: TextStyle(
+                              color: theme.colorScheme.onSecondaryContainer
+                                  .withAlpha(180),
+                            ),
+                          ),
+                          trailing: Icon(
+                            Icons.arrow_forward_ios,
+                            size: 16,
+                            color: theme.colorScheme.onSecondaryContainer,
+                          ),
+                          onTap: () => _connectToLastDevice(lastDevice),
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 FilledButton.icon(
                   onPressed: _scanning ? null : _startScan,
                   icon:
@@ -327,6 +422,8 @@ class _ConnectingCard extends StatelessWidget {
     required this.stepIndex,
     required this.totalSteps,
     required this.theme,
+    required this.contactCount,
+    required this.channelCount,
   });
 
   final _ConnectTarget? target;
@@ -334,6 +431,8 @@ class _ConnectingCard extends StatelessWidget {
   final int stepIndex;
   final int totalSteps;
   final ThemeData theme;
+  final int contactCount;
+  final int channelCount;
 
   static const _stepLabels = [
     'A ligar...',
@@ -457,6 +556,52 @@ class _ConnectingCard extends StatelessWidget {
                               active ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
+                      // Show count badge for contacts (i==2) and channels (i==3)
+                      if ((i == 2 && contactCount > 0) ||
+                          (i == 3 && channelCount > 0)) ...[
+                        const SizedBox(width: 6),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          child: Container(
+                            key: ValueKey(i == 2 ? contactCount : channelCount),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: (done
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.primaryContainer)
+                                  .withAlpha(40),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color:
+                                    done
+                                        ? theme.colorScheme.primary.withAlpha(
+                                          120,
+                                        )
+                                        : theme.colorScheme.primary.withAlpha(
+                                          80,
+                                        ),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Text(
+                              '${i == 2 ? contactCount : channelCount}',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color:
+                                    done
+                                        ? theme.colorScheme.primary
+                                        : theme.colorScheme.onSurface.withAlpha(
+                                          160,
+                                        ),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 );

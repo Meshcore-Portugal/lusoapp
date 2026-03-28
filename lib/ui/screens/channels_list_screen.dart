@@ -1,9 +1,14 @@
+import 'dart:math';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
+import 'qr_scanner_screen.dart';
 
 // Filter options
 enum _Filter { todos, naoLidos }
@@ -45,51 +50,96 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen> {
       return a.index.compareTo(b.index);
     });
 
-    return Column(
+    final maxChannels = ref.watch(deviceInfoProvider)?.maxChannels ?? 8;
+    final usedIndices = configured.map((c) => c.index).toSet();
+
+    void openAddSheet({ChannelInfo? existing}) {
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder:
+            (_) => _AddEditChannelSheet(
+              existing: existing,
+              maxChannels: maxChannels,
+              usedIndices: usedIndices,
+              onSave: (index, name, secret) async {
+                final service = ref.read(radioServiceProvider);
+                if (service == null) return;
+                await service.setChannel(index, name, secret);
+                await Future.delayed(const Duration(milliseconds: 200));
+                await service.requestChannel(index);
+              },
+            ),
+      );
+    }
+
+    return Stack(
       children: [
-        // Filter chips bar
-        _FilterBar(
-          filter: _filter,
-          totalCount: configured.length,
-          unreadCount: unreadChannelCount,
-          onChanged: (f) => setState(() => _filter = f),
+        Column(
+          children: [
+            // Filter chips bar
+            _FilterBar(
+              filter: _filter,
+              totalCount: configured.length,
+              unreadCount: unreadChannelCount,
+              onChanged: (f) => setState(() => _filter = f),
+            ),
+
+            // Content
+            Expanded(
+              child:
+                  configured.isEmpty
+                      ? _EmptyState(
+                        onRefresh: () {
+                          final service = ref.read(radioServiceProvider);
+                          if (service == null) return;
+                          for (var i = 0; i < maxChannels; i++) {
+                            service.requestChannel(i);
+                          }
+                        },
+                      )
+                      : filtered.isEmpty
+                      ? _NoUnreadState(
+                        onClearFilter:
+                            () => setState(() => _filter = _Filter.todos),
+                      )
+                      : RefreshIndicator(
+                        onRefresh: () async {
+                          final service = ref.read(radioServiceProvider);
+                          if (service == null) return;
+                          for (var i = 0; i < maxChannels; i++) {
+                            await service.requestChannel(i);
+                            await Future.delayed(
+                              const Duration(milliseconds: 100),
+                            );
+                          }
+                        },
+                        child: ListView.builder(
+                          padding: const EdgeInsets.only(top: 4, bottom: 80),
+                          itemCount: filtered.length,
+                          itemBuilder:
+                              (context, index) => _ChannelTile(
+                                channel: filtered[index],
+                                onEdit:
+                                    () =>
+                                        openAddSheet(existing: filtered[index]),
+                              ),
+                        ),
+                      ),
+            ),
+          ],
         ),
 
-        // Content
-        Expanded(
-          child:
-              configured.isEmpty
-                  ? _EmptyState(
-                    onRefresh: () {
-                      final service = ref.read(radioServiceProvider);
-                      if (service == null) return;
-                      for (var i = 0; i < 8; i++) {
-                        service.requestChannel(i);
-                      }
-                    },
-                  )
-                  : filtered.isEmpty
-                  ? _NoUnreadState(
-                    onClearFilter:
-                        () => setState(() => _filter = _Filter.todos),
-                  )
-                  : RefreshIndicator(
-                    onRefresh: () async {
-                      final service = ref.read(radioServiceProvider);
-                      if (service == null) return;
-                      for (var i = 0; i < 8; i++) {
-                        await service.requestChannel(i);
-                        await Future.delayed(const Duration(milliseconds: 100));
-                      }
-                    },
-                    child: ListView.builder(
-                      padding: const EdgeInsets.only(top: 4, bottom: 8),
-                      itemCount: filtered.length,
-                      itemBuilder:
-                          (context, index) =>
-                              _ChannelTile(channel: filtered[index]),
-                    ),
-                  ),
+        // FAB
+        Positioned(
+          bottom: 16,
+          right: 16,
+          child: FloatingActionButton(
+            heroTag: 'channels_fab',
+            onPressed: () => openAddSheet(),
+            tooltip: 'Adicionar canal',
+            child: const Icon(Icons.add),
+          ),
         ),
       ],
     );
@@ -234,8 +284,9 @@ class _NoUnreadState extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _ChannelTile extends ConsumerWidget {
-  const _ChannelTile({required this.channel});
+  const _ChannelTile({required this.channel, required this.onEdit});
   final ChannelInfo channel;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -257,7 +308,7 @@ class _ChannelTile extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => context.go('/channels/${channel.index}'),
+        onTap: () => context.push('/channels/${channel.index}'),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
@@ -317,6 +368,23 @@ class _ChannelTile extends ConsumerWidget {
 
               const SizedBox(width: 8),
 
+              // QR share button (only if secret is available)
+              if (channel.secret != null)
+                IconButton(
+                  icon: const Icon(Icons.qr_code, size: 18),
+                  tooltip: 'Partilhar canal via QR',
+                  onPressed: () => _showChannelQrCode(context),
+                  visualDensity: VisualDensity.compact,
+                ),
+
+              // Edit button
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                tooltip: 'Editar canal',
+                onPressed: onEdit,
+                visualDensity: VisualDensity.compact,
+              ),
+
               // Trailing: timestamp + total count
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -369,5 +437,334 @@ class _ChannelTile extends ConsumerWidget {
     if (diff.inHours < 24) return '${diff.inHours}h';
     if (diff.inDays < 7) return '${diff.inDays}d';
     return '${dt.day}/${dt.month}';
+  }
+
+  void _showChannelQrCode(BuildContext context) {
+    final secret = channel.secret;
+    if (secret == null) return;
+    final uri = MeshCoreUri.buildChannelUri(name: channel.name, secret: secret);
+    showDialog<void>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('QR Code do canal'),
+            content: SizedBox(
+              width: 260,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  QrImageView(
+                    data: uri,
+                    size: 240,
+                    backgroundColor: Colors.white,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '${channel.index}: ${channel.name}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Partilhe este QR Code para dar acesso ao canal',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Fechar'),
+              ),
+            ],
+          ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Add / Edit channel bottom sheet
+// ---------------------------------------------------------------------------
+
+class _AddEditChannelSheet extends StatefulWidget {
+  const _AddEditChannelSheet({
+    required this.maxChannels,
+    required this.usedIndices,
+    required this.onSave,
+    this.existing,
+  });
+
+  final ChannelInfo? existing;
+  final int maxChannels;
+  final Set<int> usedIndices;
+  final Future<void> Function(int index, String name, Uint8List secret) onSave;
+
+  @override
+  State<_AddEditChannelSheet> createState() => _AddEditChannelSheetState();
+}
+
+class _AddEditChannelSheetState extends State<_AddEditChannelSheet> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _secretCtrl;
+  late int _selectedIndex;
+  bool _saving = false;
+  String? _nameError;
+  String? _secretError;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existing;
+    _nameCtrl = TextEditingController(text: existing?.name ?? '');
+    // Secret is write-only on the radio; show empty for edit
+    _secretCtrl = TextEditingController();
+    if (existing != null) {
+      _selectedIndex = existing.index;
+    } else {
+      // Auto-pick first free slot
+      _selectedIndex = List.generate(
+        widget.maxChannels,
+        (i) => i,
+      ).firstWhere((i) => !widget.usedIndices.contains(i), orElse: () => 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _secretCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _scanQr() async {
+    final raw = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const QrScannerScreen(title: 'Ler QR de Canal'),
+      ),
+    );
+    if (raw == null || !mounted) return;
+
+    final result = MeshCoreUri.parse(raw);
+    if (result is MeshCoreChannelUri) {
+      _nameCtrl.text = result.name;
+      _secretCtrl.text =
+          result.secret.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      setState(() {
+        _nameError = null;
+        _secretError = null;
+      });
+    } else if (result is MeshCoreContactUri) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'QR de contacto detectado. Use o ecrã de Contactos para o adicionar.',
+            ),
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('QR Code MeshCore inválido ou não reconhecido.'),
+          ),
+        );
+      }
+    }
+  }
+
+  void _generateSecret() {
+    final rng = Random.secure();
+    final bytes = List.generate(16, (_) => rng.nextInt(256));
+    _secretCtrl.text =
+        bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  Uint8List? _parseSecret(String hex) {
+    if (hex.isEmpty) {
+      // Generate random secret when field is blank
+      final rng = Random.secure();
+      return Uint8List.fromList(List.generate(16, (_) => rng.nextInt(256)));
+    }
+    final clean = hex.replaceAll(RegExp(r'\s+'), '');
+    if (clean.length != 32) return null;
+    try {
+      return Uint8List.fromList(
+        List.generate(
+          16,
+          (i) => int.parse(clean.substring(i * 2, i * 2 + 2), radix: 16),
+        ),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _nameError =
+          _nameCtrl.text.trim().isEmpty ? 'O nome é obrigatório' : null;
+      final secretRaw = _secretCtrl.text.trim();
+      _secretError =
+          secretRaw.isNotEmpty && _parseSecret(secretRaw) == null
+              ? 'Introduza 32 caracteres hexadecimais (16 bytes) ou deixe em branco para gerar'
+              : null;
+    });
+    if (_nameError != null || _secretError != null) return;
+
+    final secret = _parseSecret(_secretCtrl.text.trim())!;
+    setState(() => _saving = true);
+    try {
+      await widget.onSave(_selectedIndex, _nameCtrl.text.trim(), secret);
+      if (mounted) Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.existing != null;
+    final theme = Theme.of(context);
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurface.withAlpha(40),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            isEdit ? 'Editar canal' : 'Adicionar canal',
+            style: theme.textTheme.titleLarge,
+          ),
+          const SizedBox(height: 20),
+
+          // Index selector (only when adding)
+          if (!isEdit) ...[
+            InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Índice do canal',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: _selectedIndex,
+                  isExpanded: true,
+                  items: List.generate(widget.maxChannels, (i) {
+                    final inUse = widget.usedIndices.contains(i);
+                    return DropdownMenuItem(
+                      value: i,
+                      child: Text('Canal $i${inUse ? " (em uso)" : ""}'),
+                    );
+                  }),
+                  onChanged: (v) => setState(() => _selectedIndex = v!),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ] else ...[
+            // Read-only index display when editing
+            InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Índice do canal',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.numbers),
+              ),
+              child: Text('Canal $_selectedIndex'),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Channel name
+          TextField(
+            controller: _nameCtrl,
+            decoration: InputDecoration(
+              labelText: 'Nome do canal',
+              border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.label_outline),
+              errorText: _nameError,
+            ),
+            maxLength: 31,
+            textCapitalization: TextCapitalization.words,
+          ),
+          const SizedBox(height: 8),
+
+          // Secret (key)
+          TextField(
+            controller: _secretCtrl,
+            decoration: InputDecoration(
+              labelText: 'Chave (hex, 32 chars)',
+              hintText: 'Deixe em branco para gerar aleatoriamente',
+              border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.key),
+              errorText: _secretError,
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.casino_outlined),
+                tooltip: 'Gerar chave aleatória',
+                onPressed: _generateSecret,
+              ),
+            ),
+            maxLength: 32,
+            keyboardType: TextInputType.text,
+          ),
+          const SizedBox(height: 8),
+
+          // Info text for edit mode
+          if (isEdit)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Deixe a chave em branco para gerar uma nova aleatoriamente.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withAlpha(150),
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 8),
+
+          // Scan QR to fill form
+          OutlinedButton.icon(
+            onPressed: _scanQr,
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Ler QR Code de canal'),
+          ),
+
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: _saving ? null : _save,
+            icon:
+                _saving
+                    ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.save),
+            label: Text(_saving ? 'A guardar...' : 'Guardar'),
+          ),
+        ],
+      ),
+    );
   }
 }

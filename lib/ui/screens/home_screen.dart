@@ -16,8 +16,15 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
+  bool _showVolts = false;
 
-  static const _tabs = ['/channels', '/contacts', '/radio', '/settings'];
+  static const _tabs = [
+    '/channels',
+    '/contacts',
+    '/map',
+    '/radio',
+    '/settings',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -37,17 +44,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
         actions: [
-          // Battery indicator
+          // Battery indicator — tap to toggle % / voltage
           if (batteryMv > 0)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Chip(
-                avatar: Icon(
-                  _batteryIcon(batteryMv),
-                  size: 18,
-                  color: _batteryColor(batteryMv),
+              child: GestureDetector(
+                onTap: () => setState(() => _showVolts = !_showVolts),
+                child: Chip(
+                  avatar: Icon(
+                    _batteryIcon(batteryMv),
+                    size: 18,
+                    color: _batteryColor(batteryMv),
+                  ),
+                  label: Text(
+                    _showVolts
+                        ? '${(batteryMv / 1000).toStringAsFixed(3)}V'
+                        : '${_batteryPercent(batteryMv)}%',
+                  ),
                 ),
-                label: Text('${(batteryMv / 1000).toStringAsFixed(1)}V'),
               ),
             ),
           // Connection indicator
@@ -108,6 +122,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             label: 'Contactos',
           ),
           const NavigationDestination(
+            icon: Icon(Icons.map_outlined),
+            selectedIcon: Icon(Icons.map),
+            label: 'Mapa',
+          ),
+          const NavigationDestination(
             icon: Icon(Icons.settings_input_antenna_outlined),
             selectedIcon: Icon(Icons.settings_input_antenna),
             label: 'Rádio',
@@ -120,6 +139,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
     );
+  }
+
+  int _batteryPercent(int mv) {
+    // LiPo curve: 4200 mV = 100%, 3200 mV = 0%
+    return (((mv.clamp(3200, 4200) - 3200) / 1000) * 100).round();
   }
 
   IconData _batteryIcon(int mv) {
