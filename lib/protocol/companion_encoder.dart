@@ -183,6 +183,56 @@ class CompanionEncoder {
     return _frame(cmdSetAdvertLatLon, payload.toBytes());
   }
 
+  /// ADD_UPDATE_CONTACT — add or update a contact entry.
+  /// Spec: {code, pub_key(32), type, flags, out_path_len, out_path(64),
+  ///        adv_name(32, null-padded), last_advert(uint32),
+  ///        adv_lat(int32, opt), adv_lon(int32, opt)}
+  static Uint8List addUpdateContact({
+    required Uint8List publicKey,
+    required int type,
+    required int flags,
+    required int outPathLen,
+    required Uint8List outPath,
+    required String name,
+    required int lastAdvert,
+    double? latitude,
+    double? longitude,
+  }) {
+    final payload = BytesBuilder();
+    payload.add(publicKey.sublist(0, 32));
+    payload.addByte(type);
+    payload.addByte(flags);
+    payload.addByte(outPathLen & 0xFF);
+    final pathBuf = Uint8List(64);
+    final copyLen = outPath.length < 64 ? outPath.length : 64;
+    pathBuf.setRange(0, copyLen, outPath);
+    payload.add(pathBuf);
+    final nameBytes = utf8.encode(name);
+    final nameBuf = Uint8List(32);
+    final nameCopyLen = nameBytes.length < 32 ? nameBytes.length : 32;
+    nameBuf.setRange(0, nameCopyLen, nameBytes);
+    payload.add(nameBuf);
+    payload.add(_uint32LE(lastAdvert));
+    if (latitude != null && longitude != null) {
+      payload.add(_int32LE((latitude * 1e6).round()));
+      payload.add(_int32LE((longitude * 1e6).round()));
+    }
+    return _frame(cmdAddUpdateContact, payload.toBytes());
+  }
+
+  /// SHARE_CONTACT — share a contact via radio broadcast.
+  static Uint8List shareContact(Uint8List publicKey) {
+    return _frame(cmdShareContact, publicKey.sublist(0, 32));
+  }
+
+  /// EXPORT_CONTACT — export a contact card. Omit key to export self.
+  static Uint8List exportContact([Uint8List? publicKey]) {
+    if (publicKey != null) {
+      return _frame(cmdExportContact, publicKey.sublist(0, 32));
+    }
+    return _frame(cmdExportContact);
+  }
+
   /// SEND_LOGIN — authenticate with a repeater or room server.
   /// Spec: {code, pub_key: bytes(32), password: varchar}
   /// [peerPublicKey] is the 32-byte public key of the target repeater/room server.
