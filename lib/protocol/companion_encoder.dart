@@ -233,6 +233,30 @@ class CompanionEncoder {
     return _frame(cmdExportContact);
   }
 
+  /// IMPORT_CONTACT — import a contact from card data.
+  static Uint8List importContact(Uint8List cardData) {
+    return _frame(cmdImportContact, cardData);
+  }
+
+  /// SET_TUNING_PARAMS — configure timing parameters.
+  /// Spec: {code, rxdelay_base: uint32, airtime_factor: uint32, reserved: 8 zero bytes}
+  /// Values are pre-multiplied by 1000 (e.g. rxDelay of 1.5 -> pass 1500).
+  static Uint8List setTuningParams({
+    required int rxDelayBase,
+    required int airtimeFactor,
+  }) {
+    final payload = BytesBuilder();
+    payload.add(_uint32LE(rxDelayBase));
+    payload.add(_uint32LE(airtimeFactor));
+    payload.add(Uint8List(8)); // reserved
+    return _frame(cmdSetTuningParams, payload.toBytes());
+  }
+
+  /// SEND_STATUS_REQ — request status from a node.
+  static Uint8List sendStatusReq(Uint8List publicKey) {
+    return _frame(cmdSendStatusReq, publicKey.sublist(0, 32));
+  }
+
   /// SEND_LOGIN — authenticate with a repeater or room server.
   /// Spec: {code, pub_key: bytes(32), password: varchar}
   /// [peerPublicKey] is the 32-byte public key of the target repeater/room server.
