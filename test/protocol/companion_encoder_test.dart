@@ -106,11 +106,13 @@ void main() {
       expect(utf8.decode(nameBytes), 'CT1ABC');
     });
 
-    test('sendLogin encodes UTF-8 password', () {
-      final frame = CompanionEncoder.sendLogin('secret123');
+    test('sendLogin encodes peer public key and UTF-8 password', () {
+      final pubKey = Uint8List.fromList(List.generate(32, (i) => i));
+      final frame = CompanionEncoder.sendLogin(pubKey, 'secret123');
       expect(frame[0], dirAppToRadio);
       expect(frame[3], cmdSendLogin);
-      final passBytes = frame.sublist(4);
+      expect(frame.sublist(4, 36), pubKey);
+      final passBytes = frame.sublist(36);
       expect(utf8.decode(passBytes), 'secret123');
     });
   });
@@ -132,12 +134,20 @@ void main() {
       expect(frame.sublist(4), pubKey);
     });
 
-    test('sendTracePath passes public key as payload', () {
-      final pubKey = Uint8List.fromList(List.generate(32, (i) => i * 2));
-      final frame = CompanionEncoder.sendTracePath(pubKey);
+    test('sendTracePath encodes tag, authCode, flags, and optional path', () {
+      final path = Uint8List.fromList([0xAA, 0xBB, 0xCC]);
+      final frame = CompanionEncoder.sendTracePath(
+        tag: 0x12345678,
+        authCode: 0x00ABCDEF,
+        path: path,
+      );
       expect(frame[0], dirAppToRadio);
       expect(frame[3], cmdSendTracePath);
-      expect(frame.sublist(4), pubKey);
+      // tag (4 bytes LE) + authCode (4 bytes LE) + flags (1 byte) + path
+      expect(frame.sublist(4, 8), [0x78, 0x56, 0x34, 0x12]); // tag LE
+      expect(frame.sublist(8, 12), [0xEF, 0xCD, 0xAB, 0x00]); // authCode LE
+      expect(frame[12], 0); // flags
+      expect(frame.sublist(13), path);
     });
   });
 
