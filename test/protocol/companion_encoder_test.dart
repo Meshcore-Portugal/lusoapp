@@ -171,4 +171,83 @@ void main() {
       expect(frame.sublist(4), pubKey);
     });
   });
+
+  // =========================================================================
+  // Task 3: getByKey, signData/signFinish, sendTelemetryReq, sendBinaryReq,
+  //         sendControlData
+  // =========================================================================
+
+  group('CompanionEncoder - getByKey', () {
+    test('getByKey passes public key as payload', () {
+      final pubKey = Uint8List.fromList(List.generate(32, (i) => i));
+      final frame = CompanionEncoder.getByKey(pubKey);
+      expect(frame[0], dirAppToRadio);
+      expect(frame[3], cmdGetByKey);
+      expect(frame.sublist(4), pubKey);
+    });
+  });
+
+  group('CompanionEncoder - signData and signFinish', () {
+    test('signData passes data chunk as payload', () {
+      final data = Uint8List.fromList([0x01, 0x02, 0x03, 0x04]);
+      final frame = CompanionEncoder.signData(data);
+      expect(frame[0], dirAppToRadio);
+      expect(frame[3], cmdSignData);
+      expect(frame.sublist(4), data);
+    });
+
+    test('signFinish sends empty command', () {
+      final frame = CompanionEncoder.signFinish();
+      expect(frame[0], dirAppToRadio);
+      expect(frame[3], cmdSignFinish);
+      expect(frame.length, 4); // header only
+    });
+  });
+
+  group('CompanionEncoder - sendTelemetryReq', () {
+    test('sendTelemetryReq encodes reserved bytes then public key', () {
+      final pubKey = Uint8List.fromList(List.generate(32, (i) => i));
+      final frame = CompanionEncoder.sendTelemetryReq(pubKey);
+      expect(frame[0], dirAppToRadio);
+      expect(frame[3], cmdSendTelemetryReq);
+      expect(frame.sublist(4, 7), [0, 0, 0]); // 3 reserved bytes
+      expect(frame.sublist(7, 39), pubKey);
+    });
+  });
+
+  group('CompanionEncoder - sendBinaryReq', () {
+    test('sendBinaryReq encodes public key then request data', () {
+      final pubKey = Uint8List.fromList(List.generate(32, (i) => i));
+      final reqData = Uint8List.fromList([0xAA, 0xBB, 0xCC]);
+      final frame = CompanionEncoder.sendBinaryReq(pubKey, reqData);
+      expect(frame[0], dirAppToRadio);
+      expect(frame[3], cmdSendBinaryReq);
+      expect(frame.sublist(4, 36), pubKey);
+      expect(frame.sublist(36), reqData);
+    });
+  });
+
+  group('CompanionEncoder - sendControlData', () {
+    test('sendControlData encodes flags, subType, and payload', () {
+      final payload = Uint8List.fromList([0x01, 0x02]);
+      final frame = CompanionEncoder.sendControlData(
+        subType: 0x80,
+        payload: payload,
+      );
+      expect(frame[0], dirAppToRadio);
+      expect(frame[3], cmdSendControlData);
+      expect(frame[4], 0x00); // flags = 0
+      expect(frame[5], 0x80); // subType
+      expect(frame.sublist(6), payload);
+    });
+
+    test('sendControlData without payload has only flags and subType', () {
+      final frame = CompanionEncoder.sendControlData(subType: 0x01);
+      expect(frame[0], dirAppToRadio);
+      expect(frame[3], cmdSendControlData);
+      expect(frame[4], 0x00); // flags = 0
+      expect(frame[5], 0x01); // subType
+      expect(frame.length, 6); // header(3) + cmd(1) + flags(1) + subType(1)
+    });
+  });
 }

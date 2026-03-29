@@ -270,6 +270,53 @@ class CompanionEncoder {
     return _frame(cmdSendLogin, payload.toBytes());
   }
 
+  /// GET_BY_KEY — look up a contact by public key.
+  static Uint8List getByKey(Uint8List publicKey) {
+    return _frame(cmdGetByKey, publicKey.sublist(0, 32));
+  }
+
+  /// SIGN_DATA — send a chunk of data to be signed.
+  /// Call multiple times for large payloads, then call signFinish().
+  static Uint8List signData(Uint8List data) {
+    return _frame(cmdSignData, data);
+  }
+
+  /// SIGN_FINISH — finalize signing and get RESP_CODE_SIGNATURE back.
+  static Uint8List signFinish() => _frame(cmdSignFinish);
+
+  /// SEND_TELEMETRY_REQ — request telemetry from a node.
+  /// Spec: {code, reserved(3), pub_key(32)}
+  static Uint8List sendTelemetryReq(Uint8List publicKey) {
+    final payload = BytesBuilder();
+    payload.add(Uint8List(3)); // reserved
+    payload.add(publicKey.sublist(0, 32));
+    return _frame(cmdSendTelemetryReq, payload.toBytes());
+  }
+
+  /// SEND_BINARY_REQ — send a binary request to a node.
+  /// Spec: {code, pub_key(32), request_code_and_params(variable)}
+  static Uint8List sendBinaryReq(Uint8List publicKey, Uint8List requestData) {
+    final payload = BytesBuilder();
+    payload.add(publicKey.sublist(0, 32));
+    payload.add(requestData);
+    return _frame(cmdSendBinaryReq, payload.toBytes());
+  }
+
+  /// SEND_CONTROL_DATA — send control data with a sub-type.
+  /// Spec: {code, flags(0), sub_type, payload(variable)}
+  static Uint8List sendControlData({
+    required int subType,
+    Uint8List? payload,
+  }) {
+    final buf = BytesBuilder();
+    buf.addByte(0); // flags: must be zero
+    buf.addByte(subType);
+    if (payload != null) {
+      buf.add(payload);
+    }
+    return _frame(cmdSendControlData, buf.toBytes());
+  }
+
   // --- Utility ---
 
   static int _nowEpoch() => DateTime.now().millisecondsSinceEpoch ~/ 1000;
