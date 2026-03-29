@@ -85,8 +85,18 @@ class RadioService {
     );
   }
 
-  Future<void> sendChannelMessage(int channelIndex, String text) async {
-    await _send(CompanionEncoder.sendChannelMessage(channelIndex, text));
+  Future<void> sendChannelMessage(
+    int channelIndex,
+    String text, {
+    int? timestamp,
+  }) async {
+    await _send(
+      CompanionEncoder.sendChannelMessage(
+        channelIndex,
+        text,
+        timestamp: timestamp,
+      ),
+    );
   }
 
   Future<void> syncNextMessage() async {

@@ -171,6 +171,14 @@ class StorageService {
 
 /// User-configurable notification preferences.
 class NotificationSettings {
+
+  factory NotificationSettings.fromJson(Map<String, dynamic> json) =>
+      NotificationSettings(
+        enabled: (json['enabled'] as bool?) ?? true,
+        privateMessages: (json['private_messages'] as bool?) ?? true,
+        channelMessages: (json['channel_messages'] as bool?) ?? true,
+        onlyWhenBackground: (json['only_when_background'] as bool?) ?? false,
+      );
   const NotificationSettings({
     this.enabled = true,
     this.privateMessages = true,
@@ -210,14 +218,6 @@ class NotificationSettings {
     'channel_messages': channelMessages,
     'only_when_background': onlyWhenBackground,
   };
-
-  factory NotificationSettings.fromJson(Map<String, dynamic> json) =>
-      NotificationSettings(
-        enabled: (json['enabled'] as bool?) ?? true,
-        privateMessages: (json['private_messages'] as bool?) ?? true,
-        channelMessages: (json['channel_messages'] as bool?) ?? true,
-        onlyWhenBackground: (json['only_when_background'] as bool?) ?? false,
-      );
 }
 
 /// Describes the last device that was successfully connected.

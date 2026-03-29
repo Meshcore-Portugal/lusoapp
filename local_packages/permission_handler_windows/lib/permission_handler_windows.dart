@@ -6,7 +6,7 @@
 /// permissions inside [Platform.isAndroid] guards, the Windows implementation
 /// is never called at runtime.  This stub satisfies the Dart/Flutter plugin
 /// registration without any native code.
-library permission_handler_windows;
+library;
 
 import 'package:permission_handler_platform_interface/permission_handler_platform_interface.dart';
 

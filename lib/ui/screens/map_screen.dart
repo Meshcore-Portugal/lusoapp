@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
@@ -23,6 +24,9 @@ class MapScreen extends ConsumerStatefulWidget {
 
 class _MapScreenState extends ConsumerState<MapScreen> {
   final _mapController = MapController();
+  final _tileProvider = FMTCTileProvider(
+    stores: const {'mapStore': BrowseStoreStrategy.readUpdateCreate},
+  );
 
   LatLng? _myLocation;
   bool _loadingLocation = false;
@@ -223,6 +227,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'pt.meshcore.mcapppt',
+              tileProvider: _tileProvider,
             ),
             // ---- Trace path polyline ----
             if (traceResult != null)
@@ -230,9 +235,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 polylines: [
                   Polyline(
                     points: _tracePoints(traceResult, selfPos),
-                    color: Colors.deepPurple.shade400,
+                    color: theme.colorScheme.primary,
                     strokeWidth: 3,
-                    borderColor: Colors.deepPurple.shade900,
+                    borderColor: theme.colorScheme.primaryContainer,
                     borderStrokeWidth: 1,
                   ),
                 ],
@@ -245,8 +250,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     if (hop.hasGps)
                       Marker(
                         point: LatLng(hop.latitude!, hop.longitude!),
-                        width: 80,
-                        height: 44,
+                        width: 90,
+                        height: 48,
+                        alignment: Alignment.bottomCenter,
                         child: _buildHopMarker(hop, theme),
                       ),
                 ],
@@ -411,16 +417,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final snr = hop.snrDb.toStringAsFixed(1);
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
+        // Label pill floats above the geographic point / contact icon
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           decoration: BoxDecoration(
-            color: Colors.deepPurple.shade600,
+            color: theme.colorScheme.primary,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Colors.white, width: 1),
           ),
           child: Text(
-            hop.name ?? hop.hashHex.substring(0, 4),
+            '${hop.name ?? hop.hashHex.substring(0, 4)}  $snr dB',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 9,
@@ -429,21 +437,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             overflow: TextOverflow.ellipsis,
           ),
         ),
+        // Connector line from label to dot
+        Container(width: 2, height: 10, color: theme.colorScheme.primary),
+        // Dot — anchor point aligned to the geographic coordinate
         Container(
           width: 8,
           height: 8,
           decoration: BoxDecoration(
-            color: Colors.deepPurple.shade400,
+            color: theme.colorScheme.primary,
             shape: BoxShape.circle,
             border: Border.all(color: Colors.white, width: 1.5),
-          ),
-        ),
-        Text(
-          '$snr dB',
-          style: const TextStyle(
-            color: Colors.deepPurple,
-            fontSize: 8,
-            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -876,14 +879,14 @@ class _TraceResultCard extends StatelessWidget {
             // Header row
             Row(
               children: [
-                Icon(Icons.route, size: 16, color: Colors.deepPurple.shade400),
+                Icon(Icons.route, size: 16, color: theme.colorScheme.primary),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     'Trace · $ts · ${result.hopCount} hop${result.hopCount != 1 ? 's' : ''}',
                     style: theme.textTheme.labelMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: Colors.deepPurple.shade400,
+                      color: theme.colorScheme.primary,
                     ),
                   ),
                 ),
@@ -972,7 +975,7 @@ class _HopRow extends StatelessWidget {
             size: 12,
             color:
                 hop.hasGps
-                    ? Colors.deepPurple.shade400
+                    ? theme.colorScheme.primary
                     : theme.colorScheme.outlineVariant,
           ),
           const SizedBox(width: 4),

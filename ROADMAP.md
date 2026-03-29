@@ -50,6 +50,7 @@
 - [x] Message delivery tracking
   - [x] Pending state (single tick) / confirmed state (double tick) in all chat UIs
   - [x] `SendConfirmedPush` wired to `confirmLastOutgoing()` in `MessagesNotifier`
+  - [x] Repeater heard count on sent channel messages (loopback detection — "Ouvido por N repetidor(es)" label shown when relayed echo received back)
   - [ ] Retry on failure with exponential backoff
 - [x] Background message sync (`SYNC_NEXT` loop — `MsgWaitingPush` triggers full offline queue drain)
 - [x] Last connected device memory (saved to SharedPreferences + quick-connect card in ConnectScreen)
@@ -109,9 +110,9 @@
   - [x] Request repeater stats (`cmdSendStatusReq 0x1B` → `pushStatusResponse 0x87`, `RepeaterStats` binary parser)
   - [x] Stats display: battery voltage, uptime, noise floor, RSSI, SNR, RX/TX packet counters, flood vs direct traffic, TX air time, RX air time, duplicates, error events
   - [x] Admin bottom sheet accessible via admin button on repeater contact tiles
-- [ ] Room server support
-  - [ ] Browse/join MeshCore rooms (`sendLogin` + `LoginSuccess/Fail` handled, no browse/join screen)
-  - [ ] Room message list
+- [x] Room server support
+  - [x] Browse/join MeshCore rooms (`sendLogin` + `LoginSuccess/Fail` handled, join screen with password field)
+  - [x] Room message list (full chat view, swipe-to-reply, SNR display, persistence via `contact_$hex6` store)
 - [ ] Multi-radio support
   - [ ] Connect to multiple radios simultaneously
   - [ ] Radio selector in UI

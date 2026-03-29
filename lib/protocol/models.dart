@@ -4,6 +4,18 @@ import 'package:equatable/equatable.dart';
 
 /// Represents a MeshCore contact as received from the radio.
 class Contact extends Equatable {
+  factory Contact.fromJson(Map<String, dynamic> json) => Contact(
+    publicKey: base64Decode(json['publicKey'] as String),
+    type: json['type'] as int,
+    flags: json['flags'] as int,
+    pathLen: json['pathLen'] as int,
+    name: json['name'] as String,
+    lastAdvertTimestamp: json['lastAdvertTimestamp'] as int,
+    latitude: (json['latitude'] as num?)?.toDouble(),
+    longitude: (json['longitude'] as num?)?.toDouble(),
+    lastModified: json['lastModified'] as int?,
+    customName: json['customName'] as String?,
+  );
   const Contact({
     required this.publicKey,
     required this.type,
@@ -14,6 +26,7 @@ class Contact extends Equatable {
     this.latitude,
     this.longitude,
     this.lastModified,
+    this.customName,
   });
 
   final Uint8List publicKey; // 32 bytes Ed25519
@@ -25,6 +38,31 @@ class Contact extends Equatable {
   final double? latitude;
   final double? longitude;
   final int? lastModified;
+
+  /// User-defined alias; if set, takes precedence over [name] in the UI.
+  final String? customName;
+
+  /// Name to show in the UI: [customName] if set, [name] if non-empty, else [shortId].
+  String get displayName {
+    if (customName != null && customName!.trim().isNotEmpty)
+      return customName!.trim();
+    if (name.isNotEmpty) return name;
+    return shortId;
+  }
+
+  /// Returns a copy of this contact with [customName] replaced by [value].
+  Contact withCustomName(String? value) => Contact(
+    publicKey: publicKey,
+    type: type,
+    flags: flags,
+    pathLen: pathLen,
+    name: name,
+    lastAdvertTimestamp: lastAdvertTimestamp,
+    latitude: latitude,
+    longitude: longitude,
+    lastModified: lastModified,
+    customName: value,
+  );
 
   /// Human-readable hex of the first 4 bytes of the public key.
   String get shortId {
@@ -41,7 +79,7 @@ class Contact extends Equatable {
   bool get isSensor => type == 0x04;
 
   @override
-  List<Object?> get props => [publicKey, type, name];
+  List<Object?> get props => [publicKey, type, name, customName];
 
   Map<String, dynamic> toJson() => {
     'publicKey': base64Encode(publicKey),
@@ -53,23 +91,30 @@ class Contact extends Equatable {
     'latitude': latitude,
     'longitude': longitude,
     'lastModified': lastModified,
+    'customName': customName,
   };
-
-  factory Contact.fromJson(Map<String, dynamic> json) => Contact(
-    publicKey: base64Decode(json['publicKey'] as String),
-    type: json['type'] as int,
-    flags: json['flags'] as int,
-    pathLen: json['pathLen'] as int,
-    name: json['name'] as String,
-    lastAdvertTimestamp: json['lastAdvertTimestamp'] as int,
-    latitude: (json['latitude'] as num?)?.toDouble(),
-    longitude: (json['longitude'] as num?)?.toDouble(),
-    lastModified: json['lastModified'] as int?,
-  );
 }
 
 /// A chat message (private or channel).
 class ChatMessage extends Equatable {
+  factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
+    text: json['text'] as String,
+    timestamp: json['timestamp'] as int,
+    isOutgoing: json['isOutgoing'] as bool,
+    senderKey:
+        json['senderKey'] != null
+            ? base64Decode(json['senderKey'] as String)
+            : null,
+    channelIndex: json['channelIndex'] as int?,
+    senderName: json['senderName'] as String?,
+    confirmed: json['confirmed'] as bool? ?? false,
+    snr: (json['snr'] as num?)?.toDouble(),
+    pathLen: json['pathLen'] as int?,
+    heardCount: json['heardCount'] as int? ?? 0,
+    sentRouteFlag:
+        json['sentRouteFlag'] as int? ??
+        (json['sentViaFlood'] == true ? 1 : null),
+  );
   const ChatMessage({
     required this.text,
     required this.timestamp,
@@ -80,6 +125,8 @@ class ChatMessage extends Equatable {
     this.confirmed = false,
     this.snr,
     this.pathLen,
+    this.heardCount = 0,
+    this.sentRouteFlag,
   });
 
   final String text;
@@ -91,6 +138,11 @@ class ChatMessage extends Equatable {
   final bool confirmed;
   final double? snr; // Signal-to-noise ratio (V3 only)
   final int? pathLen; // Hop count
+  /// Number of times this channel message was heard back via a repeater (loopback).
+  final int heardCount;
+
+  /// Route flag from RESP_CODE_SENT: null=unknown, 0=direct, 1=flood (via repeaters).
+  final int? sentRouteFlag;
 
   bool get isChannel => channelIndex != null;
   bool get isPrivate => channelIndex == null;
@@ -105,6 +157,8 @@ class ChatMessage extends Equatable {
     bool? confirmed,
     double? snr,
     int? pathLen,
+    int? heardCount,
+    int? sentRouteFlag,
   }) {
     return ChatMessage(
       text: text ?? this.text,
@@ -116,6 +170,8 @@ class ChatMessage extends Equatable {
       confirmed: confirmed ?? this.confirmed,
       snr: snr ?? this.snr,
       pathLen: pathLen ?? this.pathLen,
+      heardCount: heardCount ?? this.heardCount,
+      sentRouteFlag: sentRouteFlag ?? this.sentRouteFlag,
     );
   }
 
@@ -129,25 +185,19 @@ class ChatMessage extends Equatable {
     'confirmed': confirmed,
     'snr': snr,
     'pathLen': pathLen,
+    'heardCount': heardCount,
+    'sentRouteFlag': sentRouteFlag,
   };
 
-  factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
-    text: json['text'] as String,
-    timestamp: json['timestamp'] as int,
-    isOutgoing: json['isOutgoing'] as bool,
-    senderKey:
-        json['senderKey'] != null
-            ? base64Decode(json['senderKey'] as String)
-            : null,
-    channelIndex: json['channelIndex'] as int?,
-    senderName: json['senderName'] as String?,
-    confirmed: json['confirmed'] as bool? ?? false,
-    snr: (json['snr'] as num?)?.toDouble(),
-    pathLen: json['pathLen'] as int?,
-  );
-
   @override
-  List<Object?> get props => [text, timestamp, isOutgoing, channelIndex];
+  List<Object?> get props => [
+    text,
+    timestamp,
+    isOutgoing,
+    channelIndex,
+    heardCount,
+    sentRouteFlag,
+  ];
 }
 
 /// Radio configuration parameters.

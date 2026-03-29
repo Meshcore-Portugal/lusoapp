@@ -47,6 +47,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   final Ref _ref;
 
   StreamSubscription<void>? _connectionLostSub;
+  Timer? _batteryPollTimer;
 
   void _setStep(int step, String label) {
     _ref.read(connectionProgressProvider.notifier).state = step;
@@ -76,6 +77,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           name: deviceName,
         );
         _setupAutoReconnect(service, () => connectBle(deviceId, deviceName));
+        _startBatteryPolling(service);
         return true;
       }
       _ref.read(radioServiceProvider.notifier).state = null;
@@ -126,6 +128,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           type: typeStr,
           name: deviceName,
         );
+        _startBatteryPolling(service);
         return true;
       }
       _ref.read(radioServiceProvider.notifier).state = null;
@@ -140,6 +143,8 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   }
 
   Future<void> disconnect() async {
+    _batteryPollTimer?.cancel();
+    _batteryPollTimer = null;
     await _connectionLostSub?.cancel();
     _connectionLostSub = null;
     final service = _ref.read(radioServiceProvider);
@@ -150,6 +155,16 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     _ref.read(unreadCountsProvider.notifier).reset();
     _setStep(0, '');
     state = TransportState.disconnected;
+  }
+
+  /// Poll battery every 30 s while connected.
+  void _startBatteryPolling(RadioService service) {
+    _batteryPollTimer?.cancel();
+    _batteryPollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (state == TransportState.connected) {
+        service.requestBattAndStorage().catchError((_) {});
+      }
+    });
   }
 
   /// Subscribe to unexpected connection loss and attempt one auto-reconnect.
@@ -245,8 +260,9 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _ref.read(deviceInfoProvider.notifier).state = info;
         case SendConfirmedPush():
           _ref.read(messagesProvider.notifier).confirmLastOutgoing();
-        case SentResponse():
+        case SentResponse(:final routeFlag):
           _ref.read(networkStatsProvider.notifier).incrementTx();
+          _ref.read(messagesProvider.notifier).markLastOutgoingRoute(routeFlag);
         case ErrorResponse():
           _ref.read(networkStatsProvider.notifier).incrementError();
         case AdvertPush():
@@ -412,8 +428,32 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
   }
 
   void refresh(List<Contact> contacts) {
-    state = List.from(contacts);
-    StorageService.instance.saveContacts(contacts);
+    final merged =
+        contacts.map((incoming) {
+          final existing = state.firstWhere(
+            (c) => _keysEqual(c.publicKey, incoming.publicKey),
+            orElse: () => incoming,
+          );
+          return existing.customName != null
+              ? incoming.withCustomName(existing.customName)
+              : incoming;
+        }).toList();
+    state = merged;
+    StorageService.instance.saveContacts(merged);
+  }
+
+  void setCustomName(Uint8List publicKey, String? customName) {
+    final next =
+        state
+            .map(
+              (c) =>
+                  _keysEqual(c.publicKey, publicKey)
+                      ? c.withCustomName(customName)
+                      : c,
+            )
+            .toList();
+    state = next;
+    StorageService.instance.saveContacts(next);
   }
 
   void remove(Uint8List publicKey) {
@@ -468,6 +508,32 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     _saveForMessage(message);
   }
 
+  /// Increment the heard-by-repeater count on the matching sent channel message.
+  /// Called when a loopback echo of our own channel message is received.
+  /// Matches first by [channelIndex] + [timestamp] (exact, since both encoder
+  /// and stored message now share the same computed second), then falls back
+  /// to body-text match as a safeguard for messages sent before this fix.
+  void incrementHeardCount(
+    int channelIndex,
+    String bodyText, {
+    int? timestamp,
+  }) {
+    for (var i = state.length - 1; i >= 0; i--) {
+      final msg = state[i];
+      if (!msg.isOutgoing || msg.channelIndex != channelIndex) continue;
+      final matchByTs = timestamp != null && msg.timestamp == timestamp;
+      final matchByText = msg.text == bodyText;
+      if (matchByTs || matchByText) {
+        final updated = msg.copyWith(heardCount: msg.heardCount + 1);
+        final newList = List<ChatMessage>.from(state);
+        newList[i] = updated;
+        state = newList;
+        _saveForMessage(updated);
+        return;
+      }
+    }
+  }
+
   /// Mark the most recent unconfirmed outgoing message as confirmed.
   /// Called when a [SendConfirmedPush] arrives from the radio.
   void confirmLastOutgoing() {
@@ -475,6 +541,24 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
       final msg = state[i];
       if (msg.isOutgoing && !msg.confirmed) {
         final updated = msg.copyWith(confirmed: true);
+        final newList = List<ChatMessage>.from(state);
+        newList[i] = updated;
+        state = newList;
+        _saveForMessage(updated);
+        return;
+      }
+    }
+  }
+
+  /// Store the route flag on the most recent outgoing private message.
+  /// Called when [SentResponse] arrives: 0 = direct, 1 = flood (via repeaters).
+  void markLastOutgoingRoute(int routeFlag) {
+    for (var i = state.length - 1; i >= 0; i--) {
+      final msg = state[i];
+      if (msg.isOutgoing &&
+          msg.sentRouteFlag == null &&
+          msg.channelIndex == null) {
+        final updated = msg.copyWith(sentRouteFlag: routeFlag);
         final newList = List<ChatMessage>.from(state);
         newList[i] = updated;
         state = newList;

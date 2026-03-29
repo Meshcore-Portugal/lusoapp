@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../protocol/protocol.dart';
@@ -10,11 +11,26 @@ import '../../services/notification_service.dart';
 import '../../transport/radio_transport.dart';
 
 /// App settings screen.
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  String _version = '';
+
+  @override
+  void initState() {
+    super.initState();
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) setState(() => _version = info.version);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final selfInfo = ref.watch(selfInfoProvider);
     final connectionState = ref.watch(connectionProvider);
     final theme = Theme.of(context);
@@ -174,13 +190,17 @@ class SettingsScreen extends ConsumerWidget {
                   const SizedBox(height: 12),
                   const ListTile(
                     title: Text('MeshCore PT'),
-                    subtitle: Text('v0.1.0 - Comunidade Portuguesa MeshCore'),
+                    subtitle: Text('Comunidade Portuguesa MeshCore'),
+                  ),
+                  ListTile(
+                    title: const Text('Versão'),
+                    subtitle: Text(_version.isEmpty ? '…' : _version),
                   ),
                   const ListTile(
                     title: Text('Protocolo'),
                     subtitle: Text('Companion Radio Protocol v3'),
                   ),
-                  const ListTile(title: Text('Licenca'), subtitle: Text('MIT')),
+                  const ListTile(title: Text('Licença'), subtitle: Text('MIT')),
                 ],
               ),
             ),
@@ -358,13 +378,13 @@ class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.warning_amber, color: Colors.orange),
+                    Icon(Icons.warning_amber, color: theme.colorScheme.primary),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Permissão de notificação não concedida.',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.orange,
+                          color: theme.colorScheme.primary,
                         ),
                       ),
                     ),

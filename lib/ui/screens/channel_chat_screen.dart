@@ -50,22 +50,27 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
     if (service == null) return;
 
     final replyPrefix =
-        _replyingTo != null ? '@${_senderFromMessage(_replyingTo!)}: ' : '';
+        _replyingTo != null ? '@[${_senderFromMessage(_replyingTo!)}] ' : '';
     final fullText = '$replyPrefix$text';
 
-    service.sendChannelMessage(widget.channelIndex, fullText);
+    // Compute timestamp once so encoder and stored message share the same value.
+    // The loopback echo carries this timestamp, allowing exact matching.
+    final ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
-    // Add outgoing message to local state
+    // Add outgoing message to state before sending so any immediate firmware
+    // response can find it (same pattern as private chat).
     ref
         .read(messagesProvider.notifier)
         .addOutgoing(
           ChatMessage(
             text: fullText,
-            timestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            timestamp: ts,
             isOutgoing: true,
             channelIndex: widget.channelIndex,
           ),
         );
+
+    service.sendChannelMessage(widget.channelIndex, fullText, timestamp: ts);
 
     _textController.clear();
     if (_replyingTo != null) setState(() => _replyingTo = null);
@@ -269,10 +274,91 @@ class ChannelsTabScreen extends ConsumerWidget {
 // Shared widgets
 // ---------------------------------------------------------------------------
 
+/// Renders text that may start with an `@[name]` mention.
+/// The mention is shown as an accent-coloured rounded pill; the rest is normal text.
+Widget _buildMentionText(String text, ThemeData theme, TextStyle? style) {
+  final match = RegExp(r'^\@\[([^\]]+)\]\s?').firstMatch(text);
+  if (match == null) return Text(text, style: style);
+  final name = match.group(1)!;
+  final rest = text.substring(match.end);
+  return Text.rich(
+    TextSpan(
+      children: [
+        WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '@$name',
+              style: (theme.textTheme.labelSmall ?? const TextStyle()).copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+        if (rest.isNotEmpty) TextSpan(text: ' $rest', style: style),
+      ],
+    ),
+  );
+}
+
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({required this.message, this.onReply});
   final ChatMessage message;
   final VoidCallback? onReply;
+
+  static const _avatarPalette = [
+    Color(0xFF7B61FF),
+    Color(0xFF00897B),
+    Color(0xFFE91E63),
+    Color(0xFF1976D2),
+    Color(0xFFFF6D00),
+    Color(0xFF6D4C41),
+    Color(0xFF558B2F),
+    Color(0xFF6A1B9A),
+  ];
+
+  static Color _avatarColor(String name) {
+    if (name.isEmpty) return _avatarPalette[0];
+    var hash = 0;
+    for (final c in name.codeUnits) {
+      hash = (hash * 31 + c) & 0x7FFFFFFF;
+    }
+    return _avatarPalette[hash % _avatarPalette.length];
+  }
+
+  static String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts[0].isEmpty) return '?';
+    if (parts.length >= 2 && parts[1].isNotEmpty) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    final s = parts[0];
+    return (s.length >= 2 ? s.substring(0, 2) : s).toUpperCase();
+  }
+
+  static String _metaSuffix(ChatMessage msg) {
+    final parts = <String>[];
+    if (msg.snr != null) parts.add('SNR ${msg.snr!.toStringAsFixed(1)} dB');
+    if (msg.pathLen != null) {
+      final hops = msg.pathLen == 0xFF ? -1 : msg.pathLen! & 0x3F;
+      if (hops <= 0) {
+        parts.add('Directo');
+      } else {
+        parts.add('Ouvido $hops Repetidor${hops > 1 ? 'es' : ''}');
+      }
+    }
+    // Sent channel messages are always flooded — firmware returns no hop count.
+    if (msg.isOutgoing && msg.isChannel && msg.pathLen == null) {
+      parts.add('Ouvido 1 Repetidor');
+    }
+    return parts.join(' • ');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -281,87 +367,163 @@ class _MessageBubble extends StatelessWidget {
     final time = DateTime.fromMillisecondsSinceEpoch(message.timestamp * 1000);
     final timeStr =
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    final meta = _metaSuffix(message);
+    final metaLine = meta.isNotEmpty ? '$timeStr • $meta' : timeStr;
 
-    final bubble = Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        decoration: BoxDecoration(
-          color:
-              isMe
-                  ? theme.colorScheme.primaryContainer
-                  : theme.colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!isMe && message.senderName != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Text(
-                  message.senderName!,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.bold,
+    if (isMe) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 2),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.72,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(4),
+                    bottomLeft: Radius.circular(16),
+                    bottomRight: Radius.circular(16),
                   ),
+                ),
+                child: _buildMentionText(
+                  message.text,
+                  theme,
+                  theme.textTheme.bodyMedium,
                 ),
               ),
-            Text(message.text),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  timeStr,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withAlpha(100),
-                  ),
+              Padding(
+                padding: const EdgeInsets.only(top: 3, right: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      metaLine,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withAlpha(100),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      message.confirmed ? Icons.done_all : Icons.done,
+                      size: 13,
+                      color:
+                          message.confirmed
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurface.withAlpha(130),
+                    ),
+                  ],
                 ),
-                if (!isMe && message.snr != null) ...[
-                  const SizedBox(width: 6),
-                  Text(
-                    'SNR ${message.snr!.toStringAsFixed(1)} dB',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withAlpha(90),
+              ),
+              const SizedBox(height: 2),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Received — channel messages embed sender as "Name: body" when senderName is null
+    String? senderName =
+        message.senderName?.isNotEmpty == true ? message.senderName : null;
+    String displayText = message.text;
+    if (senderName == null) {
+      final colonIdx = message.text.indexOf(': ');
+      if (colonIdx > 0) {
+        senderName = message.text.substring(0, colonIdx).trim();
+        displayText = message.text.substring(colonIdx + 2);
+      }
+    }
+    final avatarLabel = senderName ?? '';
+    final color = _avatarColor(
+      avatarLabel.isNotEmpty ? avatarLabel : 'Unknown',
+    );
+
+    final row = Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: color,
+            child: Text(
+              _initials(avatarLabel),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (senderName != null && senderName.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 3, left: 2),
+                    child: Text(
+                      senderName,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ],
-                if (isMe) ...[
-                  const SizedBox(width: 6),
-                  Icon(
-                    message.confirmed ? Icons.done_all : Icons.done,
-                    size: 18,
-                    color:
-                        message.confirmed
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurface.withAlpha(140),
-                    shadows:
-                        message.confirmed
-                            ? [
-                              Shadow(
-                                color: theme.colorScheme.primary.withAlpha(80),
-                                blurRadius: 4,
-                              ),
-                            ]
-                            : null,
+                Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.68,
                   ),
-                ],
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(4),
+                      topRight: Radius.circular(16),
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: _buildMentionText(
+                    displayText,
+                    theme,
+                    theme.textTheme.bodyMedium,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 3, left: 2),
+                  child: Text(
+                    metaLine,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withAlpha(100),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
 
-    if (!isMe && onReply != null) {
-      return _SwipeToReplyWrapper(onReply: onReply!, child: bubble);
+    if (onReply != null) {
+      return _SwipeToReplyWrapper(onReply: onReply!, child: row);
     }
-    return bubble;
+    return row;
   }
 }
 
@@ -516,7 +678,9 @@ class _ReplyStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final senderLabel =
-        message.isOutgoing ? 'Você' : (message.senderName ?? 'Contacto');
+        message.isOutgoing
+            ? '@[Você]'
+            : '@[${message.senderName ?? 'Contacto'}]';
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

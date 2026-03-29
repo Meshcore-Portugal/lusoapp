@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../providers/radio_providers.dart';
 import '../../transport/radio_transport.dart';
+import '../theme.dart';
 
 /// Main shell screen with bottom navigation.
 class HomeScreen extends ConsumerStatefulWidget {
@@ -73,7 +74,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   : Icons.link_off,
               color:
                   connectionState == TransportState.connected
-                      ? Colors.green
+                      ? AppTheme.primary
                       : Colors.red,
             ),
           ),
@@ -155,7 +156,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Color _batteryColor(int mv) {
     if (mv > 3600) return Colors.green;
-    if (mv > 3300) return Colors.orange;
+    if (mv > 3300) return AppTheme.primary;
     return Colors.red;
   }
 }

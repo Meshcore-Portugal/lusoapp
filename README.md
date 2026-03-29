@@ -12,6 +12,10 @@
 - **Serial Connection** — Connect via USB OTG serial (115200 8N1)
 - **EU868 Presets** — Quick radio presets compliant with Portuguese/EU regulations
 - **Portuguese UI** — Full Portuguese (Portugal) interface
+- **Map View** — Live GPS map of all contacts and mesh nodes (OpenStreetMap, no API key required)
+- **Offline Map** — Browse-cached tiles via `flutter_map_tile_caching`; tiles are stored automatically as you pan/zoom and served from disk when offline
+
+> **Note on offline map caching:** Tile caching is purely browse-based — tiles are saved as you explore the map while online and replayed when offline. There is no "download this area" bulk pre-download feature. This is intentional: OSM's tile server [policy](https://operations.osmfoundation.org/policies/tiles/) forbids bulk pre-downloading of regions.
 
 ## Quick Start
 

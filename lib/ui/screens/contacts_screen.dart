@@ -1,12 +1,16 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
+import '../theme.dart';
 import 'qr_scanner_screen.dart';
 
 // Filter tabs
@@ -80,6 +84,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
           filtered
               .where(
                 (c) =>
+                    c.displayName.toLowerCase().contains(_query) ||
                     c.name.toLowerCase().contains(_query) ||
                     c.shortId.toLowerCase().contains(_query),
               )
@@ -341,7 +346,7 @@ class _ContactTile extends ConsumerWidget {
             .join();
 
     final unreadCount =
-        contact.isChat
+        (contact.isChat || contact.isRoom)
             ? ref.watch(
               unreadCountsProvider.select((u) => u.forContact(prefix6)),
             )
@@ -372,53 +377,107 @@ class _ContactTile extends ConsumerWidget {
           ),
         ),
         title: Text(
-          contact.name.isNotEmpty ? contact.name : contact.shortId,
+          contact.displayName,
           style: TextStyle(
             fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.w600,
           ),
         ),
         subtitle: Text(
-          'Visto: $lastSeen  |  Saltos: ${contact.pathLen}',
+          contact.customName != null
+              ? '${contact.name.isNotEmpty ? contact.name : contact.shortId}  •  Visto: $lastSeen  |  Saltos: ${contact.pathLen}'
+              : 'Visto: $lastSeen  |  Saltos: ${contact.pathLen}',
           style: theme.textTheme.bodySmall,
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: Icon(
-                isFavorite ? Icons.star : Icons.star_border,
-                color: isFavorite ? Colors.amber : null,
-              ),
-              tooltip:
-                  isFavorite
-                      ? 'Remover dos favoritos'
-                      : 'Adicionar aos favoritos',
-              onPressed:
-                  () => ref.read(favoritesProvider.notifier).toggle(keyHex),
-            ),
-            IconButton(
-              icon: const Icon(Icons.qr_code),
-              tooltip: 'Partilhar via QR',
-              onPressed: () => _showContactQrCode(context),
-            ),
-            if (contact.isChat)
-              IconButton(
-                icon: const Icon(Icons.chat),
-                tooltip: 'Mensagem privada',
-                onPressed: () => context.push('/chat/$keyHex'),
-              ),
-            if (contact.isRepeater)
-              IconButton(
-                icon: const Icon(Icons.admin_panel_settings),
-                tooltip: 'Admin remoto',
-                onPressed: () => _showAdminSheet(context, ref),
-              ),
-          ],
-        ),
-        onTap: contact.isChat ? () => context.push('/chat/$keyHex') : null,
-        onLongPress: () => _confirmDelete(context, ref),
+        trailing:
+            isFavorite
+                ? const Icon(Icons.star, color: Colors.amber, size: 20)
+                : null,
+        onTap:
+            contact.isChat
+                ? () => context.push('/chat/$keyHex')
+                : contact.isRoom
+                ? () => context.push('/room/$keyHex')
+                : null,
+        onLongPress: () => _showOptionsSheet(context, ref, isFavorite, keyHex),
       ),
     );
+  }
+
+  Future<void> _showRenameDialog(BuildContext context, WidgetRef ref) async {
+    final ctrl = TextEditingController(
+      text: contact.customName ?? contact.name,
+    );
+    final hasCustom = contact.customName != null;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return AlertDialog(
+          title: const Text('Renomear contacto'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Nome anunciado: ${contact.name.isNotEmpty ? contact.name : contact.shortId}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withAlpha(140),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Nome personalizado',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            if (hasCustom)
+              TextButton(
+                onPressed: () {
+                  ref
+                      .read(contactsProvider.notifier)
+                      .setCustomName(contact.publicKey, null);
+                  Navigator.pop(ctx);
+                },
+                child: Text(
+                  'Limpar',
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+              ),
+            FilledButton(
+              onPressed: () {
+                final trimmed = ctrl.text.trim();
+                ref
+                    .read(contactsProvider.notifier)
+                    .setCustomName(
+                      contact.publicKey,
+                      trimmed.isEmpty || trimmed == contact.name
+                          ? null
+                          : trimmed,
+                    );
+                Navigator.pop(ctx);
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        );
+      },
+    );
+    // Defer dispose until after the dialog close animation completes.
+    // Calling dispose() immediately after showDialog() returns can crash
+    // because Flutter may still rebuild the TextField during the close animation.
+    WidgetsBinding.instance.addPostFrameCallback((_) => ctrl.dispose());
   }
 
   void _showAdminSheet(BuildContext context, WidgetRef ref) {
@@ -438,37 +497,10 @@ class _ContactTile extends ConsumerWidget {
     showDialog<void>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
-            title: const Text('QR Code do contacto'),
-            content: SizedBox(
-              width: 260,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  QrImageView(
-                    data: uri,
-                    size: 240,
-                    backgroundColor: Colors.white,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    contact.name.isNotEmpty ? contact.name : contact.shortId,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _typeLabel(contact.type),
-                    style: Theme.of(ctx).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Fechar'),
-              ),
-            ],
+          (ctx) => _ContactQrDialog(
+            uri: uri,
+            displayName: contact.displayName,
+            typeLabel: _typeLabel(contact.type),
           ),
     );
   }
@@ -488,6 +520,148 @@ class _ContactTile extends ConsumerWidget {
     }
   }
 
+  void _showOptionsSheet(
+    BuildContext context,
+    WidgetRef ref,
+    bool isFavorite,
+    String keyHex,
+  ) {
+    final theme = Theme.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: _typeColor(contact.type).withAlpha(40),
+                        child: Icon(
+                          _typeIcon(contact.type),
+                          color: _typeColor(contact.type),
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              contact.displayName,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              '${_typeLabel(contact.type)}  •  ${contact.shortId}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurface.withAlpha(
+                                  130,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(),
+                // Favourite
+                ListTile(
+                  leading: Icon(
+                    isFavorite ? Icons.star : Icons.star_border,
+                    color: isFavorite ? Colors.amber : null,
+                  ),
+                  title: Text(
+                    isFavorite
+                        ? 'Remover dos favoritos'
+                        : 'Adicionar aos favoritos',
+                  ),
+                  onTap: () {
+                    ref.read(favoritesProvider.notifier).toggle(keyHex);
+                    Navigator.pop(ctx);
+                  },
+                ),
+                // QR
+                ListTile(
+                  leading: const Icon(Icons.qr_code),
+                  title: const Text('Partilhar via QR'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showContactQrCode(context);
+                  },
+                ),
+                // Rename
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined),
+                  title: const Text('Renomear'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showRenameDialog(context, ref);
+                  },
+                ),
+                // Type-specific action
+                if (contact.isChat)
+                  ListTile(
+                    leading: const Icon(Icons.chat),
+                    title: const Text('Mensagem privada'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      context.push('/chat/$keyHex');
+                    },
+                  ),
+                if (contact.isRoom)
+                  ListTile(
+                    leading: const Icon(Icons.meeting_room),
+                    title: const Text('Entrar na sala'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      context.push('/room/$keyHex');
+                    },
+                  ),
+                if (contact.isRepeater)
+                  ListTile(
+                    leading: const Icon(Icons.admin_panel_settings),
+                    title: const Text('Admin remoto'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showAdminSheet(context, ref);
+                    },
+                  ),
+                const Divider(),
+                // Delete
+                ListTile(
+                  leading: Icon(
+                    Icons.delete_outline,
+                    color: theme.colorScheme.error,
+                  ),
+                  title: Text(
+                    'Remover contacto',
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _confirmDelete(context, ref);
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -495,7 +669,7 @@ class _ContactTile extends ConsumerWidget {
           (ctx) => AlertDialog(
             title: const Text('Remover contacto'),
             content: Text(
-              'Remover "${contact.name.isNotEmpty ? contact.name : contact.shortId}" da lista de contactos?',
+              'Remover "${contact.displayName}" da lista de contactos?',
             ),
             actions: [
               TextButton(
@@ -893,7 +1067,7 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
           const SizedBox(height: 12),
           Row(
             children: [
-              const Icon(Icons.cell_tower, color: Colors.orange, size: 22),
+              const Icon(Icons.cell_tower, color: AppTheme.primary, size: 22),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1101,6 +1275,134 @@ class _StatsCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// QR code dialog with system share
+// ---------------------------------------------------------------------------
+
+class _ContactQrDialog extends StatefulWidget {
+  const _ContactQrDialog({
+    required this.uri,
+    required this.displayName,
+    required this.typeLabel,
+  });
+
+  final String uri;
+  final String displayName;
+  final String typeLabel;
+
+  @override
+  State<_ContactQrDialog> createState() => _ContactQrDialogState();
+}
+
+class _ContactQrDialogState extends State<_ContactQrDialog> {
+  final _qrKey = GlobalKey();
+  bool _sharing = false;
+  bool _sharingText = false;
+
+  Future<void> _shareQr() async {
+    setState(() => _sharing = true);
+    try {
+      final boundary =
+          _qrKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+      final pngBytes = byteData.buffer.asUint8List();
+
+      final xFile = XFile.fromData(
+        pngBytes,
+        name: '${widget.displayName}.png',
+        mimeType: 'image/png',
+      );
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [xFile],
+          text: widget.uri,
+          subject: 'Contacto MeshCore: ${widget.displayName}',
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  Future<void> _shareText() async {
+    setState(() => _sharingText = true);
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: widget.uri,
+          subject: 'Contacto MeshCore: ${widget.displayName}',
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sharingText = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('QR Code do contacto'),
+      content: SizedBox(
+        width: 260,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RepaintBoundary(
+              key: _qrKey,
+              child: QrImageView(
+                data: widget.uri,
+                size: 240,
+                backgroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              widget.displayName,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(widget.typeLabel, style: theme.textTheme.bodySmall),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Fechar'),
+        ),
+        TextButton.icon(
+          onPressed: _sharingText ? null : _shareText,
+          icon:
+              _sharingText
+                  ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Icon(Icons.text_fields),
+          label: const Text('Partilhar texto'),
+        ),
+        FilledButton.icon(
+          onPressed: _sharing ? null : _shareQr,
+          icon:
+              _sharing
+                  ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Icon(Icons.share),
+          label: const Text('Partilhar QR'),
+        ),
+      ],
     );
   }
 }

@@ -9,6 +9,7 @@ import 'screens/map_screen.dart';
 import 'screens/private_chat_screen.dart';
 import 'screens/radio_config_screen.dart';
 import 'screens/contacts_screen.dart';
+import 'screens/room_screen.dart';
 import 'screens/settings_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -43,6 +44,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) {
               final keyHex = state.pathParameters['keyHex']!;
               return PrivateChatScreen(contactKeyHex: keyHex);
+            },
+          ),
+          GoRoute(
+            path: '/room/:keyHex',
+            builder: (context, state) {
+              final keyHex = state.pathParameters['keyHex']!;
+              return RoomScreen(contactKeyHex: keyHex);
             },
           ),
           GoRoute(

@@ -37,7 +37,7 @@ class TelemetryScreen extends ConsumerWidget {
 
         // ---- Network stats section ----
         const _SectionHeader(
-          label: 'Estatísticas de Rede',
+          label: 'Estatísticas da Rede',
           icon: Icons.bar_chart,
         ),
         const SizedBox(height: 8),
@@ -53,8 +53,7 @@ class TelemetryScreen extends ConsumerWidget {
         if (telemetry.isEmpty)
           _EmptyHint(
             icon: Icons.sensors_off,
-            message:
-                'Nenhuma telemetria recebida.\nOs sensores MeshCore enviam dados CayenneLPP via TelemetryPush.',
+            message: 'Nenhuma telemetria recebida.',
             theme: theme,
           )
         else
@@ -83,7 +82,7 @@ class _BatteryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasData = history.isNotEmpty;
-    final volts = currentMv > 0 ? (currentMv / 1000.0).toStringAsFixed(3) : '—';
+    final volts = currentMv > 0 ? (currentMv / 1000.0).toStringAsFixed(2) : '—';
 
     return Card(
       child: Padding(

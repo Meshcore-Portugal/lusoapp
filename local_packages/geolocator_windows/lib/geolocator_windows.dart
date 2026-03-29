@@ -6,7 +6,7 @@
 /// inside a [defaultTargetPlatform == TargetPlatform.android] (or iOS) guard,
 /// this stub is never invoked at runtime.  It satisfies the Dart/Flutter
 /// plugin registration without any native code.
-library geolocator_windows;
+library;
 
 import 'dart:async';
 

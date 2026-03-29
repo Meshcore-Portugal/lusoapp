@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart'
+    show FlutterBluePlus, BluetoothAdapterState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -10,6 +12,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../providers/radio_providers.dart';
 import '../../services/storage_service.dart';
 import '../../transport/transport.dart';
+import '../theme.dart';
 
 // ---------------------------------------------------------------------------
 // Composite model — a discovered device paired with its connection type.
@@ -68,7 +71,37 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     super.dispose();
   }
 
+  /// Returns true if Bluetooth is on (or not applicable), false if it is off.
+  /// When off, shows a friendly snackbar and returns false so the caller can abort.
+  bool _checkBluetoothOn() {
+    if (kIsWeb) return true;
+    if (!Platform.isAndroid && !Platform.isIOS) return true;
+    if (FlutterBluePlus.adapterStateNow == BluetoothAdapterState.off) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.bluetooth_disabled, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Bluetooth desligado. Ligue o Bluetooth para procurar dispositivos.',
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppTheme.primary,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _startScan() async {
+    if (!_checkBluetoothOn()) return;
+
     setState(() {
       _scanning = true;
       _targets.clear();
@@ -151,6 +184,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   }
 
   Future<void> _connectTo(_ConnectTarget target) async {
+    if (target.type == _ConnectType.ble && !_checkBluetoothOn()) return;
+
     setState(() => _connectingTarget = target);
     final connection = ref.read(connectionProvider.notifier);
     final name = target.device.name;
@@ -178,9 +213,9 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     } else if (mounted) {
       setState(() => _connectingTarget = null);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Falha ao ligar ao dispositivo'),
-          backgroundColor: Colors.red,
+        SnackBar(
+          content: const Text('Falha ao ligar ao dispositivo'),
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     }
@@ -203,6 +238,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                 : _ConnectType.serialCompanion,
       );
     });
+    if (last.type == 'ble' && !_checkBluetoothOn()) return;
+
     final connection = ref.read(connectionProvider.notifier);
     bool ok;
     if (last.type == 'ble') {
@@ -222,9 +259,9 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     } else if (mounted) {
       setState(() => _connectingTarget = null);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Falha ao ligar ao último dispositivo'),
-          backgroundColor: Colors.red,
+        SnackBar(
+          content: const Text('Falha ao ligar ao último dispositivo'),
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     }
@@ -248,20 +285,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
           child: Column(
             children: [
               const SizedBox(height: 48),
-              Icon(
-                Icons.cell_tower,
-                size: 80,
-                color: theme.colorScheme.primary,
-              ),
+              Image.asset('assets/images/meshcore-pt-logo.webp', height: 120),
               const SizedBox(height: 16),
-              Text(
-                'MeshCore PT',
-                style: theme.textTheme.headlineLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-              const SizedBox(height: 8),
               Text(
                 'Comunidade Portuguesa MeshCore',
                 style: theme.textTheme.bodyLarge?.copyWith(
@@ -293,32 +318,32 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 16),
                       child: Card(
-                        color: theme.colorScheme.secondaryContainer,
+                        color: theme.colorScheme.primaryContainer,
                         child: ListTile(
                           leading: Icon(
                             lastDevice.type == 'ble'
                                 ? Icons.bluetooth
                                 : Icons.usb,
-                            color: theme.colorScheme.onSecondaryContainer,
+                            color: theme.colorScheme.onPrimaryContainer,
                           ),
                           title: Text(
                             'Ligar novamente',
                             style: TextStyle(
-                              color: theme.colorScheme.onSecondaryContainer,
+                              color: theme.colorScheme.onPrimaryContainer,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           subtitle: Text(
                             lastDevice.name,
                             style: TextStyle(
-                              color: theme.colorScheme.onSecondaryContainer
+                              color: theme.colorScheme.onPrimaryContainer
                                   .withAlpha(180),
                             ),
                           ),
                           trailing: Icon(
                             Icons.arrow_forward_ios,
                             size: 16,
-                            color: theme.colorScheme.onSecondaryContainer,
+                            color: theme.colorScheme.onPrimaryContainer,
                           ),
                           onTap: () => _connectToLastDevice(lastDevice),
                         ),

@@ -31,7 +31,7 @@ class CompanionDecoder {
       case respSelfInfo:
         return _parseSelfInfo(data);
       case respSent:
-        return const SentResponse();
+        return _parseSentResponse(data);
       case respContactMsgRecv:
         return _parsePrivateMessage(data);
       case respContactMsgRecvV3:
@@ -209,6 +209,12 @@ class CompanionDecoder {
         longitude: lon,
       ),
     );
+  }
+
+  /// Parse RESP_CODE_SENT (0x06): route_flag, expected_ack, est_timeout
+  static SentResponse _parseSentResponse(Uint8List data) {
+    final routeFlag = data.isNotEmpty ? data[0] : 0;
+    return SentResponse(routeFlag: routeFlag);
   }
 
   static PrivateMessageResponse _parsePrivateMessageV3(Uint8List data) {
@@ -528,7 +534,11 @@ class SelfInfoResponse extends CompanionResponse {
 }
 
 class SentResponse extends CompanionResponse {
-  const SentResponse();
+  const SentResponse({this.routeFlag = 0});
+
+  /// 0 = direct, 1 = flood (via repeaters)
+  final int routeFlag;
+  bool get isFlood => routeFlag == 1;
 }
 
 class PrivateMessageResponse extends CompanionResponse {
