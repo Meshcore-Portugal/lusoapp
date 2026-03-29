@@ -160,7 +160,7 @@ void main() {
       expect(frame[4], 3);
       final nameBytes = frame.sublist(5, 37);
       final nameStr = utf8.decode(
-        nameBytes.sublist(0, nameBytes.indexOf(0) == -1 ? nameBytes.length : nameBytes.indexOf(0)),
+        nameBytes.sublist(0, nameBytes.contains(0) ? nameBytes.indexOf(0) : nameBytes.length),
       );
       expect(nameStr, 'Emergency');
       expect(frame.sublist(37, 53), secret);
