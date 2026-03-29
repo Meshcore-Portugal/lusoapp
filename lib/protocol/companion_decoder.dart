@@ -50,6 +50,10 @@ class CompanionDecoder {
         return _parseDeviceInfo(data);
       case respChannelInfo:
         return _parseChannelInfo(data);
+      case respSignature:
+        return _parseSignature(data);
+      case respStats:
+        return _parseStats(data);
       // Unsolicited push codes
       case pushAdvert:
       case pushNewAdvert:
@@ -465,6 +469,18 @@ class CompanionDecoder {
     return AdvertPush(pubKey, type, name.trim());
   }
 
+  static SignatureResponse? _parseSignature(Uint8List data) {
+    if (data.length < 64) return null;
+    return SignatureResponse(Uint8List.fromList(data.sublist(0, 64)));
+  }
+
+  static StatsResponse? _parseStats(Uint8List data) {
+    if (data.isEmpty) return null;
+    final subType = data[0];
+    final statsData = data.length > 1 ? data.sublist(1) : Uint8List(0);
+    return StatsResponse(subType, statsData);
+  }
+
   // --- Utility ---
 
   static int _readUint32LE(Uint8List data, int offset) {
@@ -631,6 +647,17 @@ class StatusResponsePush extends CompanionResponse {
 
 class RawDataPush extends CompanionResponse {
   const RawDataPush(this.data);
+  final Uint8List data;
+}
+
+class SignatureResponse extends CompanionResponse {
+  const SignatureResponse(this.signature);
+  final Uint8List signature;
+}
+
+class StatsResponse extends CompanionResponse {
+  const StatsResponse(this.subType, this.data);
+  final int subType;
   final Uint8List data;
 }
 
