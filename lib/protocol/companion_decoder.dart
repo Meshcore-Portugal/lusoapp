@@ -72,6 +72,12 @@ class CompanionDecoder {
         return TraceDataPush(data);
       case pushTelemetryResponse:
         return TelemetryPush(data);
+      case pushBinaryResponse:
+        return _parseBinaryResponse(data);
+      case pushPathDiscoveryResponse:
+        return _parsePathDiscovery(data);
+      case pushControlData:
+        return _parseControlData(data);
       case pushContactDeleted:
         return const ContactDeletedPush();
       case pushContactsFull:
@@ -469,6 +475,51 @@ class CompanionDecoder {
     return AdvertPush(pubKey, type, name.trim());
   }
 
+  static BinaryResponsePush? _parseBinaryResponse(Uint8List data) {
+    // data layout: reserved(1), tag(uint32 LE), response_data(variable)
+    if (data.length < 5) return null; // 1 reserved + 4 tag
+    final tag = _readUint32LE(data, 1);
+    final responseData = data.length > 5 ? data.sublist(5) : Uint8List(0);
+    return BinaryResponsePush(tag, responseData);
+  }
+
+  static PathDiscoveryPush? _parsePathDiscovery(Uint8List data) {
+    // data layout: reserved(1), pub_key_prefix(6), out_path_len(1),
+    //              out_path(out_path_len*4), in_path_len(1), in_path(in_path_len*4)
+    if (data.length < 8) return null; // 1+6+1 minimum
+    final pubKeyPrefix = Uint8List.fromList(data.sublist(1, 7));
+    final outPathLen = data[7];
+    var offset = 8;
+    final outPath = <int>[];
+    for (var i = 0; i < outPathLen && offset + 4 <= data.length; i++) {
+      outPath.add(_readUint32LE(data, offset));
+      offset += 4;
+    }
+    if (offset >= data.length) {
+      return PathDiscoveryPush(pubKeyPrefix, outPath, const []);
+    }
+    final inPathLen = data[offset];
+    offset++;
+    final inPath = <int>[];
+    for (var i = 0; i < inPathLen && offset + 4 <= data.length; i++) {
+      inPath.add(_readUint32LE(data, offset));
+      offset += 4;
+    }
+    return PathDiscoveryPush(pubKeyPrefix, outPath, inPath);
+  }
+
+  static ControlDataPush? _parseControlData(Uint8List data) {
+    // data layout: SNR*4(signed byte), RSSI(signed byte), path_len(byte), payload(variable)
+    if (data.length < 3) return null;
+    final snrByte = data[0];
+    final snr = (snrByte < 128 ? snrByte : snrByte - 256) / 4.0;
+    final rssiByte = data[1];
+    final rssi = rssiByte < 128 ? rssiByte : rssiByte - 256;
+    final pathLen = data[2];
+    final payload = data.length > 3 ? data.sublist(3) : Uint8List(0);
+    return ControlDataPush(snr, rssi, pathLen, payload);
+  }
+
   static SignatureResponse? _parseSignature(Uint8List data) {
     if (data.length < 64) return null;
     return SignatureResponse(Uint8List.fromList(data.sublist(0, 64)));
@@ -648,6 +699,27 @@ class StatusResponsePush extends CompanionResponse {
 class RawDataPush extends CompanionResponse {
   const RawDataPush(this.data);
   final Uint8List data;
+}
+
+class BinaryResponsePush extends CompanionResponse {
+  const BinaryResponsePush(this.tag, this.responseData);
+  final int tag;
+  final Uint8List responseData;
+}
+
+class PathDiscoveryPush extends CompanionResponse {
+  const PathDiscoveryPush(this.pubKeyPrefix, this.outPath, this.inPath);
+  final Uint8List pubKeyPrefix;
+  final List<int> outPath;
+  final List<int> inPath;
+}
+
+class ControlDataPush extends CompanionResponse {
+  const ControlDataPush(this.snr, this.rssi, this.pathLen, this.payload);
+  final double snr;
+  final int rssi;
+  final int pathLen;
+  final Uint8List payload;
 }
 
 class SignatureResponse extends CompanionResponse {
