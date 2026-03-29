@@ -26,7 +26,7 @@
   - [x] Settings screen (identity, connection management)
 - [x] State management (Riverpod providers)
 - [x] Portuguese (Portugal) UI language
-- [ ] Unit tests for protocol encoder/decoder
+- [x] Unit tests for protocol encoder/decoder
 - [ ] Integration tests for transport layer mocks
 
 ---
