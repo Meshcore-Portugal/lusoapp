@@ -68,7 +68,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   if (selfInfo != null)
                     ListTile(
-                      title: const Text('Chave Publica'),
+                      title: const Text('Chave Pública'),
                       subtitle: Text(
                         selfInfo.publicKey
                             .map((b) => b.toRadixString(16).padLeft(2, '0'))
@@ -352,7 +352,7 @@ class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
                 Icon(Icons.notifications, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(
-                  'Notificacoes',
+                  'Notificações',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),

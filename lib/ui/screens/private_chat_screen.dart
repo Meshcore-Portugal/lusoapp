@@ -21,6 +21,7 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
   final _scrollController = ScrollController();
   bool _waitingForTrace = false;
   ChatMessage? _replyingTo;
+  bool _atBottom = true;
 
   Uint8List get _contactKey {
     final hex = widget.contactKeyHex;
@@ -106,14 +107,26 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     return hex.length >= 12 ? hex.substring(0, 12) : hex;
   }
 
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final atBottom =
+        _scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 80;
+    if (atBottom != _atBottom) setState(() => _atBottom = atBottom);
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       ref.read(unreadCountsProvider.notifier).markContactRead(_prefix6Hex);
-      // Load persisted messages for this contact on first open.
-      ref.read(messagesProvider.notifier).ensureLoadedForContact(_prefix6Hex);
+      // Load persisted messages, then scroll to bottom once they are in state.
+      await ref
+          .read(messagesProvider.notifier)
+          .ensureLoadedForContact(_prefix6Hex);
+      if (mounted) _scrollToBottom();
     });
   }
 
@@ -130,7 +143,9 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     // whenever new messages arrive, and tail-scroll to the latest message.
     ref.listen<List<ChatMessage>>(messagesProvider, (prev, next) {
       ref.read(unreadCountsProvider.notifier).markContactRead(_prefix6Hex);
-      if (prev != null && next.length > prev.length) _scrollToBottom();
+      if (prev != null && next.length > prev.length && _atBottom) {
+        _scrollToBottom();
+      }
     });
 
     // Show trace result sheet when a new trace arrives
@@ -141,6 +156,7 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
       _showTraceSheet(next);
     });
 
+    final selfName = ref.watch(selfInfoProvider)?.name;
     final contacts = ref.watch(contactsProvider);
     final allMessages = ref.watch(messagesProvider);
     final contact = _findContact(contacts);
@@ -238,7 +254,8 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
 
         // Messages
         Expanded(
-          child:
+          child: Stack(
+            children: [
               contactMessages.isEmpty
                   ? Center(
                     child: Column(
@@ -272,6 +289,7 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
                       final msg = contactMessages[index];
                       return _PrivateMessageBubble(
                         message: msg,
+                        selfName: selfName,
                         contactDisplayName:
                             msg.isOutgoing ? null : contact?.displayName,
                         contactPathLen: contact?.pathLen,
@@ -282,6 +300,18 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
                       );
                     },
                   ),
+              if (!_atBottom)
+                Positioned(
+                  bottom: 8,
+                  right: 12,
+                  child: FloatingActionButton.small(
+                    heroTag: 'scroll_bottom_priv${widget.contactKeyHex}',
+                    onPressed: _scrollToBottom,
+                    child: const Icon(Icons.keyboard_double_arrow_down),
+                  ),
+                ),
+            ],
+          ),
         ),
 
         // Input bar
@@ -350,35 +380,64 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
 
 /// Renders text that may start with an `@[name]` mention.
 /// The mention is shown as an accent-coloured rounded pill; the rest is normal text.
-Widget _buildMentionText(String text, ThemeData theme, TextStyle? style) {
-  final match = RegExp(r'^\@\[([^\]]+)\]\s?').firstMatch(text);
-  if (match == null) return Text(text, style: style);
-  final name = match.group(1)!;
-  final rest = text.substring(match.end);
-  return Text.rich(
-    TextSpan(
-      children: [
-        WidgetSpan(
-          alignment: PlaceholderAlignment.middle,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              '@$name',
-              style: (theme.textTheme.labelSmall ?? const TextStyle()).copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
+/// Renders text with all `@[name]` mentions as pill chips anywhere in the message.
+/// Mentions matching [selfName] use the tertiary colour for emphasis;
+/// all other mentions use the primary colour.
+Widget _buildMentionText(
+  String text,
+  ThemeData theme,
+  TextStyle? style, {
+  String? selfName,
+}) {
+  final pattern = RegExp(r'@\[([^\]]+)\]');
+  final matches = pattern.allMatches(text).toList();
+  if (matches.isEmpty) return Text(text, style: style);
+
+  final spans = <InlineSpan>[];
+  var cursor = 0;
+
+  for (final match in matches) {
+    if (match.start > cursor) {
+      spans.add(
+        TextSpan(text: text.substring(cursor, match.start), style: style),
+      );
+    }
+    final name = match.group(1)!;
+    final isSelf =
+        selfName != null &&
+        name.trim().toLowerCase() == selfName.trim().toLowerCase();
+    final pillColor =
+        isSelf ? theme.colorScheme.tertiary : theme.colorScheme.primary;
+    final textColor =
+        isSelf ? theme.colorScheme.onTertiary : Colors.white;
+    spans.add(
+      WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 1),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: pillColor,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            '@$name',
+            style: (theme.textTheme.labelSmall ?? const TextStyle()).copyWith(
+              color: textColor,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ),
-        if (rest.isNotEmpty) TextSpan(text: ' $rest', style: style),
-      ],
-    ),
-  );
+      ),
+    );
+    cursor = match.end;
+  }
+
+  if (cursor < text.length) {
+    spans.add(TextSpan(text: text.substring(cursor), style: style));
+  }
+
+  return Text.rich(TextSpan(children: spans));
 }
 
 class _PrivateMessageBubble extends StatelessWidget {
@@ -387,11 +446,13 @@ class _PrivateMessageBubble extends StatelessWidget {
     this.onReply,
     this.contactDisplayName,
     this.contactPathLen,
+    this.selfName,
   });
   final ChatMessage message;
   final VoidCallback? onReply;
   final String? contactDisplayName;
   final int? contactPathLen;
+  final String? selfName;
 
   static const _avatarPalette = [
     Color(0xFF7B61FF),
@@ -492,6 +553,7 @@ class _PrivateMessageBubble extends StatelessWidget {
                   message.text,
                   theme,
                   theme.textTheme.bodyMedium,
+                  selfName: selfName,
                 ),
               ),
               Padding(
@@ -665,8 +727,11 @@ class _ChatInputBar extends StatelessWidget {
                         vertical: 10,
                       ),
                     ),
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => onSend(),
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    minLines: 1,
+                    maxLines: 5,
+                    maxLength: 140,
                   ),
                 ),
                 const SizedBox(width: 8),

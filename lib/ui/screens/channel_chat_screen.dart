@@ -19,20 +19,31 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   ChatMessage? _replyingTo;
+  bool _atBottom = true;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       ref
           .read(unreadCountsProvider.notifier)
           .markChannelRead(widget.channelIndex);
-      // Load persisted messages for this channel on first open.
-      ref
+      // Load persisted messages, then scroll to bottom once they are in state.
+      await ref
           .read(messagesProvider.notifier)
           .ensureLoadedForChannel(widget.channelIndex);
+      if (mounted) _scrollToBottom();
     });
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final atBottom =
+        _scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 80;
+    if (atBottom != _atBottom) setState(() => _atBottom = atBottom);
   }
 
   @override
@@ -107,9 +118,12 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
       ref
           .read(unreadCountsProvider.notifier)
           .markChannelRead(widget.channelIndex);
-      if (prev != null && next.length > prev.length) _scrollToBottom();
+      if (prev != null && next.length > prev.length && _atBottom) {
+        _scrollToBottom();
+      }
     });
 
+    final selfName = ref.watch(selfInfoProvider)?.name;
     final channels = ref.watch(channelsProvider);
     final allMessages = ref.watch(messagesProvider);
     final channelMessages =
@@ -153,7 +167,8 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
 
         // Messages
         Expanded(
-          child:
+          child: Stack(
+            children: [
               channelMessages.isEmpty
                   ? Center(
                     child: Column(
@@ -182,6 +197,7 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
                       final msg = channelMessages[index];
                       return _MessageBubble(
                         message: msg,
+                        selfName: selfName,
                         onReply:
                             msg.isOutgoing
                                 ? null
@@ -189,6 +205,18 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
                       );
                     },
                   ),
+              if (!_atBottom)
+                Positioned(
+                  bottom: 8,
+                  right: 12,
+                  child: FloatingActionButton.small(
+                    heroTag: 'scroll_bottom_ch${widget.channelIndex}',
+                    onPressed: _scrollToBottom,
+                    child: const Icon(Icons.keyboard_double_arrow_down),
+                  ),
+                ),
+            ],
+          ),
         ),
 
         // Input bar
@@ -274,43 +302,71 @@ class ChannelsTabScreen extends ConsumerWidget {
 // Shared widgets
 // ---------------------------------------------------------------------------
 
-/// Renders text that may start with an `@[name]` mention.
-/// The mention is shown as an accent-coloured rounded pill; the rest is normal text.
-Widget _buildMentionText(String text, ThemeData theme, TextStyle? style) {
-  final match = RegExp(r'^\@\[([^\]]+)\]\s?').firstMatch(text);
-  if (match == null) return Text(text, style: style);
-  final name = match.group(1)!;
-  final rest = text.substring(match.end);
-  return Text.rich(
-    TextSpan(
-      children: [
-        WidgetSpan(
-          alignment: PlaceholderAlignment.middle,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              '@$name',
-              style: (theme.textTheme.labelSmall ?? const TextStyle()).copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
+/// Renders text with all `@[name]` mentions as pill chips anywhere in the message.
+/// Mentions matching [selfName] use the tertiary colour for emphasis;
+/// all other mentions use the primary colour.
+Widget _buildMentionText(
+  String text,
+  ThemeData theme,
+  TextStyle? style, {
+  String? selfName,
+}) {
+  final pattern = RegExp(r'@\[([^\]]+)\]');
+  final matches = pattern.allMatches(text).toList();
+  if (matches.isEmpty) return Text(text, style: style);
+
+  final spans = <InlineSpan>[];
+  var cursor = 0;
+
+  for (final match in matches) {
+    if (match.start > cursor) {
+      spans.add(
+        TextSpan(text: text.substring(cursor, match.start), style: style),
+      );
+    }
+    final name = match.group(1)!;
+    final isSelf =
+        selfName != null &&
+        name.trim().toLowerCase() == selfName.trim().toLowerCase();
+    final pillColor =
+        isSelf ? theme.colorScheme.tertiary : theme.colorScheme.primary;
+    final textColor =
+        isSelf ? theme.colorScheme.onTertiary : Colors.white;
+    spans.add(
+      WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 1),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: pillColor,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            '@$name',
+            style: (theme.textTheme.labelSmall ?? const TextStyle()).copyWith(
+              color: textColor,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ),
-        if (rest.isNotEmpty) TextSpan(text: ' $rest', style: style),
-      ],
-    ),
-  );
+      ),
+    );
+    cursor = match.end;
+  }
+
+  if (cursor < text.length) {
+    spans.add(TextSpan(text: text.substring(cursor), style: style));
+  }
+
+  return Text.rich(TextSpan(children: spans));
 }
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.message, this.onReply});
+  const _MessageBubble({required this.message, this.onReply, this.selfName});
   final ChatMessage message;
   final VoidCallback? onReply;
+  final String? selfName;
 
   static const _avatarPalette = [
     Color(0xFF7B61FF),
@@ -399,6 +455,7 @@ class _MessageBubble extends StatelessWidget {
                   message.text,
                   theme,
                   theme.textTheme.bodyMedium,
+                  selfName: selfName,
                 ),
               ),
               Padding(
@@ -501,6 +558,7 @@ class _MessageBubble extends StatelessWidget {
                     displayText,
                     theme,
                     theme.textTheme.bodyMedium,
+                    selfName: selfName,
                   ),
                 ),
                 Padding(
@@ -579,8 +637,11 @@ class _ChatInputBar extends StatelessWidget {
                         vertical: 10,
                       ),
                     ),
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => onSend(),
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    minLines: 1,
+                    maxLines: 5,
+                    maxLength: 140,
                   ),
                 ),
                 const SizedBox(width: 8),

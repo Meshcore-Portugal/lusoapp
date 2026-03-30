@@ -16,6 +16,9 @@ import 'qr_scanner_screen.dart';
 // Filter tabs
 enum _Filter { todos, favoritos, companheiros, repetidores, salas, sensores }
 
+// Sort order
+enum _Sort { nome, ouvidoRecentemente, ultimaMensagem }
+
 /// Contacts list screen with filter tabs.
 class ContactsScreen extends ConsumerStatefulWidget {
   const ContactsScreen({super.key});
@@ -26,6 +29,7 @@ class ContactsScreen extends ConsumerStatefulWidget {
 
 class _ContactsScreenState extends ConsumerState<ContactsScreen> {
   _Filter _filter = _Filter.todos;
+  _Sort _sort = _Sort.ouvidoRecentemente;
   final _searchCtrl = TextEditingController();
   String _query = '';
 
@@ -43,10 +47,20 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     super.dispose();
   }
 
+  /// Returns the first 6 bytes of [key] as a lowercase hex string.
+  static String _hex6(Uint8List key) {
+    final n = key.length < 6 ? key.length : 6;
+    return key
+        .sublist(0, n)
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join();
+  }
+
   @override
   Widget build(BuildContext context) {
     final contacts = ref.watch(contactsProvider);
     final favorites = ref.watch(favoritesProvider);
+    final messages = ref.watch(messagesProvider);
 
     final chatContacts = contacts.where((c) => c.isChat).toList();
     final repeaters = contacts.where((c) => c.isRepeater).toList();
@@ -91,6 +105,34 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
               .toList();
     }
 
+    // Build last-message timestamp index keyed by 6-byte public-key prefix.
+    final lastMsgTs = <String, int>{};
+    for (final msg in messages) {
+      if (msg.senderKey != null && msg.senderKey!.length >= 6) {
+        final k = _hex6(msg.senderKey!);
+        if (msg.timestamp > (lastMsgTs[k] ?? 0)) lastMsgTs[k] = msg.timestamp;
+      }
+    }
+
+    filtered = [...filtered];
+    switch (_sort) {
+      case _Sort.nome:
+        filtered.sort(
+          (a, b) =>
+              a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
+        );
+      case _Sort.ouvidoRecentemente:
+        filtered.sort(
+          (a, b) => b.lastAdvertTimestamp.compareTo(a.lastAdvertTimestamp),
+        );
+      case _Sort.ultimaMensagem:
+        filtered.sort((a, b) {
+          final aTs = lastMsgTs[_hex6(a.publicKey)] ?? 0;
+          final bTs = lastMsgTs[_hex6(b.publicKey)] ?? 0;
+          return bTs.compareTo(aTs);
+        });
+    }
+
     return Stack(
       children: [
         Column(
@@ -109,33 +151,66 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
               onChanged: (f) => setState(() => _filter = f),
             ),
 
-            // Search bar
+            // Search bar + sort button
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-              child: TextField(
-                controller: _searchCtrl,
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: 'Pesquisar contactos...',
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  suffixIcon:
-                      _query.isNotEmpty
-                          ? IconButton(
-                            icon: const Icon(Icons.close, size: 18),
-                            onPressed: () => _searchCtrl.clear(),
-                          )
-                          : null,
-                  isDense: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
+              padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchCtrl,
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        hintText: 'Pesquisar contactos...',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        suffixIcon:
+                            _query.isNotEmpty
+                                ? IconButton(
+                                  icon: const Icon(Icons.close, size: 18),
+                                  onPressed: () => _searchCtrl.clear(),
+                                )
+                                : null,
+                        isDense: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 8,
+                          horizontal: 12,
+                        ),
+                      ),
+                    ),
                   ),
-                  filled: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: 8,
-                    horizontal: 12,
+                  PopupMenuButton<_Sort>(
+                    icon: Icon(
+                      Icons.sort,
+                      color:
+                          _sort != _Sort.ouvidoRecentemente
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                    ),
+                    tooltip: 'Ordenar',
+                    initialValue: _sort,
+                    onSelected: (s) => setState(() => _sort = s),
+                    itemBuilder:
+                        (_) => [
+                          const PopupMenuItem(
+                            value: _Sort.nome,
+                            child: Text('Nome (A-Z)'),
+                          ),
+                          const PopupMenuItem(
+                            value: _Sort.ouvidoRecentemente,
+                            child: Text('Ouvido recentemente'),
+                          ),
+                          const PopupMenuItem(
+                            value: _Sort.ultimaMensagem,
+                            child: Text('Última mensagem'),
+                          ),
+                        ],
                   ),
-                ),
+                ],
               ),
             ),
 

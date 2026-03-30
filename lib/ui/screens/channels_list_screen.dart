@@ -80,8 +80,32 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen> {
   _Filter _filter = _Filter.todos;
 
   @override
+  void initState() {
+    super.initState();
+    // Eagerly load persisted messages for all known channels so the list
+    // shows last-message previews without requiring a channel visit first.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _loadAllChannelMessages(ref.read(channelsProvider));
+    });
+  }
+
+  void _loadAllChannelMessages(List<ChannelInfo> channels) {
+    for (final ch in channels) {
+      if (ch.name.isNotEmpty) {
+        ref.read(messagesProvider.notifier).ensureLoadedForChannel(ch.index);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final channels = ref.watch(channelsProvider);
+
+    // Also trigger when channels arrive from the radio after the screen opens.
+    ref.listen<List<ChannelInfo>>(channelsProvider, (_, next) {
+      _loadAllChannelMessages(next);
+    });
     final unread = ref.watch(unreadCountsProvider);
     final allMessages = ref.watch(messagesProvider);
     final maxChannels = ref.watch(deviceInfoProvider)?.maxChannels ?? 8;
