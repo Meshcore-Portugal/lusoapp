@@ -368,10 +368,10 @@ class _ContactTile extends ConsumerWidget {
           isLabelVisible: unreadCount > 0,
           label: Text(unreadCount > 99 ? '99+' : '$unreadCount'),
           child: CircleAvatar(
-            backgroundColor: _typeColor(contact.type).withAlpha(40),
+            backgroundColor: _avatarColor(contact).withAlpha(40),
             child: Icon(
-              _typeIcon(contact.type),
-              color: _typeColor(contact.type),
+              _avatarIcon(contact),
+              color: _avatarColor(contact),
               size: 20,
             ),
           ),
@@ -542,10 +542,10 @@ class _ContactTile extends ConsumerWidget {
                   child: Row(
                     children: [
                       CircleAvatar(
-                        backgroundColor: _typeColor(contact.type).withAlpha(40),
+                        backgroundColor: _avatarColor(contact).withAlpha(40),
                         child: Icon(
-                          _typeIcon(contact.type),
-                          color: _typeColor(contact.type),
+                          _avatarIcon(contact),
+                          color: _avatarColor(contact),
                           size: 20,
                         ),
                       ),
@@ -694,6 +694,16 @@ class _ContactTile extends ConsumerWidget {
       await service.requestContacts();
     }
   }
+
+  bool _isTimekeeper(Contact c) =>
+      c.name.toLowerCase().contains('timekeeper') ||
+      (c.customName?.toLowerCase().contains('timekeeper') ?? false);
+
+  IconData _avatarIcon(Contact c) =>
+      _isTimekeeper(c) ? Icons.access_time_rounded : _typeIcon(c.type);
+
+  Color _avatarColor(Contact c) =>
+      _isTimekeeper(c) ? Colors.teal : _typeColor(c.type);
 
   IconData _typeIcon(int type) {
     switch (type) {

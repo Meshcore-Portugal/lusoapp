@@ -875,14 +875,26 @@ class _EditChannelSheetState extends State<_EditChannelSheet> {
   }
 
   Future<void> _confirmDelete() async {
+    final isPublic =
+        widget.channel.secret != null &&
+        _toHex(widget.channel.secret!) == _kPublicKeyHex;
+
     final confirmed = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: const Text('Remover canal'),
-            content: Text(
-              'Tem a certeza que quer remover "${widget.channel.name}"?\n\n'
-              'Esta acção não pode ser desfeita. Para recuperar o canal terá de conhecer a chave secreta.',
+      builder: (ctx) {
+        if (isPublic) {
+          return AlertDialog(
+            icon: Icon(
+              Icons.warning_amber_rounded,
+              color: Theme.of(ctx).colorScheme.error,
+              size: 40,
+            ),
+            title: const Text('Remover Canal Público?'),
+            content: const Text(
+              'Está prestes a remover o Canal Público.\n\n'
+              'Este é o canal principal partilhado por toda a comunidade MeshCore. '
+              'Sem ele não poderá receber ou enviar mensagens públicas.\n\n'
+              'Tem mesmo a certeza?',
             ),
             actions: [
               TextButton(
@@ -894,10 +906,33 @@ class _EditChannelSheetState extends State<_EditChannelSheet> {
                   backgroundColor: Theme.of(ctx).colorScheme.error,
                 ),
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Remover'),
+                child: const Text('Remover mesmo assim'),
               ),
             ],
+          );
+        }
+
+        return AlertDialog(
+          title: const Text('Remover canal'),
+          content: Text(
+            'Tem a certeza que quer remover "${widget.channel.name}"?\n\n'
+            'Esta acção não pode ser desfeita. Para recuperar o canal terá de conhecer a chave secreta.',
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(ctx).colorScheme.error,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Remover'),
+            ),
+          ],
+        );
+      },
     );
     if (confirmed != true || !mounted) return;
 

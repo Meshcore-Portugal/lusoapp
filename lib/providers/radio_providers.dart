@@ -370,25 +370,44 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     );
     log.d('Contacts: ${contactsResp?.runtimeType ?? "TIMEOUT"}');
 
-    // 4. Channels — request each one and wait for its response before sending
-    //    the next (spec: "send one command at a time").
-    //    Timeout 500 ms: BLE writeWithoutResponse + notification RTT is
-    //    typically 20–60 ms; 500 ms gives ample headroom on slow connections.
-    //    Also terminates on ErrorResponse so we never block the full timeout
-    //    for a channel slot the firmware rejects.
+    // 4. Channels — send all requests with a short stagger and collect
+    //    responses in parallel rather than round-tripping one at a time.
+    //    Each GET_CHANNEL round-trip is typically 20–60 ms over BLE; doing
+    //    them sequentially with a 500 ms timeout could waste up to 4 s for
+    //    8 slots.  Instead we:
+    //      a) Start a single listener that collects every ChannelInfoResponse.
+    //      b) Fire all requests 30 ms apart (gives the firmware write queue
+    //         time to drain without blocking on each response).
+    //      c) Wait for all slots to arrive, or a 1.5 s overall timeout.
     _setStep(4, 'A sincronizar canais...');
     final maxChannels = service.deviceInfo?.maxChannels ?? 8;
+    final receivedChannels = <int>{};
+    final channelsDone = Completer<void>();
+    final channelSub = service.responses.listen((r) {
+      if (r is ChannelInfoResponse) {
+        receivedChannels.add(r.channel.index);
+        if (receivedChannels.length >= maxChannels && !channelsDone.isCompleted) {
+          channelsDone.complete();
+        }
+      }
+    });
+
     for (var i = 0; i < maxChannels; i++) {
-      await _sendAndWait(
-        service,
-        () => service.requestChannel(i),
-        (r) =>
-            (r is ChannelInfoResponse && r.channel.index == i) ||
-            r is ErrorResponse,
-        timeout: const Duration(milliseconds: 500),
-      );
+      await service.requestChannel(i);
+      if (i < maxChannels - 1) {
+        await Future.delayed(const Duration(milliseconds: 30));
+      }
     }
-    log.d('Channels done (maxChannels=$maxChannels)');
+
+    try {
+      await channelsDone.future.timeout(const Duration(milliseconds: 1500));
+    } on TimeoutException {
+      // Partial results are fine — proceed with whatever arrived.
+    }
+    await channelSub.cancel();
+    log.d(
+      'Channels done: ${receivedChannels.length}/$maxChannels received',
+    );
 
     // 5. Drain any messages queued while the app was disconnected.
     //    The spec says to send CMD_SYNC_NEXT_MESSAGE during initialisation.
