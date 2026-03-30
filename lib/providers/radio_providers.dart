@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../protocol/cayenne_lpp.dart';
 import '../protocol/protocol.dart';
@@ -186,7 +188,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   /// Poll battery every 30 s while connected.
   void _startBatteryPolling(RadioService service) {
     _batteryPollTimer?.cancel();
-    _batteryPollTimer = Timer.periodic(const Duration(seconds: 120), (_) {
+    _batteryPollTimer = Timer.periodic(const Duration(seconds: 300), (_) {
       if (state == TransportState.connected) {
         service.requestBattAndStorage().catchError((_) {});
       }
@@ -819,21 +821,60 @@ class BatteryReading {
 }
 
 class BatteryHistoryNotifier extends StateNotifier<List<BatteryReading>> {
-  BatteryHistoryNotifier() : super([]);
+  BatteryHistoryNotifier() : super([]) {
+    _loadFromPrefs();
+  }
 
-  static const _maxEntries = 120;
+  static const _prefKey = 'battery_history_v1';
+  static const _maxAge = Duration(days: 7);
+
+  Future<void> _loadFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_prefKey);
+    if (raw == null) return;
+    try {
+      final list = (jsonDecode(raw) as List).cast<Map<String, dynamic>>();
+      final cutoff = DateTime.now().subtract(_maxAge);
+      final readings =
+          list
+              .map(
+                (e) => BatteryReading(
+                  timestamp: DateTime.fromMillisecondsSinceEpoch(
+                    e['ts'] as int,
+                  ),
+                  millivolts: e['mv'] as int,
+                ),
+              )
+              .where((r) => r.timestamp.isAfter(cutoff))
+              .toList();
+      if (readings.isNotEmpty) state = readings;
+    } catch (_) {
+      // Ignore malformed persisted data
+    }
+  }
 
   void add(int millivolts) {
     if (millivolts <= 0) return;
-    final entry = BatteryReading(
-      timestamp: DateTime.now(),
-      millivolts: millivolts,
-    );
-    final updated = [...state, entry];
-    state =
-        updated.length > _maxEntries
-            ? updated.sublist(updated.length - _maxEntries)
-            : updated;
+    final cutoff = DateTime.now().subtract(_maxAge);
+    state = [
+      ...state.where((r) => r.timestamp.isAfter(cutoff)),
+      BatteryReading(timestamp: DateTime.now(), millivolts: millivolts),
+    ];
+    _saveToPrefs();
+  }
+
+  Future<void> _saveToPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data =
+        state
+            .map(
+              (r) => {
+                'ts': r.timestamp.millisecondsSinceEpoch,
+                'mv': r.millivolts,
+              },
+            )
+            .toList();
+    await prefs.setString(_prefKey, jsonEncode(data));
   }
 }
 

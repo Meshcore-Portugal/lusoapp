@@ -83,6 +83,7 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen> {
   Widget build(BuildContext context) {
     final channels = ref.watch(channelsProvider);
     final unread = ref.watch(unreadCountsProvider);
+    final allMessages = ref.watch(messagesProvider);
     final maxChannels = ref.watch(deviceInfoProvider)?.maxChannels ?? 8;
 
     final configured = channels.where((c) => c.name.isNotEmpty).toList();
@@ -95,10 +96,14 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen> {
             : List<ChannelInfo>.from(configured);
 
     filtered.sort((a, b) {
-      final ua = unread.forChannel(a.index);
-      final ub = unread.forChannel(b.index);
-      if (ua != ub) return ub.compareTo(ua);
-      return a.index.compareTo(b.index);
+      int lastTs(ChannelInfo ch) => allMessages
+          .where((m) => m.channelIndex == ch.index)
+          .fold(0, (ts, m) => m.timestamp > ts ? m.timestamp : ts);
+
+      final ta = lastTs(a);
+      final tb = lastTs(b);
+      if (ta != tb) return tb.compareTo(ta); // newest message first
+      return a.index.compareTo(b.index); // tie-break by slot index
     });
 
     final usedIndices = configured.map((c) => c.index).toSet();

@@ -21,7 +21,7 @@ class RadioTabScreen extends StatelessWidget {
                 icon: Icon(Icons.settings_input_antenna_outlined),
                 text: 'Rádio',
               ),
-              Tab(icon: Icon(Icons.crisis_alert_outlined), text: '3-3-3'),
+              Tab(icon: Icon(Icons.crisis_alert_outlined), text: 'Plano 3-3-3'),
             ],
           ),
           const Expanded(
