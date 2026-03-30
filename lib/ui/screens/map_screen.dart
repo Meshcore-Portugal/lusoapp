@@ -24,9 +24,12 @@ class MapScreen extends ConsumerStatefulWidget {
 
 class _MapScreenState extends ConsumerState<MapScreen> {
   final _mapController = MapController();
-  final _tileProvider = FMTCTileProvider(
-    stores: const {'mapStore': BrowseStoreStrategy.readUpdateCreate},
-  );
+  late final TileProvider _tileProvider =
+      kIsWeb
+          ? NetworkTileProvider()
+          : FMTCTileProvider(
+            stores: const {'mapStore': BrowseStoreStrategy.readUpdateCreate},
+          );
 
   LatLng? _myLocation;
   bool _loadingLocation = false;
@@ -228,6 +231,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'pt.meshcore.mcapppt',
               tileProvider: _tileProvider,
+              // On web the browser sets its own User-Agent header;
+              // a custom one would be blocked by CORS pre-flight.
+            ),
+            const RichAttributionWidget(
+              showFlutterMapAttribution: false,
+              attributions: [
+                TextSourceAttribution('MeshCore Portugal'),
+                TextSourceAttribution('© OpenStreetMap contributors'),
+              ],
             ),
             // ---- Trace path polyline ----
             if (traceResult != null)
@@ -292,8 +304,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   ),
               ],
             ),
-            const SimpleAttributionWidget(
-              source: Text('OpenStreetMap contributors'),
+            SafeArea(
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    child: Text(
+                      'MeshCore Portugal | © OpenStreetMap contributors',
+                      style: TextStyle(fontSize: 10, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
