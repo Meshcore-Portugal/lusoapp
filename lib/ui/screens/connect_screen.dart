@@ -65,6 +65,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   StreamSubscription<RadioDevice>? _bleScanSub;
   StreamSubscription<BluetoothAdapterState>? _bleStateSub;
   _ConnectTarget? _connectingTarget;
+  int _cachedContactCount = 0;
+  int _cachedChannelCount = 0;
 
   @override
   void initState() {
@@ -273,7 +275,12 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   Future<void> _connectTo(_ConnectTarget target) async {
     if (target.type == _ConnectType.ble && !_checkBluetoothOn()) return;
 
-    setState(() => _connectingTarget = target);
+    setState(() {
+      _connectingTarget = target;
+      _cachedContactCount = ref.read(contactsProvider).length;
+      _cachedChannelCount =
+          ref.read(channelsProvider).where((c) => c.name.isNotEmpty).length;
+    });
     final connection = ref.read(connectionProvider.notifier);
     final name = target.device.name;
     bool ok;
@@ -324,6 +331,9 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                 ? _ConnectType.serialKiss
                 : _ConnectType.serialCompanion,
       );
+      _cachedContactCount = ref.read(contactsProvider).length;
+      _cachedChannelCount =
+          ref.read(channelsProvider).where((c) => c.name.isNotEmpty).length;
     });
     if (last.type == 'ble' && !_checkBluetoothOn()) return;
 
@@ -395,6 +405,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                           .watch(channelsProvider)
                           .where((c) => c.name.isNotEmpty)
                           .length,
+                  cachedContactCount: _cachedContactCount,
+                  cachedChannelCount: _cachedChannelCount,
                 )
               else ...[
                 Builder(
@@ -547,6 +559,8 @@ class _ConnectingCard extends StatelessWidget {
     required this.theme,
     required this.contactCount,
     required this.channelCount,
+    required this.cachedContactCount,
+    required this.cachedChannelCount,
   });
 
   final _ConnectTarget? target;
@@ -556,6 +570,8 @@ class _ConnectingCard extends StatelessWidget {
   final ThemeData theme;
   final int contactCount;
   final int channelCount;
+  final int cachedContactCount;
+  final int cachedChannelCount;
 
   static const _stepLabels = [
     'A ligar...',
@@ -685,44 +701,76 @@ class _ConnectingCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 200),
-                          child: Container(
-                            key: ValueKey(i == 2 ? contactCount : channelCount),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: (done
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.primaryContainer)
-                                  .withAlpha(40),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color:
-                                    done
-                                        ? theme.colorScheme.primary.withAlpha(
-                                          120,
-                                        )
-                                        : theme.colorScheme.primary.withAlpha(
-                                          80,
-                                        ),
-                                width: 0.8,
-                              ),
-                            ),
-                            child: Text(
-                              '${i == 2 ? contactCount : channelCount}',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color:
-                                    done
+                          child: Builder(builder: (context) {
+                            final live =
+                                i == 2 ? contactCount : channelCount;
+                            final cached =
+                                i == 2
+                                    ? cachedContactCount
+                                    : cachedChannelCount;
+                            final newCount = (live - cached).clamp(0, live);
+                            final badgeColor =
+                                (done
                                         ? theme.colorScheme.primary
-                                        : theme.colorScheme.onSurface.withAlpha(
-                                          160,
-                                        ),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 10,
+                                        : theme.colorScheme.primaryContainer)
+                                    .withAlpha(40);
+                            final borderColor =
+                                done
+                                    ? theme.colorScheme.primary.withAlpha(120)
+                                    : theme.colorScheme.primary.withAlpha(80);
+                            final baseStyle =
+                                theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 10,
+                                );
+                            return Container(
+                              key: ValueKey('${i}_$live'),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 1,
                               ),
-                            ),
-                          ),
+                              decoration: BoxDecoration(
+                                color: badgeColor,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: borderColor,
+                                  width: 0.8,
+                                ),
+                              ),
+                              child:
+                                  cached > 0 && newCount > 0
+                                      ? Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            '$cached',
+                                            style: baseStyle?.copyWith(
+                                              color: theme
+                                                  .colorScheme.onSurface
+                                                  .withAlpha(110),
+                                            ),
+                                          ),
+                                          Text(
+                                            ' +$newCount',
+                                            style: baseStyle?.copyWith(
+                                              color: theme.colorScheme.primary,
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                      : Text(
+                                        '$live',
+                                        style: baseStyle?.copyWith(
+                                          color:
+                                              done
+                                                  ? theme.colorScheme.primary
+                                                  : theme
+                                                      .colorScheme.onSurface
+                                                      .withAlpha(160),
+                                        ),
+                                      ),
+                            );
+                          }),
                         ),
                       ],
                     ],
