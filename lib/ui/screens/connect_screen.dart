@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart'
-    show FlutterBluePlus, BluetoothAdapterState;
+    show FlutterBluePlus, BluetoothAdapterState, FlutterBluePlusException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -63,12 +63,99 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   bool _scanning = false;
   final List<_ConnectTarget> _targets = [];
   StreamSubscription<RadioDevice>? _bleScanSub;
+  StreamSubscription<BluetoothAdapterState>? _bleStateSub;
   _ConnectTarget? _connectingTarget;
 
   @override
+  void initState() {
+    super.initState();
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      // Subscribe to the adapterState stream — this triggers the platform call
+      // that populates the actual state. adapterStateNow is 'unknown' until
+      // the first subscription, so we cannot rely on it at startup.
+      _bleStateSub = FlutterBluePlus.adapterState.listen((state) {
+        if (state == BluetoothAdapterState.off) {
+          _bleStateSub?.cancel();
+          _bleStateSub = null;
+          if (mounted) _checkBleOnStartup();
+        } else if (state != BluetoothAdapterState.unknown) {
+          // BLE is already on (or unavailable) — no dialog needed.
+          _bleStateSub?.cancel();
+          _bleStateSub = null;
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
+    _bleStateSub?.cancel();
     _bleScanSub?.cancel();
     super.dispose();
+  }
+
+  Future<void> _checkBleOnStartup() async {
+    if (!mounted) return;
+
+    final enable = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.bluetooth_disabled),
+                SizedBox(width: 10),
+                Flexible(child: Text('Bluetooth desligado')),
+              ],
+            ),
+            content: const Text(
+              'O Bluetooth está desligado. Deseja activá-lo para ligar ao rádio MeshCore?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Não'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Activar'),
+              ),
+            ],
+          ),
+    );
+
+    if (!mounted) return;
+    if (enable == true) {
+      if (Platform.isAndroid) {
+        try {
+          // turnOn() shows the system dialog and awaits BluetoothAdapterState.on.
+          // Throws FlutterBluePlusException if the user denies.
+          await FlutterBluePlus.turnOn();
+        } on FlutterBluePlusException catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Activação do Bluetooth recusada.'),
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      } else {
+        // iOS does not allow programmatic BLE enable.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Por favor active o Bluetooth nas Definições do sistema.',
+              ),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    }
   }
 
   /// Returns true if Bluetooth is on (or not applicable), false if it is off.
