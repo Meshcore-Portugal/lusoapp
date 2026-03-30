@@ -170,6 +170,47 @@ class StorageService {
   }
 
   // ---------------------------------------------------------------------------
+  // Plan 3-3-3 settings
+  // ---------------------------------------------------------------------------
+
+  static const _keyPlan333Enabled = 'plan333_enabled';
+  static const _keyPlan333Config  = 'plan333_config';
+
+  Future<void> savePlan333Enabled(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_keyPlan333Enabled, enabled);
+    } catch (_) {}
+  }
+
+  Future<bool> loadPlan333Enabled() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_keyPlan333Enabled) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Stores Plan333Config as a raw JSON string (caller handles encoding).
+  Future<void> savePlan333Config(String json) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyPlan333Config, json);
+    } catch (_) {}
+  }
+
+  /// Returns the stored Plan333Config JSON string, or null if not set.
+  Future<String?> loadPlan333Config() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_keyPlan333Config);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Favorites (app-side, not stored on radio)
   // ---------------------------------------------------------------------------
 

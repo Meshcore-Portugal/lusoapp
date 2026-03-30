@@ -25,6 +25,9 @@
     <!-- Notifications — required for flutter_local_notifications on Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Exact alarms — required for Plan 3-3-3 scheduled window reminders -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
     <application
         android:label="mcapppt"
         android:name="${applicationName}"

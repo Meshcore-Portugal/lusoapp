@@ -2,9 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timezone/data/latest_all.dart' as tz_data;
 
 import 'providers/radio_providers.dart';
 import 'services/notification_service.dart';
+import 'services/plan333_service.dart';
 import 'services/storage_service.dart';
 import 'services/widget_service.dart';
 import 'ui/router.dart';
@@ -12,6 +14,9 @@ import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Timezone data required for Plan 3-3-3 scheduled notifications.
+  tz_data.initializeTimeZones();
 
   if (!kIsWeb) {
     await FMTCObjectBoxBackend().initialise();
@@ -63,6 +68,10 @@ class _McAppPtState extends ConsumerState<McAppPt> {
     if (mounted) {
       await ref.read(notificationSettingsProvider.notifier).loadFromStorage();
       await ref.read(favoritesProvider.notifier).loadFromStorage();
+      await ref.read(plan333EnabledProvider.notifier).loadFromStorage();
+      await ref.read(plan333ConfigProvider.notifier).loadFromStorage();
+      // Eagerly initialize the auto-send notifier (starts background timer).
+      ref.read(plan333AutoSendProvider);
     }
 
     // Push initial widget state with cached data (or disconnected state).

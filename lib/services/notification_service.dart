@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 import 'storage_service.dart';
 
@@ -20,6 +21,20 @@ class NotificationService {
   static const _androidChannelName = 'Mensagens MeshCore';
   static const _androidChannelDesc =
       'Notificacoes de mensagens privadas e de canal';
+
+  static const _plan333ChannelId = 'plan333_alerts';
+  static const _plan333ChannelName = 'Alertas Plano 3-3-3';
+  static const _plan333ChannelDesc =
+      'Lembretes das janelas de escuta do Plano 3-3-3';
+
+  // Notification IDs 1000-1007: daily window alerts; 1008: Saturday training.
+  static const _plan333BaseId = 1000;
+  static const _plan333TrainingId = 1008;
+
+  // Window hours and corresponding notify times (3 min before each window).
+  static const _windowHours = [0, 3, 6, 9, 12, 15, 18, 21];
+  // Lisbon timezone — correct for the Portuguese Plano 3-3-3.
+  static const _lisbon = 'Europe/Lisbon';
 
   final _plugin = FlutterLocalNotificationsPlugin();
   bool _initialized = false;
@@ -79,21 +94,28 @@ class NotificationService {
 
     await _plugin.initialize(initSettings);
 
-    // Create the Android notification channel once.
+    // Create Android notification channels once.
     if (defaultTargetPlatform == TargetPlatform.android) {
-      await _plugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >()
-          ?.createNotificationChannel(
-            const AndroidNotificationChannel(
-              _androidChannelId,
-              _androidChannelName,
-              description: _androidChannelDesc,
-              importance: Importance.high,
-              playSound: true,
-            ),
-          );
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      await android?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _androidChannelId,
+          _androidChannelName,
+          description: _androidChannelDesc,
+          importance: Importance.high,
+          playSound: true,
+        ),
+      );
+      await android?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _plan333ChannelId,
+          _plan333ChannelName,
+          description: _plan333ChannelDesc,
+          importance: Importance.high,
+          playSound: true,
+        ),
+      );
     }
 
     _initialized = true;
@@ -202,6 +224,92 @@ class NotificationService {
       title: channelName,
       body: '$senderName: ${text.isNotEmpty ? text : "(mensagem)"}',
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Plan 3-3-3 scheduled alerts
+  // ---------------------------------------------------------------------------
+
+  /// Schedule 8 daily window alerts + 1 weekly Saturday training reminder.
+  /// Safe to call multiple times — cancels existing Plan333 notifications first.
+  Future<void> schedulePlan333Alerts() async {
+    if (!_initialized || kIsWeb) return;
+
+    await cancelPlan333Alerts();
+
+    final location = tz.getLocation(_lisbon);
+
+    const androidDetails = AndroidNotificationDetails(
+      _plan333ChannelId,
+      _plan333ChannelName,
+      channelDescription: _plan333ChannelDesc,
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+      macOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+    );
+
+    for (int i = 0; i < _windowHours.length; i++) {
+      final h = _windowHours[i];
+      // Notify 3 minutes before the window hour.
+      final notifyHour = h == 0 ? 23 : h - 1;
+      const notifyMinute = 57;
+      final windowLabel =
+          '${h.toString().padLeft(2, '0')}:00';
+
+      final now = tz.TZDateTime.now(location);
+      var target = tz.TZDateTime(
+          location, now.year, now.month, now.day, notifyHour, notifyMinute);
+      if (target.isBefore(now)) {
+        target = target.add(const Duration(days: 1));
+      }
+
+      await _plugin.zonedSchedule(
+        _plan333BaseId + i,
+        'Plano 3-3-3 — Janela $windowLabel em 3 min',
+        'Ligue o CB Canal 3 AM (26.985 MHz) ou PMR 446 Canal 3',
+        target,
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        matchDateTimeComponents: DateTimeComponents.time,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    }
+
+    // Weekly Saturday training reminder at 20:55 (5 min before 21:00 window).
+    final now = tz.TZDateTime.now(location);
+    var satTarget =
+        tz.TZDateTime(location, now.year, now.month, now.day, 20, 55);
+    if (satTarget.isBefore(now)) {
+      satTarget = satTarget.add(const Duration(days: 1));
+    }
+    while (satTarget.weekday != DateTime.saturday) {
+      satTarget = satTarget.add(const Duration(days: 1));
+    }
+
+    await _plugin.zonedSchedule(
+      _plan333TrainingId,
+      'Treino Plano 3-3-3 — Hoje às 21:00',
+      'Treino semanal de sábado. Ligue o CB Canal 3 ou PMR 446 Canal 3.',
+      satTarget,
+      details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
+  /// Cancel all Plan 3-3-3 scheduled notifications.
+  Future<void> cancelPlan333Alerts() async {
+    if (!_initialized || kIsWeb) return;
+    for (int i = 0; i <= 8; i++) {
+      await _plugin.cancel(_plan333BaseId + i);
+    }
   }
 
   // ---------------------------------------------------------------------------
