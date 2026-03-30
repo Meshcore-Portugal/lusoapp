@@ -9,6 +9,7 @@ import '../protocol/protocol.dart';
 import '../services/notification_service.dart';
 import '../services/radio_service.dart';
 import '../services/storage_service.dart';
+import '../services/widget_service.dart';
 import '../transport/transport.dart';
 
 // ---------------------------------------------------------------------------
@@ -78,6 +79,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         );
         _setupAutoReconnect(service, () => connectBle(deviceId, deviceName));
         _startBatteryPolling(service);
+        _pushWidget();
         return true;
       }
       _ref.read(radioServiceProvider.notifier).state = null;
@@ -129,6 +131,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           name: deviceName,
         );
         _startBatteryPolling(service);
+        _pushWidget();
         return true;
       }
       _ref.read(radioServiceProvider.notifier).state = null;
@@ -155,12 +158,35 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     _ref.read(unreadCountsProvider.notifier).reset();
     _setStep(0, '');
     state = TransportState.disconnected;
+    _pushWidget();
+  }
+
+  /// Push current radio state to the Android home screen widget.
+  void _pushWidget() {
+    final selfInfo = _ref.read(selfInfoProvider);
+    final batteryMv = _ref.read(batteryProvider);
+    final contacts = _ref.read(contactsProvider);
+    final channels = _ref.read(channelsProvider);
+
+    // Same LiPo curve used by the home screen: 4200 mV = 100%, 3200 mV = 0%
+    final batteryPct =
+        batteryMv == 0
+            ? 0
+            : (((batteryMv.clamp(3200, 4200) - 3200) / 1000) * 100).round();
+
+    WidgetService.update(
+      radioName: selfInfo?.name ?? '—',
+      connected: state == TransportState.connected,
+      batteryPct: batteryPct,
+      contactCount: contacts.length,
+      channelCount: channels.where((c) => !c.isEmpty).length,
+    );
   }
 
   /// Poll battery every 30 s while connected.
   void _startBatteryPolling(RadioService service) {
     _batteryPollTimer?.cancel();
-    _batteryPollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _batteryPollTimer = Timer.periodic(const Duration(seconds: 120), (_) {
       if (state == TransportState.connected) {
         service.requestBattAndStorage().catchError((_) {});
       }
@@ -191,13 +217,16 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     service.responses.listen((response) {
       switch (response) {
         case ContactResponse():
+          _ref.read(contactsProvider.notifier).refresh(service.contacts);
         case EndContactsResponse():
           _ref.read(contactsProvider.notifier).refresh(service.contacts);
+          _pushWidget();
         case ContactDeletedPush():
           // Radio confirmed deletion — refresh from the service's now-updated list.
           _ref.read(contactsProvider.notifier).refresh(service.contacts);
         case ChannelInfoResponse():
           _ref.read(channelsProvider.notifier).refresh(service.channels);
+          _pushWidget();
         case PrivateMessageResponse(:final message):
           _ref.read(messagesProvider.notifier).addMessage(message);
           if (!message.isOutgoing) {
@@ -253,9 +282,11 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         case SelfInfoResponse(:final info):
           _ref.read(selfInfoProvider.notifier).state = info;
           _ref.read(radioConfigProvider.notifier).state = info.radioConfig;
+          _pushWidget();
         case BattAndStorageResponse(:final batteryMv):
           _ref.read(batteryProvider.notifier).state = batteryMv;
           _ref.read(batteryHistoryProvider.notifier).add(batteryMv);
+          _pushWidget();
         case DeviceInfoResponse(:final info):
           _ref.read(deviceInfoProvider.notifier).state = info;
         case SendConfirmedPush():

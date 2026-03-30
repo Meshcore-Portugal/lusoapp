@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/radio_providers.dart';
 import 'services/notification_service.dart';
 import 'services/storage_service.dart';
+import 'services/widget_service.dart';
 import 'ui/router.dart';
 import 'ui/theme.dart';
 
@@ -62,6 +63,21 @@ class _McAppPtState extends ConsumerState<McAppPt> {
     if (mounted) {
       await ref.read(notificationSettingsProvider.notifier).loadFromStorage();
       await ref.read(favoritesProvider.notifier).loadFromStorage();
+    }
+
+    // Push initial widget state with cached data (or disconnected state).
+    if (mounted) {
+      final selfInfo = ref.read(selfInfoProvider);
+      final contacts = ref.read(contactsProvider);
+      final channels = ref.read(channelsProvider);
+
+      await WidgetService.update(
+        radioName: selfInfo?.name ?? '—',
+        connected: false,
+        batteryPct: 0,
+        contactCount: contacts.length,
+        channelCount: channels.where((c) => !c.isEmpty).length,
+      );
     }
   }
 

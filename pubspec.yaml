@@ -52,6 +52,9 @@ dependencies:
   latlong2: ^0.9.1
   geolocator: ^13.0.1
 
+  # Android home screen widget bridge
+  home_widget: ^0.6.0
+
   # Utilities
   intl: ^0.20.0
   equatable: ^2.0.7
