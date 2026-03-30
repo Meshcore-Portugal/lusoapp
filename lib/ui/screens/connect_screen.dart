@@ -375,7 +375,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               Image.asset('assets/images/meshcore-pt-logo.webp', height: 120),
               const SizedBox(height: 16),
               Text(
-                'Comunidade Portuguesa MeshCore',
+                'MeshCore Portugal',
                 style: theme.textTheme.bodyLarge?.copyWith(
                   color: theme.colorScheme.onSurface.withAlpha(180),
                 ),
