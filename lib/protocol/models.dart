@@ -466,6 +466,13 @@ class RepeaterStats {
 class ChannelInfo extends Equatable {
   const ChannelInfo({required this.index, required this.name, this.secret});
 
+  factory ChannelInfo.fromJson(Map<String, dynamic> json) => ChannelInfo(
+    index: json['index'] as int,
+    name: json['name'] as String,
+    secret:
+        json['secret'] != null ? base64Decode(json['secret'] as String) : null,
+  );
+
   final int index;
   final String name;
   final Uint8List? secret; // 16-byte channel secret
@@ -473,6 +480,12 @@ class ChannelInfo extends Equatable {
   /// Whether this channel slot is empty (no name and all-zero secret).
   bool get isEmpty =>
       name.isEmpty && (secret == null || secret!.every((b) => b == 0));
+
+  Map<String, dynamic> toJson() => {
+    'index': index,
+    'name': name,
+    if (secret != null) 'secret': base64Encode(secret!),
+  };
 
   @override
   List<Object?> get props => [index, name];

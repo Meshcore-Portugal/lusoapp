@@ -112,6 +112,34 @@ class StorageService {
   }
 
   // ---------------------------------------------------------------------------
+  // Channels
+  // ---------------------------------------------------------------------------
+
+  static const _keyChannels = 'channels_v1';
+
+  Future<void> saveChannels(List<ChannelInfo> channels) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final json = jsonEncode(channels.map((c) => c.toJson()).toList());
+      await prefs.setString(_keyChannels, json);
+    } catch (_) {}
+  }
+
+  Future<List<ChannelInfo>> loadChannels() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final json = prefs.getString(_keyChannels);
+      if (json == null) return [];
+      final list = jsonDecode(json) as List<dynamic>;
+      return list
+          .map((e) => ChannelInfo.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Notification settings
   // ---------------------------------------------------------------------------
 
@@ -171,7 +199,6 @@ class StorageService {
 
 /// User-configurable notification preferences.
 class NotificationSettings {
-
   factory NotificationSettings.fromJson(Map<String, dynamic> json) =>
       NotificationSettings(
         enabled: (json['enabled'] as bool?) ?? true,

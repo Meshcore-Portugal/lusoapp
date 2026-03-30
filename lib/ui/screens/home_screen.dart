@@ -65,10 +65,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
             ),
-          // Connection indicator
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Icon(
+          // Connection indicator — tap to connect / disconnect
+          IconButton(
+            icon: Icon(
               connectionState == TransportState.connected
                   ? Icons.link
                   : Icons.link_off,
@@ -77,6 +76,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ? AppTheme.primary
                       : Colors.red,
             ),
+            onPressed: () => _onConnectionIconTap(context, connectionState),
           ),
         ],
       ),
@@ -140,6 +140,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _onConnectionIconTap(
+    BuildContext context,
+    TransportState state,
+  ) async {
+    if (state == TransportState.connected) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Desligar rádio?'),
+              content: const Text('A ligação ao rádio será terminada.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Desligar'),
+                ),
+              ],
+            ),
+      );
+      if (confirm == true && mounted) {
+        await ref.read(connectionProvider.notifier).disconnect();
+      }
+    } else {
+      context.go('/connect');
+    }
   }
 
   int _batteryPercent(int mv) {

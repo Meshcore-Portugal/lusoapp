@@ -397,44 +397,55 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                           .length,
                 )
               else ...[
-                // Last device quick-connect
                 Builder(
                   builder: (context) {
                     final lastDevice = ref.watch(lastDeviceProvider);
                     if (lastDevice == null) return const SizedBox.shrink();
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Card(
-                        color: theme.colorScheme.primaryContainer,
-                        child: ListTile(
-                          leading: Icon(
-                            lastDevice.type == 'ble'
-                                ? Icons.bluetooth
-                                : Icons.usb,
-                            color: theme.colorScheme.onPrimaryContainer,
-                          ),
-                          title: Text(
-                            'Ligar novamente',
-                            style: TextStyle(
-                              color: theme.colorScheme.onPrimaryContainer,
-                              fontWeight: FontWeight.bold,
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Card(
+                            color: theme.colorScheme.primaryContainer,
+                            child: ListTile(
+                              leading: Icon(
+                                lastDevice.type == 'ble'
+                                    ? Icons.bluetooth
+                                    : Icons.usb,
+                                color: theme.colorScheme.onPrimaryContainer,
+                              ),
+                              title: Text(
+                                'Ligar novamente',
+                                style: TextStyle(
+                                  color: theme.colorScheme.onPrimaryContainer,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              subtitle: Text(
+                                lastDevice.name,
+                                style: TextStyle(
+                                  color: theme.colorScheme.onPrimaryContainer
+                                      .withAlpha(180),
+                                ),
+                              ),
+                              trailing: Icon(
+                                Icons.arrow_forward_ios,
+                                size: 16,
+                                color: theme.colorScheme.onPrimaryContainer,
+                              ),
+                              onTap: () => _connectToLastDevice(lastDevice),
                             ),
                           ),
-                          subtitle: Text(
-                            lastDevice.name,
-                            style: TextStyle(
-                              color: theme.colorScheme.onPrimaryContainer
-                                  .withAlpha(180),
-                            ),
-                          ),
-                          trailing: Icon(
-                            Icons.arrow_forward_ios,
-                            size: 16,
-                            color: theme.colorScheme.onPrimaryContainer,
-                          ),
-                          onTap: () => _connectToLastDevice(lastDevice),
                         ),
-                      ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: TextButton.icon(
+                            icon: const Icon(Icons.wifi_off, size: 18),
+                            label: const Text('Continuar offline'),
+                            onPressed: () => context.go('/channels'),
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),

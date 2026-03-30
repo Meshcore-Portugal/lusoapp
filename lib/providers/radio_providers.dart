@@ -386,7 +386,8 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     final channelSub = service.responses.listen((r) {
       if (r is ChannelInfoResponse) {
         receivedChannels.add(r.channel.index);
-        if (receivedChannels.length >= maxChannels && !channelsDone.isCompleted) {
+        if (receivedChannels.length >= maxChannels &&
+            !channelsDone.isCompleted) {
           channelsDone.complete();
         }
       }
@@ -405,9 +406,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
       // Partial results are fine — proceed with whatever arrived.
     }
     await channelSub.cancel();
-    log.d(
-      'Channels done: ${receivedChannels.length}/$maxChannels received',
-    );
+    log.d('Channels done: ${receivedChannels.length}/$maxChannels received');
 
     // 5. Drain any messages queued while the app was disconnected.
     //    The spec says to send CMD_SYNC_NEXT_MESSAGE during initialisation.
@@ -501,8 +500,16 @@ final contactsProvider = StateNotifierProvider<ContactsNotifier, List<Contact>>(
 class ChannelsNotifier extends StateNotifier<List<ChannelInfo>> {
   ChannelsNotifier() : super([]);
 
+  Future<void> loadFromStorage() async {
+    final stored = await StorageService.instance.loadChannels();
+    if (stored.isNotEmpty) {
+      state = List.from(stored)..sort((a, b) => a.index.compareTo(b.index));
+    }
+  }
+
   void refresh(List<ChannelInfo> channels) {
     state = List.from(channels)..sort((a, b) => a.index.compareTo(b.index));
+    StorageService.instance.saveChannels(state);
   }
 }
 
