@@ -6,9 +6,9 @@ import 'screens/home_screen.dart';
 import 'screens/channels_list_screen.dart';
 import 'screens/channel_chat_screen.dart';
 import 'screens/map_screen.dart';
-import 'screens/plan333_screen.dart';
 import 'screens/private_chat_screen.dart';
 import 'screens/radio_config_screen.dart';
+import 'screens/radio_tab_screen.dart';
 import 'screens/contacts_screen.dart';
 import 'screens/room_screen.dart';
 import 'screens/settings_screen.dart';
@@ -56,15 +56,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/radio',
-            builder: (context, state) => const RadioConfigScreen(),
+            builder: (context, state) => const RadioTabScreen(),
           ),
           GoRoute(
             path: '/settings',
             builder: (context, state) => const SettingsScreen(),
-          ),
-          GoRoute(
-            path: '/plan333',
-            builder: (context, state) => const Plan333Screen(),
           ),
         ],
       ),

@@ -658,67 +658,252 @@ class _FormatsCard extends StatelessWidget {
 }
 
 // ============================================================================
-// MeshCore channel config reference card
+// MeshCore channel config button → opens a bottom sheet
 // ============================================================================
 
 class _MeshCoreChannelCard extends StatelessWidget {
   const _MeshCoreChannelCard();
 
+  void _showSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => const _ChannelSetupSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () => _showSheet(context),
+        icon: const Icon(Icons.lock_outline, size: 18),
+        label: const Text('Configurar Canal MeshCore  (#plano333)'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: theme.colorScheme.primary,
+          side: BorderSide(color: theme.colorScheme.primary.withAlpha(120)),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          alignment: Alignment.centerLeft,
+        ),
+      ),
+    );
+  }
+}
+
+class _ChannelSetupSheet extends ConsumerStatefulWidget {
+  const _ChannelSetupSheet();
+
+  @override
+  ConsumerState<_ChannelSetupSheet> createState() => _ChannelSetupSheetState();
+}
+
+class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
+  bool _loading = false;
+  String? _resultMessage;
+  bool _resultOk = false;
+
+  Future<void> _configure() async {
+    final service   = ref.read(radioServiceProvider);
+    final channels  = ref.read(channelsProvider);
+    final config    = ref.read(plan333ConfigProvider);
+
+    if (service == null) return;
+
+    setState(() { _loading = true; _resultMessage = null; });
+
+    try {
+      // Find the slot: existing #plano333 slot → first empty slot → slot 1.
+      int slot = channels
+          .where((c) => c.name == Plan333Service.meshCoreHashtag)
+          .map((c) => c.index)
+          .firstOrNull
+          ?? channels
+              .where((c) => c.isEmpty)
+              .map((c) => c.index)
+              .firstOrNull
+          ?? 1;
+
+      await service.setChannel(
+        slot,
+        Plan333Service.meshCoreHashtag,
+        Plan333Service.meshCoreSecretBytes,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await service.requestChannel(slot);
+
+      // Auto-update the event channel index in config.
+      if (config.meshChannelIndex != slot) {
+        await ref
+            .read(plan333ConfigProvider.notifier)
+            .update(config.copyWith(meshChannelIndex: slot));
+      }
+
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _resultOk = true;
+          _resultMessage = 'Canal #plano333 adicionado no slot $slot';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _resultOk = false;
+          _resultMessage = 'Erro: $e';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme       = Theme.of(context);
+    final connState   = ref.watch(connectionProvider);
+    final channels    = ref.watch(channelsProvider);
+    final isConnected = connState == TransportState.connected;
+    final alreadySet  = channels.any(
+      (c) => c.name == Plan333Service.meshCoreHashtag,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Icon(Icons.lock_outline, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Canal MeshCore  #plano333',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Adiciona o canal ao rádio ligado ou consulte os dados manualmente.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Configure button ────────────────────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _loading || !isConnected ? null : _configure,
+              icon: _loading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.black87),
+                    )
+                  : Icon(
+                      alreadySet ? Icons.sync : Icons.add_circle_outline,
+                      size: 18,
+                    ),
+              label: Text(
+                !isConnected
+                    ? 'Rádio não ligado'
+                    : _loading
+                        ? 'A configurar...'
+                        : alreadySet
+                            ? 'Re-configurar no Rádio'
+                            : 'Adicionar ao Rádio',
+              ),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                backgroundColor:
+                    alreadySet ? theme.colorScheme.secondary : null,
+              ),
+            ),
+          ),
+
+          if (_resultMessage != null) ...[
+            const SizedBox(height: 8),
             Row(
               children: [
-                Icon(Icons.lock_outline, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  'Configuração do Canal MeshCore',
-                  style: theme.textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                Icon(
+                  _resultOk ? Icons.check_circle : Icons.error_outline,
+                  size: 14,
+                  color: _resultOk
+                      ? const Color(0xFF00E676)
+                      : theme.colorScheme.error,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _resultMessage!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: _resultOk
+                          ? const Color(0xFF00E676)
+                          : theme.colorScheme.error,
+                    ),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            _ChannelConfigRow(
-              label: 'Hashtag',
-              value: Plan333Service.meshCoreHashtag,
-            ),
-            const Divider(height: 16),
-            _ChannelConfigRow(
-              label: 'Secret Key',
-              value: Plan333Service.meshCoreSecretKey,
-              monospace: true,
-              copyable: true,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'No cliente MeshCore: Join a Hashtag Channel → #plano333',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 4),
-            InkWell(
-              onTap: () {
-                Clipboard.setData(
-                    const ClipboardData(text: Plan333Service.reportUrl));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('URL do relatório copiado'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
+          ],
+
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+
+          // ── Credentials (reference / manual) ───────────────────────────
+          _ChannelConfigRow(
+            label: 'Hashtag',
+            value: Plan333Service.meshCoreHashtag,
+            copyable: true,
+          ),
+          const Divider(height: 20),
+          _ChannelConfigRow(
+            label: 'Secret Key',
+            value: Plan333Service.meshCoreSecretKey,
+            monospace: true,
+            copyable: true,
+          ),
+          const SizedBox(height: 12),
+          InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: () {
+              Clipboard.setData(
+                  const ClipboardData(text: Plan333Service.reportUrl));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('URL do relatório copiado'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
                   Icon(Icons.bar_chart,
-                      size: 13, color: theme.colorScheme.primary),
-                  const SizedBox(width: 4),
+                      size: 14, color: theme.colorScheme.primary),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       'Relatório: ${Plan333Service.reportUrl}',
@@ -729,12 +914,12 @@ class _MeshCoreChannelCard extends StatelessWidget {
                     ),
                   ),
                   Icon(Icons.copy_outlined,
-                      size: 13, color: theme.colorScheme.primary),
+                      size: 14, color: theme.colorScheme.primary),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

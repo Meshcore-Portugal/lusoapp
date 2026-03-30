@@ -24,7 +24,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     '/contacts',
     '/map',
     '/radio',
-    '/plan333',
     '/settings',
   ];
 
@@ -132,11 +131,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             icon: Icon(Icons.settings_input_antenna_outlined),
             selectedIcon: Icon(Icons.settings_input_antenna),
             label: 'Rádio',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.crisis_alert_outlined),
-            selectedIcon: Icon(Icons.crisis_alert),
-            label: '3-3-3',
           ),
           const NavigationDestination(
             icon: Icon(Icons.settings_outlined),

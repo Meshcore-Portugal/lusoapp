@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -142,6 +143,16 @@ class Plan333Service {
   // ── MeshCore channel config (published on plano333.pt) ───────────────────
   static const String meshCoreHashtag = '#plano333';
   static const String meshCoreSecretKey = '8d40917d08edeeb33e85c1a2308a2221';
+
+  /// The 16-byte secret for the #plano333 channel, decoded from [meshCoreSecretKey].
+  static Uint8List get meshCoreSecretBytes {
+    const hex = meshCoreSecretKey;
+    final out = Uint8List(hex.length ~/ 2);
+    for (var i = 0; i < out.length; i++) {
+      out[i] = int.parse(hex.substring(i * 2, i * 2 + 2), radix: 16);
+    }
+    return out;
+  }
   static const String reportUrl =
       'https://www.meshcore.pt/pt/projects/plano333';
 
