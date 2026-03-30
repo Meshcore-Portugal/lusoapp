@@ -104,6 +104,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // GPS helpers
   // ---------------------------------------------------------------------------
 
+  /// Returns true only when coordinates represent a real GPS fix.
+  /// Rejects null values and the [0, 0] sentinel used when no fix is available.
+  static bool _isValidGps(double? lat, double? lng) =>
+      lat != null && lng != null && !(lat == 0.0 && lng == 0.0);
+
   /// True on platforms where Geolocator works.
   bool get _locationSupported =>
       !kIsWeb &&
@@ -186,14 +191,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final theme = Theme.of(context);
 
     final gpsContacts =
-        contacts
-            .where((c) => c.latitude != null && c.longitude != null)
-            .toList();
+        contacts.where((c) => _isValidGps(c.latitude, c.longitude)).toList();
 
     // Prefer GPS from radio self-info; fall back to device GPS.
+    // Treat [0, 0] as "no fix" — do not snap the map to null-island.
+    final radio = selfInfo;
     final selfPos =
-        (selfInfo?.latitude != null && selfInfo?.longitude != null)
-            ? LatLng(selfInfo!.latitude!, selfInfo.longitude!)
+        (radio != null && _isValidGps(radio.latitude, radio.longitude))
+            ? LatLng(radio.latitude!, radio.longitude!)
             : _myLocation;
 
     final allPoints = [
@@ -820,12 +825,9 @@ class _ClusterListSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        0,
-        0,
-        0,
-        MediaQuery.of(context).viewInsets.bottom + 16,
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.65,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -841,27 +843,39 @@ class _ClusterListSheet extends StatelessWidget {
             ),
           ),
           const Divider(height: 1),
-          for (final contact in cluster.members)
-            ListTile(
-              leading: CircleAvatar(
-                backgroundColor: _typeColor(contact),
-                child: Icon(_typeIcon(contact), color: Colors.white, size: 20),
-              ),
-              title: Text(
-                contact.name,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              subtitle: Text(
-                '${_typeLabel(contact)}  ·  ${contact.shortId}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => onContactTap(contact),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final contact in cluster.members)
+                  ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: _typeColor(contact),
+                      child: Icon(
+                        _typeIcon(contact),
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    title: Text(
+                      contact.name,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${_typeLabel(contact)}  ·  ${contact.shortId}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => onContactTap(contact),
+                  ),
+              ],
             ),
+          ),
+          SizedBox(height: MediaQuery.of(context).viewInsets.bottom + 16),
         ],
       ),
     );
