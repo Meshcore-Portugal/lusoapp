@@ -661,7 +661,7 @@ class _FormatsCard extends StatelessWidget {
 // MeshCore channel config button → opens a bottom sheet
 // ============================================================================
 
-class _MeshCoreChannelCard extends StatelessWidget {
+class _MeshCoreChannelCard extends ConsumerWidget {
   const _MeshCoreChannelCard();
 
   void _showSheet(BuildContext context) {
@@ -676,7 +676,13 @@ class _MeshCoreChannelCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final channels = ref.watch(channelsProvider);
+    final alreadySet = channels.any(
+      (c) => c.name == Plan333Service.meshCoreHashtag,
+    );
+    if (alreadySet) return const SizedBox.shrink();
+
     final theme = Theme.of(context);
     return SizedBox(
       width: double.infinity,
