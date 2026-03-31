@@ -229,6 +229,10 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
               _replyingTo != null
                   ? () => setState(() => _replyingTo = null)
                   : null,
+          participants: {
+            for (final m in channelMessages.where((m) => !m.isOutgoing))
+              _senderFromMessage(m),
+          }..remove('Canal'),
         ),
       ],
     );
@@ -585,13 +589,14 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-class _ChatInputBar extends StatelessWidget {
+class _ChatInputBar extends StatefulWidget {
   const _ChatInputBar({
     required this.controller,
     required this.onSend,
     this.hintText = 'Escreva uma mensagem...',
     this.replyTo,
     this.onCancelReply,
+    this.participants = const {},
   });
 
   final TextEditingController controller;
@@ -599,13 +604,77 @@ class _ChatInputBar extends StatelessWidget {
   final String hintText;
   final ChatMessage? replyTo;
   final VoidCallback? onCancelReply;
+  final Set<String> participants;
+
+  @override
+  State<_ChatInputBar> createState() => _ChatInputBarState();
+}
+
+class _ChatInputBarState extends State<_ChatInputBar> {
+  List<String> _suggestions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTextChanged);
+    super.dispose();
+  }
+
+  /// Returns the active `@query` fragment at the cursor, or null if none.
+  String? _mentionQuery() {
+    final text = widget.controller.text;
+    final cursor = widget.controller.selection.baseOffset;
+    if (cursor < 0 || cursor > text.length) return null;
+    final before = text.substring(0, cursor);
+    // Find the last '@' that hasn't been closed with ']'
+    final atIdx = before.lastIndexOf('@');
+    if (atIdx < 0) return null;
+    final fragment = before.substring(atIdx + 1);
+    // If there's a space or newline in the fragment it's not a mention
+    if (fragment.contains(' ') || fragment.contains('\n')) return null;
+    return fragment.toLowerCase();
+  }
+
+  void _onTextChanged() {
+    final query = _mentionQuery();
+    if (query == null) {
+      if (_suggestions.isNotEmpty) setState(() => _suggestions = []);
+      return;
+    }
+    final filtered =
+        widget.participants
+            .where((p) => p.toLowerCase().contains(query))
+            .toList()
+          ..sort();
+    if (filtered.toString() != _suggestions.toString()) {
+      setState(() => _suggestions = filtered);
+    }
+  }
+
+  void _insertMention(String name) {
+    final text = widget.controller.text;
+    final cursor = widget.controller.selection.baseOffset;
+    final before = text.substring(0, cursor);
+    final atIdx = before.lastIndexOf('@');
+    final after = text.substring(cursor);
+    final inserted = '${text.substring(0, atIdx)}@[$name] $after';
+    widget.controller.value = TextEditingValue(
+      text: inserted,
+      selection: TextSelection.collapsed(offset: atIdx + name.length + 4),
+    );
+    setState(() => _suggestions = []);
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return Container(
-      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
@@ -616,40 +685,78 @@ class _ChatInputBar extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (replyTo != null && onCancelReply != null)
-              _ReplyStrip(
-                message: replyTo!,
-                onCancel: onCancelReply!,
-                theme: theme,
-              ),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    decoration: InputDecoration(
-                      hintText: hintText,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
+            // Mention suggestion strip
+            if (_suggestions.isNotEmpty)
+              Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: theme.colorScheme.outlineVariant,
+                      width: 0.5,
                     ),
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.newline,
-                    minLines: 1,
-                    maxLines: 5,
-                    maxLength: 140,
                   ),
                 ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  onPressed: onSend,
-                  icon: const Icon(Icons.send),
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  itemCount: _suggestions.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 6),
+                  itemBuilder: (context, i) {
+                    final name = _suggestions[i];
+                    return Center(
+                      child: ActionChip(
+                        label: Text('@$name'),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => _insertMention(name),
+                      ),
+                    );
+                  },
                 ),
-              ],
+              ),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (widget.replyTo != null && widget.onCancelReply != null)
+                    _ReplyStrip(
+                      message: widget.replyTo!,
+                      onCancel: widget.onCancelReply!,
+                      theme: theme,
+                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: widget.controller,
+                          decoration: InputDecoration(
+                            hintText: widget.hintText,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                          ),
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.newline,
+                          minLines: 1,
+                          maxLines: 5,
+                          maxLength: 140,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filled(
+                        onPressed: widget.onSend,
+                        icon: const Icon(Icons.send),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
