@@ -32,7 +32,7 @@
 - [x] GPS coordinates parsed and stored in Contact and SelfInfo models
 - [x] Portuguese (Portugal) UI language (all screens hard-coded PT-PT)
 - [x] Unit tests for protocol layer (22 tests: KISS + Companion encoder/decoder)
-- [ ] Integration tests for transport layer mocks
+- [x] Integration tests for transport layer mocks (56 tests: MockRadioTransport, KissTransport, RadioService framed + BLE)
 
 ---
 
