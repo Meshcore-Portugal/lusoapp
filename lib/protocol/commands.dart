@@ -46,6 +46,7 @@ const int cmdGetByKey = 0x1E;
 const int cmdGetChannel = 0x1F;
 const int cmdSetChannel = 0x20;
 const int cmdSignData = 0x22;
+const int cmdSignFinish = 0x23;
 const int cmdSendTracePath = 0x24;
 const int cmdSendTelemetryReq = 0x27;
 const int cmdSendBinaryReq = 0x32;
