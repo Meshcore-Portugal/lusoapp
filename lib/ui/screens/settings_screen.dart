@@ -144,20 +144,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               : Colors.red,
                     ),
                   ),
-                  if (connectionState == TransportState.connected)
+                  if (connectionState == TransportState.connected) ...[
                     ListTile(
-                      title: const Text('Desligar'),
-                      subtitle: const Text('Terminar ligação ao rádio'),
-                      leading: const Icon(Icons.link_off),
-                      onTap: () async {
-                        await ref
-                            .read(connectionProvider.notifier)
-                            .disconnect();
-                        if (context.mounted) {
-                          context.go('/connect');
-                        }
-                      },
+                      title: const Text('Configuração do Rádio'),
+                      subtitle: const Text('LoRa, telemetria e dispositivo'),
+                      leading: const Icon(Icons.settings_input_antenna),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push('/settings/radio'),
                     ),
+                  ],
                 ],
               ),
             ),
