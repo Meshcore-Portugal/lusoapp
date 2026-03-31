@@ -2,7 +2,9 @@
 param(
     [switch]$SkipTests,
     [switch]$ApkOnly,
-    [switch]$WindowsOnly
+    [switch]$WindowsOnly,
+    [switch]$Web,
+    [string]$BaseHref = "/"
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,6 +32,12 @@ try {
     # Clean
     Log "Cleaning previous build..."
     flutter clean
+    # Also clear stale CMake cache to prevent wrong install prefix (C:/Program Files/...)
+    $cmakeCache = Join-Path $ProjectDir "build\windows\x64\CMakeCache.txt"
+    if (Test-Path $cmakeCache) {
+        Remove-Item -Path $cmakeCache -Force
+        Log "Cleared stale CMake cache"
+    }
 
     # Dependencies
     Log "Getting dependencies..."
@@ -61,6 +69,23 @@ try {
             Compress-Archive -Path "$WinOut\*" -DestinationPath $archive -Force
             $size = (Get-Item $archive).Length / 1MB
             Log ("Windows archive: $archive ({0:N1} MB)" -f $size)
+        }
+    }
+
+    # Web — built when -Web is explicit, or when running a full build (no platform filter)
+    $buildWeb = $Web -or (-not $ApkOnly -and -not $WindowsOnly)
+    if ($buildWeb) {
+        Log "Building web release (base-href='$BaseHref')..."
+        flutter build web --release --base-href $BaseHref
+        if ($LASTEXITCODE -ne 0) { Err "Web build failed"; Pop-Location; exit 1 }
+
+        $WebOut = Join-Path $ProjectDir "build\web"
+        if (Test-Path $WebOut) {
+            $archive = Join-Path $DistDir "mcapppt-${Version}-web.zip"
+            Compress-Archive -Path "$WebOut\*" -DestinationPath $archive -Force
+            $size = (Get-Item $archive).Length / 1MB
+            Log ("Web archive: $archive ({0:N1} MB)" -f $size)
+            Log "  Deploy: unzip and serve build\web\ over HTTPS (Web Bluetooth requires HTTPS)"
         }
     }
 

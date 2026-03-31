@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
+import 'telemetry_screen.dart';
 
 /// Screen for viewing and editing the radio LoRa configuration.
 class RadioConfigScreen extends ConsumerStatefulWidget {
@@ -12,7 +13,8 @@ class RadioConfigScreen extends ConsumerStatefulWidget {
   ConsumerState<RadioConfigScreen> createState() => _RadioConfigScreenState();
 }
 
-class _RadioConfigScreenState extends ConsumerState<RadioConfigScreen> {
+class _RadioConfigScreenState extends ConsumerState<RadioConfigScreen>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
 
   // Form field controllers
@@ -26,6 +28,8 @@ class _RadioConfigScreenState extends ConsumerState<RadioConfigScreen> {
 
   bool _dirty = false;
   bool _saving = false;
+
+  late final TabController _tabController;
 
   static const _bandwidths = [
     (label: '7.8 kHz', hz: 7800),
@@ -51,6 +55,7 @@ class _RadioConfigScreenState extends ConsumerState<RadioConfigScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     final config = ref.read(radioConfigProvider);
     _populateFrom(config);
   }
@@ -67,6 +72,7 @@ class _RadioConfigScreenState extends ConsumerState<RadioConfigScreen> {
 
   @override
   void dispose() {
+    _tabController.dispose();
     _freqController.dispose();
     _txPowerController.dispose();
     super.dispose();
@@ -133,270 +139,298 @@ class _RadioConfigScreenState extends ConsumerState<RadioConfigScreen> {
       }
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Form(
-        key: _formKey,
-        onChanged: _markDirty,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ---------------------------------------------------------------
-            // Current config summary
-            // ---------------------------------------------------------------
-            if (config != null) _ConfigSummaryCard(config: config),
-
-            if (config != null) const SizedBox(height: 16),
-
-            // ---------------------------------------------------------------
-            // Device info card
-            // ---------------------------------------------------------------
-            if (deviceInfo != null || selfInfo != null)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
+    return Column(
+      children: [
+        TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.settings_input_antenna), text: 'Configuração'),
+            Tab(icon: Icon(Icons.show_chart), text: 'Telemetria'),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Form(
+                  key: _formKey,
+                  onChanged: _markDirty,
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        'Dispositivo',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
+                      // ---------------------------------------------------------------
+                      // Current config summary
+                      // ---------------------------------------------------------------
+                      if (config != null) _ConfigSummaryCard(config: config),
+
+                      if (config != null) const SizedBox(height: 16),
+
+                      // ---------------------------------------------------------------
+                      // Device info card
+                      // ---------------------------------------------------------------
+                      if (deviceInfo != null || selfInfo != null)
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Dispositivo',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                if (selfInfo != null)
+                                  _InfoRow(label: 'Nome', value: selfInfo.name),
+                                if (deviceInfo != null) ...[
+                                  _InfoRow(
+                                    label: 'Modelo',
+                                    value:
+                                        deviceInfo.model ??
+                                        deviceInfo.deviceName,
+                                  ),
+                                  _InfoRow(
+                                    label: 'Firmware',
+                                    value:
+                                        deviceInfo.versionString ??
+                                        'v${deviceInfo.firmwareVersion}',
+                                  ),
+                                  if (deviceInfo.storageUsed != null &&
+                                      deviceInfo.storageTotal != null)
+                                    _InfoRow(
+                                      label: 'Armazenamento',
+                                      value:
+                                          '${deviceInfo.storageUsed} / ${deviceInfo.storageTotal} bytes',
+                                    ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+
+                      if (deviceInfo != null || selfInfo != null)
+                        const SizedBox(height: 16),
+
+                      // ---------------------------------------------------------------
+                      // LoRa parameters card
+                      // ---------------------------------------------------------------
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Parâmetros LoRa',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+
+                              // Frequency
+                              TextFormField(
+                                controller: _freqController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Frequência (MHz)',
+                                  helperText: 'Ex: 868.1250',
+                                  border: OutlineInputBorder(),
+                                  suffixText: 'MHz',
+                                ),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                validator: (v) {
+                                  if (v == null || v.isEmpty) {
+                                    return 'Insere a frequência';
+                                  }
+                                  final d = double.tryParse(v);
+                                  if (d == null || d < 150 || d > 2500) {
+                                    return 'Frequência inválida (150–2500 MHz)';
+                                  }
+                                  return null;
+                                },
+                              ),
+
+                              const SizedBox(height: 16),
+
+                              // Bandwidth
+                              DropdownButtonFormField<int>(
+                                key: ValueKey('bw_$_bandwidthHz'),
+                                initialValue: _bandwidthHz,
+                                decoration: const InputDecoration(
+                                  labelText: 'Largura de banda',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items:
+                                    _bandwidths
+                                        .map(
+                                          (b) => DropdownMenuItem(
+                                            value: b.hz,
+                                            child: Text(b.label),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged: (v) {
+                                  setState(() {
+                                    _bandwidthHz = v;
+                                    _dirty = true;
+                                  });
+                                },
+                                validator:
+                                    (v) =>
+                                        v == null
+                                            ? 'Selecciona a largura de banda'
+                                            : null,
+                              ),
+
+                              const SizedBox(height: 16),
+
+                              // Spreading Factor
+                              DropdownButtonFormField<int>(
+                                key: ValueKey('sf_$_spreadingFactor'),
+                                initialValue: _spreadingFactor,
+                                decoration: const InputDecoration(
+                                  labelText: 'Spreading Factor',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items:
+                                    _spreadingFactors
+                                        .map(
+                                          (sf) => DropdownMenuItem(
+                                            value: sf,
+                                            child: Text('SF$sf'),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged: (v) {
+                                  setState(() {
+                                    _spreadingFactor = v;
+                                    _dirty = true;
+                                  });
+                                },
+                                validator:
+                                    (v) =>
+                                        v == null
+                                            ? 'Selecciona o spreading factor'
+                                            : null,
+                              ),
+
+                              const SizedBox(height: 16),
+
+                              // Coding Rate
+                              DropdownButtonFormField<int>(
+                                key: ValueKey('cr_$_codingRate'),
+                                initialValue: _codingRate,
+                                decoration: const InputDecoration(
+                                  labelText: 'Coding Rate',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items:
+                                    _codingRates
+                                        .map(
+                                          (cr) => DropdownMenuItem(
+                                            value: cr.val,
+                                            child: Text(cr.label),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged: (v) {
+                                  setState(() {
+                                    _codingRate = v;
+                                    _dirty = true;
+                                  });
+                                },
+                                validator:
+                                    (v) =>
+                                        v == null
+                                            ? 'Selecciona o coding rate'
+                                            : null,
+                              ),
+
+                              const SizedBox(height: 16),
+
+                              // TX Power
+                              TextFormField(
+                                controller: _txPowerController,
+                                decoration: InputDecoration(
+                                  labelText: 'Potência TX',
+                                  helperText:
+                                      deviceInfo != null
+                                          ? 'Máx: ${selfInfo?.maxTxPower ?? "?"} dBm'
+                                          : null,
+                                  border: const OutlineInputBorder(),
+                                  suffixText: 'dBm',
+                                ),
+                                keyboardType: TextInputType.number,
+                                validator: (v) {
+                                  if (v == null || v.isEmpty) {
+                                    return 'Insere a potência';
+                                  }
+                                  final i = int.tryParse(v);
+                                  if (i == null || i < 1 || i > 30) {
+                                    return 'Potência inválida (1–30 dBm)';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      if (selfInfo != null)
-                        _InfoRow(label: 'Nome', value: selfInfo.name),
-                      if (deviceInfo != null) ...[
-                        _InfoRow(
-                          label: 'Modelo',
-                          value: deviceInfo.model ?? deviceInfo.deviceName,
+
+                      const SizedBox(height: 24),
+
+                      // Save button
+                      FilledButton.icon(
+                        onPressed: _saving ? null : _save,
+                        icon:
+                            _saving
+                                ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : const Icon(Icons.save),
+                        label: Text(_saving ? 'A guardar...' : 'Guardar'),
+                      ),
+
+                      if (config != null) ...[
+                        const SizedBox(height: 12),
+                        // Reset to current radio values
+                        OutlinedButton.icon(
+                          onPressed:
+                              _dirty
+                                  ? () {
+                                    setState(() {
+                                      _populateFrom(config);
+                                      _dirty = false;
+                                    });
+                                  }
+                                  : null,
+                          icon: const Icon(Icons.undo),
+                          label: const Text('Repor valores actuais'),
                         ),
-                        _InfoRow(
-                          label: 'Firmware',
-                          value:
-                              deviceInfo.versionString ??
-                              'v${deviceInfo.firmwareVersion}',
-                        ),
-                        if (deviceInfo.storageUsed != null &&
-                            deviceInfo.storageTotal != null)
-                          _InfoRow(
-                            label: 'Armazenamento',
-                            value:
-                                '${deviceInfo.storageUsed} / ${deviceInfo.storageTotal} bytes',
-                          ),
                       ],
                     ],
                   ),
                 ),
               ),
-
-            if (deviceInfo != null || selfInfo != null)
-              const SizedBox(height: 16),
-
-            // ---------------------------------------------------------------
-            // LoRa parameters card
-            // ---------------------------------------------------------------
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Parâmetros LoRa',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Frequency
-                    TextFormField(
-                      controller: _freqController,
-                      decoration: const InputDecoration(
-                        labelText: 'Frequência (MHz)',
-                        helperText: 'Ex: 868.1250',
-                        border: OutlineInputBorder(),
-                        suffixText: 'MHz',
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) {
-                          return 'Insere a frequência';
-                        }
-                        final d = double.tryParse(v);
-                        if (d == null || d < 150 || d > 2500) {
-                          return 'Frequência inválida (150–2500 MHz)';
-                        }
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Bandwidth
-                    DropdownButtonFormField<int>(
-                      key: ValueKey('bw_$_bandwidthHz'),
-                      initialValue: _bandwidthHz,
-                      decoration: const InputDecoration(
-                        labelText: 'Largura de banda',
-                        border: OutlineInputBorder(),
-                      ),
-                      items:
-                          _bandwidths
-                              .map(
-                                (b) => DropdownMenuItem(
-                                  value: b.hz,
-                                  child: Text(b.label),
-                                ),
-                              )
-                              .toList(),
-                      onChanged: (v) {
-                        setState(() {
-                          _bandwidthHz = v;
-                          _dirty = true;
-                        });
-                      },
-                      validator:
-                          (v) =>
-                              v == null
-                                  ? 'Selecciona a largura de banda'
-                                  : null,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Spreading Factor
-                    DropdownButtonFormField<int>(
-                      key: ValueKey('sf_$_spreadingFactor'),
-                      initialValue: _spreadingFactor,
-                      decoration: const InputDecoration(
-                        labelText: 'Spreading Factor',
-                        border: OutlineInputBorder(),
-                      ),
-                      items:
-                          _spreadingFactors
-                              .map(
-                                (sf) => DropdownMenuItem(
-                                  value: sf,
-                                  child: Text('SF$sf'),
-                                ),
-                              )
-                              .toList(),
-                      onChanged: (v) {
-                        setState(() {
-                          _spreadingFactor = v;
-                          _dirty = true;
-                        });
-                      },
-                      validator:
-                          (v) =>
-                              v == null
-                                  ? 'Selecciona o spreading factor'
-                                  : null,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Coding Rate
-                    DropdownButtonFormField<int>(
-                      key: ValueKey('cr_$_codingRate'),
-                      initialValue: _codingRate,
-                      decoration: const InputDecoration(
-                        labelText: 'Coding Rate',
-                        border: OutlineInputBorder(),
-                      ),
-                      items:
-                          _codingRates
-                              .map(
-                                (cr) => DropdownMenuItem(
-                                  value: cr.val,
-                                  child: Text(cr.label),
-                                ),
-                              )
-                              .toList(),
-                      onChanged: (v) {
-                        setState(() {
-                          _codingRate = v;
-                          _dirty = true;
-                        });
-                      },
-                      validator:
-                          (v) => v == null ? 'Selecciona o coding rate' : null,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // TX Power
-                    TextFormField(
-                      controller: _txPowerController,
-                      decoration: InputDecoration(
-                        labelText: 'Potência TX',
-                        helperText:
-                            deviceInfo != null
-                                ? 'Máx: ${selfInfo?.maxTxPower ?? "?"} dBm'
-                                : null,
-                        border: const OutlineInputBorder(),
-                        suffixText: 'dBm',
-                      ),
-                      keyboardType: TextInputType.number,
-                      validator: (v) {
-                        if (v == null || v.isEmpty) {
-                          return 'Insere a potência';
-                        }
-                        final i = int.tryParse(v);
-                        if (i == null || i < 1 || i > 30) {
-                          return 'Potência inválida (1–30 dBm)';
-                        }
-                        return null;
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Save button
-            FilledButton.icon(
-              onPressed: _saving ? null : _save,
-              icon:
-                  _saving
-                      ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                      : const Icon(Icons.save),
-              label: Text(_saving ? 'A guardar...' : 'Guardar'),
-            ),
-
-            if (config != null) ...[
-              const SizedBox(height: 12),
-              // Reset to current radio values
-              OutlinedButton.icon(
-                onPressed:
-                    _dirty
-                        ? () {
-                          setState(() {
-                            _populateFrom(config);
-                            _dirty = false;
-                          });
-                        }
-                        : null,
-                icon: const Icon(Icons.undo),
-                label: const Text('Repor valores actuais'),
-              ),
+              // Tab 1: telemetry
+              const TelemetryScreen(),
             ],
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }

@@ -24,8 +24,14 @@ class BleTransport implements RadioTransport {
   BluetoothCharacteristic? _rxChar;
   BluetoothCharacteristic? _txChar;
   StreamSubscription<List<int>>? _notifySub;
+  StreamSubscription<BluetoothConnectionState>? _connStateSub;
   final _dataController = StreamController<Uint8List>.broadcast();
+  final _connectionLostController = StreamController<void>.broadcast();
   bool _connected = false;
+
+  /// Set to true when disconnect() is called by the app, so the
+  /// connectionState listener doesn't fire a spurious connectionLost event.
+  bool _userDisconnected = false;
 
   @override
   String get displayName => 'BLE: ${_device.platformName}';
@@ -40,7 +46,11 @@ class BleTransport implements RadioTransport {
   Stream<Uint8List> get dataStream => _dataController.stream;
 
   @override
+  Stream<void> get connectionLost => _connectionLostController.stream;
+
+  @override
   Future<bool> connect() async {
+    _userDisconnected = false;
     try {
       _log.i('BLE connecting to ${_device.platformName} (web=$kIsWeb)');
 
@@ -91,6 +101,18 @@ class BleTransport implements RadioTransport {
 
       _connected = true;
       _log.i('BLE connected: ${_device.platformName}');
+
+      // Monitor for unexpected disconnects (not triggered by dispose/disconnect).
+      _connStateSub = _device.connectionState.listen((s) {
+        if (s == BluetoothConnectionState.disconnected &&
+            _connected &&
+            !_userDisconnected) {
+          _log.w('BLE connection lost unexpectedly');
+          _connected = false;
+          _connectionLostController.add(null);
+        }
+      });
+
       return true;
     } catch (e) {
       _log.e('BLE connect failed: $e');
@@ -103,9 +125,12 @@ class BleTransport implements RadioTransport {
 
   @override
   Future<void> disconnect() async {
+    _userDisconnected = true;
     _connected = false;
     await _notifySub?.cancel();
     _notifySub = null;
+    await _connStateSub?.cancel();
+    _connStateSub = null;
     try {
       await _device.disconnect();
     } catch (_) {}
@@ -138,6 +163,7 @@ class BleTransport implements RadioTransport {
   Future<void> dispose() async {
     await disconnect();
     await _dataController.close();
+    await _connectionLostController.close();
   }
 
   /// Enable notifications on a characteristic, handling the flutter_blue_plus
@@ -192,11 +218,13 @@ class BleTransport implements RadioTransport {
 
   /// Scan for MeshCore BLE devices.
   ///
-  /// Passing [BleUuids.service] in [withServices] serves double duty on web:
-  /// it tells the Web Bluetooth browser picker to filter to NUS devices AND
-  /// it declares the UUID in `optionalServices`, which is required by the
-  /// Web Bluetooth security model before [discoverServices] is allowed.
-  /// Removing it (acceptAllDevices) causes a SecurityError on discoverServices.
+  /// On web, [withServices] only goes into the browser picker `filters`.
+  /// [webOptionalServices] is the separate parameter that populates
+  /// `optionalServices` in `requestDevice()`, which the Web Bluetooth
+  /// security model requires before [discoverServices] is allowed.
+  /// Without it, `discoverServices()` throws a SecurityError even if the
+  /// device was selected successfully from the picker.
+  /// Both must include [BleUuids.service] for the NUS service to be accessible.
   ///
   /// **Web note:** On web, [FlutterBluePlus.startScan] calls the browser's
   /// `requestDevice()` which blocks until the user picks a device, emits the
@@ -238,6 +266,10 @@ class BleTransport implements RadioTransport {
       try {
         await FlutterBluePlus.startScan(
           withServices: [BleUuids.service],
+          // Required on web: declares service UUIDs in requestDevice()
+          // optionalServices so discoverServices() is not blocked by the
+          // browser security model (separate from the picker filters above).
+          webOptionalServices: [BleUuids.service],
           timeout: timeout,
         );
       } catch (e) {

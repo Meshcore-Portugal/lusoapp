@@ -12,6 +12,10 @@
 - **Ligacao Serie** — Ligar via USB OTG serie (115200 8N1)
 - **Predefinicoes EU868** — Predefinicoes rapidas de radio em conformidade com regulamentos portugueses/UE
 - **Interface em Portugues** — Interface completa em Portugues (Portugal)
+- **Vista de Mapa** — Mapa GPS em tempo real de todos os contactos e nos mesh (OpenStreetMap, sem necessidade de chave API)
+- **Mapa Offline** — Cache de tiles via `flutter_map_tile_caching`; os tiles sao guardados automaticamente enquanto navega no mapa com ligacao e servidos a partir do disco quando offline
+
+> **Nota sobre cache offline do mapa:** A cache de tiles e exclusivamente por navegacao — os tiles sao guardados a medida que explora o mapa com ligacao e reproduzidos quando offline. Nao existe funcionalidade de pre-descarregamento em massa de uma area. Isto e intencional: a [politica](https://operations.osmfoundation.org/policies/tiles/) do servidor de tiles da OSM proibe o pre-descarregamento em massa de regioes.
 
 ## Inicio Rapido
 

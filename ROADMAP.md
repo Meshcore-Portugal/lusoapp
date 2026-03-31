@@ -2,53 +2,76 @@
 
 ## Roadmap
 
-### Phase 1 — Foundation (Current: v0.1.x)
+### Phase 1 — Foundation (Complete: v0.1.x)
 
 **Goal:** Working serial & BLE connection with basic messaging.
 
 - [x] Project scaffolding (Flutter, Riverpod, GoRouter)
 - [x] MeshCore Companion Protocol implementation
-  - [x] KISS framing encoder/decoder
-  - [x] Companion frame encoder (App → Radio)
-  - [x] Companion frame decoder (Radio → App)
-  - [x] Full command/response type definitions
+  - [x] KISS framing encoder/decoder (full byte-stuffing, streaming accumulator)
+  - [x] Companion frame encoder (App → Radio) — 20+ methods, all v3 commands
+  - [x] Companion frame decoder (Radio → App) — 30+ sealed response types, v2+v3
+  - [x] Full command/response/push type definitions (32 cmd, 18 resp, 16 push codes)
 - [x] Transport layer
   - [x] Abstract `RadioTransport` interface
-  - [x] BLE transport (Nordic UART service)
-  - [x] Serial/USB OTG transport
+  - [x] BLE transport (Nordic UART service, MTU negotiation, web workaround)
+  - [x] Serial/USB OTG transport (flutter_libserialport, 115200 8N1)
+  - [x] KISS TNC mode over serial (decorator transport)
   - [x] Device scanning and discovery
 - [x] Core UI screens
-  - [x] Device connection screen (BLE + Serial scan)
+  - [x] Device connection screen (BLE + Serial scan, 5-step progress)
+  - [x] Channels list (unread badges, unread-first sort, refresh)
   - [x] Channel chat (send/receive channel messages)
-  - [x] Private chat (1:1 encrypted messaging)
-  - [x] Radio configuration (LoRa params, TX power, presets)
-  - [x] Contacts list (grouped by type)
-  - [x] Settings screen (identity, connection management)
-- [x] State management (Riverpod providers)
-- [x] Portuguese (Portugal) UI language
-- [ ] Unit tests for protocol encoder/decoder
-- [ ] Integration tests for transport layer mocks
+  - [x] Private chat (1:1 encrypted messaging, trace route + reset path menu)
+  - [x] Radio configuration (LoRa params, TX power, device info card)
+  - [x] Contacts list (type-filter chips: Companheiros/Repetidores/Salas/Sensores)
+  - [x] Settings screen (identity name edit, disconnect, public key display)
+- [x] State management (Riverpod providers — full connection/data lifecycle)
+- [x] Unread message tracking (per-channel and per-contact counts)
+- [x] Battery and connection quality indicators (battery mV displayed)
+- [x] GPS coordinates parsed and stored in Contact and SelfInfo models
+- [x] Portuguese (Portugal) UI language (all screens hard-coded PT-PT)
+- [x] Unit tests for protocol layer (22 tests: KISS + Companion encoder/decoder)
+- [x] Integration tests for transport layer mocks (56 tests: MockRadioTransport, KissTransport, RadioService framed + BLE)
 
 ---
 
-### Phase 2 — Persistence & Reliability (v0.2.x)
+### Phase 2 — Persistence & Reliability (Current: v0.2.x)
 
 **Goal:** Message history, offline support, robust reconnection.
 
-- [ ] Local database (Isar)
-  - [ ] Message history persistence
-  - [ ] Contact cache (survive app restarts)
-  - [ ] Channel list persistence
-- [ ] Auto-reconnect logic
-  - [ ] BLE reconnect on disconnect
+- [x] Local database (SharedPreferences-backed JSON store — `StorageService`)
+  - [x] Message history persistence (per contact / per channel, capped at 500 msgs)
+  - [x] Contact cache (survive app restarts — loaded on app start)
+  - [x] Lazy message loading per chat screen (loaded on first open)
+- [x] Auto-reconnect logic
+  - [x] BLE reconnect on unexpected disconnect (`connectionLost` stream, single retry with 2 s backoff)
   - [ ] Serial reconnect on USB re-plug
-- [ ] Message delivery tracking
-  - [ ] Pending/sent/confirmed/failed states
+- [x] Message delivery tracking
+  - [x] Pending state (single tick) / confirmed state (double tick) in all chat UIs
+  - [x] `SendConfirmedPush` wired to `confirmLastOutgoing()` in `MessagesNotifier`
+  - [x] Repeater heard count on sent channel messages (loopback detection — "Ouvido por N repetidor(es)" label shown when relayed echo received back)
   - [ ] Retry on failure with exponential backoff
-- [ ] Background message sync (`SYNC_NEXT` loop)
-- [ ] Notification support (local notifications for new messages)
-- [ ] Connection quality indicator (RSSI, SNR from `RxMeta`)
-- [ ] Export/import contacts
+- [x] Background message sync (`SYNC_NEXT` loop — `MsgWaitingPush` triggers full offline queue drain)
+- [x] Last connected device memory (saved to SharedPreferences + quick-connect card in ConnectScreen)
+- [x] SNR display in chat (incoming messages show `SNR X.X dB`)
+- [x] Channel create/edit UI (FAB + bottom sheet, index picker, name, secret, random key generation)
+- [x] Contact add UI (FAB + bottom sheet, send advert, manual public key entry, `cmdAddUpdateContact`)
+- [x] Contact delete UI (long-press on contact tile → confirm dialog → `cmdRemoveContact`)
+- [x] QR code sharing and scanning
+  - [x] Share own contact as QR code (Settings screen — `meshcore://contact/add?...`)
+  - [x] Share any contact as QR code (QR icon on each contact tile)
+  - [x] Share channel via QR code (QR icon on each channel tile — `meshcore://channel/add?...`)
+  - [x] Scan QR to add contact (scanner in Add Contact sheet — parses and pre-fills form)
+  - [x] Scan QR to add channel (scanner in Add/Edit Channel sheet — parses and pre-fills form)
+- [x] Local OS notifications for new messages
+  - [x] `flutter_local_notifications` — Android, iOS, macOS, Windows, Linux support
+  - [x] `NotificationSettings` model with master enable, per-category toggles, background-only mode
+  - [x] `NotificationService` singleton — inits Android channel, requests permission, fires alerts
+  - [x] `NotificationSettingsNotifier` provider — persists settings via `StorageService`
+  - [x] Notifications card in Settings screen — "Activar notificacoes", private, canal, background toggles
+  - [x] `AppLifecycleObserver` — foreground detection for "only when background" mode
+- [ ] Export/import contacts (command constants defined; binary encoder implemented, no import/export UI)
 
 ---
 
@@ -56,20 +79,40 @@
 
 **Goal:** Full companion app parity with richer UX.
 
-- [ ] Map view
-  - [ ] Display contacts with GPS coordinates
-  - [ ] Self-location via phone GPS
-  - [ ] Path visualization between nodes
-- [ ] Telemetry dashboard
-  - [ ] Battery history chart
-  - [ ] Sensor data (CayenneLPP decode)
-  - [ ] Network statistics (RX/TX/Error counters)
-- [ ] Path tracing
-  - [ ] Visual hop-by-hop route display
+- [x] Map view
+  - [x] Display contacts with GPS coordinates (colour-coded markers by node type: blue=chat, orange=repeater, purple=room, teal=sensor)
+  - [x] Self-location via phone GPS (`geolocator` — permission request, fallback to radio self-info coords)
+  - [x] Own position marker (distinct style — primary-colour ring)
+  - [x] Tap contact marker → bottom sheet (name, type, GPS coords, "Enviar mensagem" button)
+  - [x] "Fit all" FAB — zoom to show all markers at once
+  - [x] "Localizar" FAB — get device GPS and centre map
+  - [x] OpenStreetMap tiles via `flutter_map` (no API key, OSM attribution shown)
+  - [x] Empty-state hint card when no GPS data available
+  - [x] Map rotation disabled (zoom/drag/pinch only)
+  - [x] GPS centre button (fast-centre if position known, locate if not)
+  - [x] Contact detail panel with full-width text (no truncation)
+  - [x] Contact clustering — zoom-adaptive grouping, tap to expand or show list
+  - [x] Path visualization between nodes (polyline overlay — trace hop GPS positions drawn in order)
+- [x] Telemetry dashboard
+  - [x] Battery history chart (sparkline with min/max labels, LiPo % estimate)
+  - [x] Sensor data (CayenneLPP decode — 15 sensor types, `TelemetryPush` → `lib/protocol/cayenne_lpp.dart`)
+  - [x] Network statistics (RX/TX/Error counters, heard-nodes counter, reset button)
+  - [x] Wired as second tab inside Rádio screen ("Configuração" + "Telemetria")
+- [x] Path tracing UI
+  - [x] Visual hop-by-hop route display (`TraceDataPush` parsed in `lib/protocol/trace_parser.dart`; map PolylineLayer + info card; chat bottom sheet with SNR per hop)
   - [ ] Latency estimation
-- [ ] Room server support
-  - [ ] Browse/join MeshCore rooms
-  - [ ] Room message list
+- [x] Contact favourites
+  - [x] Star icon toggle on every contact tile (filled amber = favourite)
+  - [x] "Favoritos" filter tab in contacts screen
+  - [x] Persisted across sessions via `SharedPreferences` (`favorites_v1` key)
+- [x] Repeater remote admin
+  - [x] Login with admin password (`sendLogin 0x1A` → `LoginSuccessPush 0x85` / `LoginFailPush 0x86`)
+  - [x] Request repeater stats (`cmdSendStatusReq 0x1B` → `pushStatusResponse 0x87`, `RepeaterStats` binary parser)
+  - [x] Stats display: battery voltage, uptime, noise floor, RSSI, SNR, RX/TX packet counters, flood vs direct traffic, TX air time, RX air time, duplicates, error events
+  - [x] Admin bottom sheet accessible via admin button on repeater contact tiles
+- [x] Room server support
+  - [x] Browse/join MeshCore rooms (`sendLogin` + `LoginSuccess/Fail` handled, join screen with password field)
+  - [x] Room message list (full chat view, swipe-to-reply, SNR display, persistence via `contact_$hex6` store)
 - [ ] Multi-radio support
   - [ ] Connect to multiple radios simultaneously
   - [ ] Radio selector in UI
@@ -80,15 +123,18 @@
 
 **Goal:** Community features, localization, and release readiness.
 
-- [ ] Full i18n framework
-  - [ ] Portuguese (Portugal) — primary
+- [ ] Full i18n framework (all UI text currently hard-coded PT-PT literals; no ARB files)
+  - [ ] Portuguese (Portugal) — primary (inline strings to be externalized)
   - [ ] English — secondary
   - [ ] Spanish — community contribution
 - [ ] QR code sharing
-  - [ ] Share own contact via QR
-  - [ ] Scan to add contact
+  - [x] Share own contact via QR (Settings screen)
+  - [x] Share any contact via QR (contact tile icon)
+  - [x] Share channel via QR (channel tile icon)
+  - [x] Scan QR to add contact
+  - [x] Scan QR to add/configure channel
 - [ ] Theme customization
-  - [ ] Light/dark mode toggle
+  - [ ] Light/dark mode toggle (dark theme defined, no user toggle yet)
   - [ ] Custom accent colors
 - [ ] Accessibility
   - [ ] Screen reader support
@@ -112,8 +158,8 @@
   - [ ] View repeater status
   - [ ] Configure repeater settings (if admin)
 - [ ] Channel management
-  - [ ] Create/edit channels on radio
-  - [ ] Channel encryption settings
+  - [x] Create/edit channels on radio (FAB + bottom sheet, Phase 2)
+  - [ ] Channel encryption key rotation UI
 - [ ] Firmware update over BLE/Serial
   - [ ] OTA firmware upload
   - [ ] Version check and notification
@@ -131,12 +177,6 @@
 
 **Goal:** Production-ready release with ecosystem integration.
 
-- [ ] MeshFlare integration
-  - [ ] Bridge to MQTT cluster
-  - [ ] IRC federation gateway
-- [ ] Meshtastic interop
-  - [ ] Receive Meshtastic packets via MeshCore bridge
-  - [ ] Cross-protocol contact resolution
 - [ ] Webhook/automation support
   - [ ] Incoming message webhooks
   - [ ] IFTTT/Home Assistant integration

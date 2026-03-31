@@ -18,6 +18,16 @@
     <!-- Declare BLE as optional so the app works on devices without BT -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
+    <!-- Camera — required for QR code scanning -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- Notifications — required for flutter_local_notifications on Android 13+ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Exact alarms — required for Plan 3-3-3 scheduled window reminders -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
     <application
         android:label="mcapppt"
         android:name="${applicationName}"
@@ -44,6 +54,18 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Home screen widget -->
+        <receiver
+            android:name=".MeshCoreWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

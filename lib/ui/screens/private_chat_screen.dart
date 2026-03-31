@@ -1,7 +1,7 @@
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../protocol/protocol.dart';
@@ -19,6 +19,9 @@ class PrivateChatScreen extends ConsumerStatefulWidget {
 class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
+  bool _waitingForTrace = false;
+  ChatMessage? _replyingTo;
+  bool _atBottom = true;
 
   Uint8List get _contactKey {
     final hex = widget.contactKeyHex;
@@ -54,23 +57,35 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     if (service == null) return;
 
     // Send using first 6 bytes of the public key as prefix
-    final prefix =
+    final keyPrefix =
         _contactKey.length >= 6 ? _contactKey.sublist(0, 6) : _contactKey;
-    service.sendPrivateMessage(prefix, text);
+    final replyContact =
+        _replyingTo != null ? _findContact(ref.read(contactsProvider)) : null;
+    final replyPrefix =
+        _replyingTo != null
+            ? '@[${replyContact?.displayName ?? 'Contacto'}] '
+            : '';
+    final fullText = '$replyPrefix$text';
 
-    // Add outgoing message to local state
+    // Add outgoing message to state BEFORE sending the BLE command.
+    // The firmware response (SentResponse with routeFlag) can arrive before
+    // the next microtask, so the message must already be in state for
+    // markLastOutgoingRoute() to find it.
     ref
         .read(messagesProvider.notifier)
         .addOutgoing(
           ChatMessage(
-            text: text,
+            text: fullText,
             timestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000,
             isOutgoing: true,
             senderKey: _contactKey,
           ),
         );
 
+    service.sendPrivateMessage(keyPrefix, fullText);
+
     _textController.clear();
+    if (_replyingTo != null) setState(() => _replyingTo = null);
     _scrollToBottom();
   }
 
@@ -92,13 +107,26 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     return hex.length >= 12 ? hex.substring(0, 12) : hex;
   }
 
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final atBottom =
+        _scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 80;
+    if (atBottom != _atBottom) setState(() => _atBottom = atBottom);
+  }
+
   @override
   void initState() {
     super.initState();
-    // Mark contact as read when this screen is opened.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       ref.read(unreadCountsProvider.notifier).markContactRead(_prefix6Hex);
+      // Load persisted messages, then scroll to bottom once they are in state.
+      await ref
+          .read(messagesProvider.notifier)
+          .ensureLoadedForContact(_prefix6Hex);
+      if (mounted) _scrollToBottom();
     });
   }
 
@@ -112,11 +140,23 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
   @override
   Widget build(BuildContext context) {
     // While this screen is visible, clear unread badge for this contact
-    // whenever new messages arrive.
-    ref.listen<List<ChatMessage>>(messagesProvider, (_, __) {
+    // whenever new messages arrive, and tail-scroll to the latest message.
+    ref.listen<List<ChatMessage>>(messagesProvider, (prev, next) {
       ref.read(unreadCountsProvider.notifier).markContactRead(_prefix6Hex);
+      if (prev != null && next.length > prev.length && _atBottom) {
+        _scrollToBottom();
+      }
     });
 
+    // Show trace result sheet when a new trace arrives
+    ref.listen<TraceResult?>(traceResultProvider, (prev, next) {
+      if (!_waitingForTrace || next == null || !mounted) return;
+      if (prev?.tag == next.tag && prev?.timestamp == next.timestamp) return;
+      _waitingForTrace = false;
+      _showTraceSheet(next);
+    });
+
+    final selfName = ref.watch(selfInfoProvider)?.name;
     final contacts = ref.watch(contactsProvider);
     final allMessages = ref.watch(messagesProvider);
     final contact = _findContact(contacts);
@@ -160,7 +200,7 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      contact?.name ?? 'Contacto',
+                      contact?.displayName ?? 'Contacto',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -182,6 +222,7 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
                   if (service == null || contact == null) return;
                   switch (value) {
                     case 'trace':
+                      setState(() => _waitingForTrace = true);
                       service.tracePath(Random().nextInt(0x7FFFFFFF));
                     case 'reset_path':
                       service.resetPath(contact.publicKey);
@@ -213,7 +254,8 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
 
         // Messages
         Expanded(
-          child:
+          child: Stack(
+            children: [
               contactMessages.isEmpty
                   ? Center(
                     child: Column(
@@ -245,9 +287,31 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
                     itemCount: contactMessages.length,
                     itemBuilder: (context, index) {
                       final msg = contactMessages[index];
-                      return _PrivateMessageBubble(message: msg);
+                      return _PrivateMessageBubble(
+                        message: msg,
+                        selfName: selfName,
+                        contactDisplayName:
+                            msg.isOutgoing ? null : contact?.displayName,
+                        contactPathLen: contact?.pathLen,
+                        onReply:
+                            msg.isOutgoing
+                                ? null
+                                : () => setState(() => _replyingTo = msg),
+                      );
                     },
                   ),
+              if (!_atBottom)
+                Positioned(
+                  bottom: 8,
+                  right: 12,
+                  child: FloatingActionButton.small(
+                    heroTag: 'scroll_bottom_priv${widget.contactKeyHex}',
+                    onPressed: _scrollToBottom,
+                    child: const Icon(Icons.keyboard_double_arrow_down),
+                  ),
+                ),
+            ],
+          ),
         ),
 
         // Input bar
@@ -255,6 +319,11 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
           controller: _textController,
           onSend: _sendMessage,
           hintText: 'Mensagem para ${contact?.name ?? "contacto"}...',
+          replyTo: _replyingTo,
+          onCancelReply:
+              _replyingTo != null
+                  ? () => setState(() => _replyingTo = null)
+                  : null,
         ),
       ],
     );
@@ -298,11 +367,152 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
         return 'Desconhecido';
     }
   }
+
+  void _showTraceSheet(TraceResult result) {
+    final theme = Theme.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _TraceResultSheet(result: result, theme: theme),
+    );
+  }
+}
+
+/// Renders text that may start with an `@[name]` mention.
+/// The mention is shown as an accent-coloured rounded pill; the rest is normal text.
+/// Renders text with all `@[name]` mentions as pill chips anywhere in the message.
+/// Mentions matching [selfName] use the tertiary colour for emphasis;
+/// all other mentions use the primary colour.
+Widget _buildMentionText(
+  String text,
+  ThemeData theme,
+  TextStyle? style, {
+  String? selfName,
+}) {
+  final pattern = RegExp(r'@\[([^\]]+)\]');
+  final matches = pattern.allMatches(text).toList();
+  if (matches.isEmpty) return Text(text, style: style);
+
+  final spans = <InlineSpan>[];
+  var cursor = 0;
+
+  for (final match in matches) {
+    if (match.start > cursor) {
+      spans.add(
+        TextSpan(text: text.substring(cursor, match.start), style: style),
+      );
+    }
+    final name = match.group(1)!;
+    final isSelf =
+        selfName != null &&
+        name.trim().toLowerCase() == selfName.trim().toLowerCase();
+    final pillColor =
+        isSelf ? theme.colorScheme.tertiary : theme.colorScheme.primary;
+    final textColor =
+        isSelf ? theme.colorScheme.onTertiary : Colors.white;
+    spans.add(
+      WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 1),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: pillColor,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            '@$name',
+            style: (theme.textTheme.labelSmall ?? const TextStyle()).copyWith(
+              color: textColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+    cursor = match.end;
+  }
+
+  if (cursor < text.length) {
+    spans.add(TextSpan(text: text.substring(cursor), style: style));
+  }
+
+  return Text.rich(TextSpan(children: spans));
 }
 
 class _PrivateMessageBubble extends StatelessWidget {
-  const _PrivateMessageBubble({required this.message});
+  const _PrivateMessageBubble({
+    required this.message,
+    this.onReply,
+    this.contactDisplayName,
+    this.contactPathLen,
+    this.selfName,
+  });
   final ChatMessage message;
+  final VoidCallback? onReply;
+  final String? contactDisplayName;
+  final int? contactPathLen;
+  final String? selfName;
+
+  static const _avatarPalette = [
+    Color(0xFF7B61FF),
+    Color(0xFF00897B),
+    Color(0xFFE91E63),
+    Color(0xFF1976D2),
+    Color(0xFFFF6D00),
+    Color(0xFF6D4C41),
+    Color(0xFF558B2F),
+    Color(0xFF6A1B9A),
+  ];
+
+  static Color _avatarColor(String name) {
+    if (name.isEmpty) return _avatarPalette[0];
+    var hash = 0;
+    for (final c in name.codeUnits) {
+      hash = (hash * 31 + c) & 0x7FFFFFFF;
+    }
+    return _avatarPalette[hash % _avatarPalette.length];
+  }
+
+  static String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts[0].isEmpty) return '?';
+    if (parts.length >= 2 && parts[1].isNotEmpty) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    final s = parts[0];
+    return (s.length >= 2 ? s.substring(0, 2) : s).toUpperCase();
+  }
+
+  static String _metaSuffix(ChatMessage msg, {int? contactPathLen}) {
+    final parts = <String>[];
+    if (msg.snr != null) parts.add('SNR ${msg.snr!.toStringAsFixed(1)} dB');
+    if (msg.pathLen != null) {
+      final hops = msg.pathLen! & 0x3F;
+      if (hops == 0) {
+        parts.add('Directo');
+      } else {
+        parts.add('Ouvido $hops Repetidor${hops > 1 ? 'es' : ''}');
+      }
+    }
+    if (msg.isOutgoing && msg.sentRouteFlag != null && msg.pathLen == null) {
+      if (msg.sentRouteFlag == 0) {
+        // Direct routing — use contact's known path length for hop count.
+        final cHops =
+            (contactPathLen != null && contactPathLen != 0xFF)
+                ? contactPathLen & 0x3F
+                : 0;
+        if (cHops > 0) {
+          parts.add('Ouvido $cHops Repetidor${cHops > 1 ? 'es' : ''}');
+        } else {
+          parts.add('Directo');
+        }
+      } else {
+        parts.add('Ouvido 1 Repetidor');
+      }
+    }
+    return parts.join(' • ');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -311,50 +521,157 @@ class _PrivateMessageBubble extends StatelessWidget {
     final time = DateTime.fromMillisecondsSinceEpoch(message.timestamp * 1000);
     final timeStr =
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    final meta = _metaSuffix(message, contactPathLen: contactPathLen);
+    final metaLine = meta.isNotEmpty ? '$timeStr • $meta' : timeStr;
 
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        decoration: BoxDecoration(
-          color:
-              isMe
-                  ? theme.colorScheme.primaryContainer
-                  : theme.colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(message.text),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  timeStr,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withAlpha(100),
+    if (isMe) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 2),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.72,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(4),
+                    bottomLeft: Radius.circular(16),
+                    bottomRight: Radius.circular(16),
                   ),
                 ),
-                if (isMe && message.confirmed) ...[
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.done_all,
-                    size: 14,
-                    color: theme.colorScheme.primary,
+                child: _buildMentionText(
+                  message.text,
+                  theme,
+                  theme.textTheme.bodyMedium,
+                  selfName: selfName,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 3, right: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      metaLine,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withAlpha(100),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      message.confirmed ? Icons.done_all : Icons.done,
+                      size: 13,
+                      color:
+                          message.confirmed
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurface.withAlpha(130),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 2),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Received
+    final senderName =
+        contactDisplayName ??
+        (message.senderName != null && message.senderName!.isNotEmpty
+            ? message.senderName!
+            : null);
+    final avatarLabel = senderName ?? '?';
+    final color = _avatarColor(avatarLabel);
+
+    final row = Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: color,
+            child: Text(
+              _initials(avatarLabel),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (senderName != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 3, left: 2),
+                    child: Text(
+                      senderName,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ],
+                Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.68,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(4),
+                      topRight: Radius.circular(16),
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: _buildMentionText(
+                    message.text,
+                    theme,
+                    theme.textTheme.bodyMedium,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 3, left: 2),
+                  child: Text(
+                    metaLine,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withAlpha(100),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+
+    if (onReply != null) {
+      return _SwipeToReplyWrapper(onReply: onReply!, child: row);
+    }
+    return row;
   }
 }
 
@@ -363,11 +680,15 @@ class _ChatInputBar extends StatelessWidget {
     required this.controller,
     required this.onSend,
     this.hintText = 'Escreva uma mensagem...',
+    this.replyTo,
+    this.onCancelReply,
   });
 
   final TextEditingController controller;
   final VoidCallback onSend;
   final String hintText;
+  final ChatMessage? replyTo;
+  final VoidCallback? onCancelReply;
 
   @override
   Widget build(BuildContext context) {
@@ -382,28 +703,337 @@ class _ChatInputBar extends StatelessWidget {
         ),
       ),
       child: SafeArea(
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: TextField(
-                controller: controller,
-                decoration: InputDecoration(
-                  hintText: hintText,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
+            if (replyTo != null && onCancelReply != null)
+              _ReplyStrip(
+                message: replyTo!,
+                onCancel: onCancelReply!,
+                theme: theme,
+              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    decoration: InputDecoration(
+                      hintText: hintText,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                    ),
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    minLines: 1,
+                    maxLines: 5,
+                    maxLength: 140,
                   ),
                 ),
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => onSend(),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  onPressed: onSend,
+                  icon: const Icon(Icons.send),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Swipe-to-reply + reply strip widgets
+// ---------------------------------------------------------------------------
+
+class _SwipeToReplyWrapper extends StatefulWidget {
+  const _SwipeToReplyWrapper({required this.child, required this.onReply});
+  final Widget child;
+  final VoidCallback onReply;
+
+  @override
+  State<_SwipeToReplyWrapper> createState() => _SwipeToReplyWrapperState();
+}
+
+class _SwipeToReplyWrapperState extends State<_SwipeToReplyWrapper> {
+  double _offset = 0;
+  bool _fired = false;
+  static const _kThreshold = 64.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final progress = (_offset / _kThreshold).clamp(0.0, 1.0);
+    return GestureDetector(
+      onHorizontalDragUpdate: (d) {
+        if (d.delta.dx > 0) {
+          setState(() {
+            _offset = (_offset + d.delta.dx).clamp(0.0, _kThreshold * 1.3);
+            if (_offset >= _kThreshold && !_fired) {
+              _fired = true;
+              HapticFeedback.lightImpact();
+              widget.onReply();
+            }
+          });
+        }
+      },
+      onHorizontalDragEnd:
+          (_) => setState(() {
+            _offset = 0;
+            _fired = false;
+          }),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 4,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: Opacity(
+                opacity: progress,
+                child: Transform.scale(
+                  scale: 0.6 + 0.4 * progress,
+                  child: Icon(
+                    Icons.reply,
+                    color: theme.colorScheme.primary,
+                    size: 24,
+                  ),
+                ),
               ),
             ),
-            const SizedBox(width: 8),
-            IconButton.filled(onPressed: onSend, icon: const Icon(Icons.send)),
-          ],
+          ),
+          Transform.translate(offset: Offset(_offset, 0), child: widget.child),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReplyStrip extends StatelessWidget {
+  const _ReplyStrip({
+    required this.message,
+    required this.onCancel,
+    required this.theme,
+  });
+  final ChatMessage message;
+  final VoidCallback onCancel;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final senderLabel =
+        message.isOutgoing
+            ? '@[Você]'
+            : '@[${message.senderName ?? 'Contacto'}]';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border(
+          left: BorderSide(color: theme.colorScheme.primary, width: 3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.reply, size: 16, color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  senderLabel,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  message.text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 16),
+            onPressed: onCancel,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Trace result bottom sheet
+// ---------------------------------------------------------------------------
+
+class _TraceResultSheet extends StatelessWidget {
+  const _TraceResultSheet({required this.result, required this.theme});
+
+  final TraceResult result;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final ts =
+        '${result.timestamp.hour.toString().padLeft(2, '0')}:'
+        '${result.timestamp.minute.toString().padLeft(2, '0')}:'
+        '${result.timestamp.second.toString().padLeft(2, '0')}';
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 8),
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.outlineVariant,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Icon(Icons.route, color: theme.colorScheme.primary, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Rota encontrada — $ts',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${result.hopCount} hop${result.hopCount != 1 ? 's' : ''}',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 16),
+          if (result.hops.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Rota directa (sem repetidores)',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            )
+          else
+            for (int i = 0; i < result.hops.length; i++)
+              _TraceHopTile(index: i + 1, hop: result.hops[i], theme: theme),
+          ListTile(
+            leading: Icon(
+              Icons.arrow_downward,
+              color: Colors.green.shade600,
+              size: 20,
+            ),
+            title: const Text('Recebido no rádio'),
+            trailing: Text(
+              '${result.finalSnrDb.toStringAsFixed(1)} dB',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: Colors.green.shade600,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _TraceHopTile extends StatelessWidget {
+  const _TraceHopTile({
+    required this.index,
+    required this.hop,
+    required this.theme,
+  });
+
+  final int index;
+  final TraceHop hop;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final snrColor =
+        hop.snrDb > 5
+            ? Colors.green.shade600
+            : hop.snrDb > 0
+            ? Colors.orange.shade700
+            : Colors.red.shade600;
+
+    return ListTile(
+      dense: true,
+      leading: CircleAvatar(
+        radius: 14,
+        backgroundColor: theme.colorScheme.primaryContainer,
+        child: Text(
+          '$index',
+          style: TextStyle(
+            color: theme.colorScheme.onPrimaryContainer,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      title: Text(
+        hop.name ?? hop.hashHex,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          fontFamily: hop.name == null ? 'monospace' : null,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle:
+          hop.hasGps
+              ? Text(
+                '${hop.latitude!.toStringAsFixed(5)}, ${hop.longitude!.toStringAsFixed(5)}',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              )
+              : Text(
+                'Sem GPS',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.outlineVariant,
+                ),
+              ),
+      trailing: Text(
+        '${hop.snrDb.toStringAsFixed(1)} dB',
+        style: theme.textTheme.labelLarge?.copyWith(
+          color: snrColor,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );

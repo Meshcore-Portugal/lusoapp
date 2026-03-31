@@ -1,16 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
+import '../../services/notification_service.dart';
 import '../../transport/radio_transport.dart';
 
 /// App settings screen.
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  String _version = '';
+
+  @override
+  void initState() {
+    super.initState();
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) setState(() => _version = info.version);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final selfInfo = ref.watch(selfInfoProvider);
     final connectionState = ref.watch(connectionProvider);
     final theme = Theme.of(context);
@@ -41,14 +61,14 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 12),
                   ListTile(
-                    title: const Text('Nome do No'),
-                    subtitle: Text(selfInfo?.name ?? 'Nao conectado'),
+                    title: const Text('Nome do Nó'),
+                    subtitle: Text(selfInfo?.name ?? 'Não conectado'),
                     trailing: const Icon(Icons.edit),
                     onTap: () => _editName(context, ref),
                   ),
                   if (selfInfo != null)
                     ListTile(
-                      title: const Text('Chave Publica'),
+                      title: const Text('Chave Pública'),
                       subtitle: Text(
                         selfInfo.publicKey
                             .map((b) => b.toRadixString(16).padLeft(2, '0'))
@@ -58,6 +78,32 @@ class SettingsScreen extends ConsumerWidget {
                           fontSize: 11,
                         ),
                       ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.copy, size: 18),
+                        tooltip: 'Copiar chave pública',
+                        onPressed: () {
+                          final hex =
+                              selfInfo.publicKey
+                                  .map(
+                                    (b) => b.toRadixString(16).padLeft(2, '0'),
+                                  )
+                                  .join();
+                          Clipboard.setData(ClipboardData(text: hex));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Chave pública copiada'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  if (selfInfo != null)
+                    ListTile(
+                      leading: const Icon(Icons.qr_code),
+                      title: const Text('Partilhar o meu contacto'),
+                      subtitle: const Text('Mostra QR Code para partilhar'),
+                      onTap: () => _showOwnQrCode(context, selfInfo),
                     ),
                 ],
               ),
@@ -77,7 +123,7 @@ class SettingsScreen extends ConsumerWidget {
                       Icon(Icons.link, color: theme.colorScheme.primary),
                       const SizedBox(width: 8),
                       Text(
-                        'Ligacao',
+                        'Ligação',
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -92,18 +138,21 @@ class SettingsScreen extends ConsumerWidget {
                       connectionState == TransportState.connected
                           ? Icons.check_circle
                           : Icons.cancel,
-                      color: connectionState == TransportState.connected
-                          ? Colors.green
-                          : Colors.red,
+                      color:
+                          connectionState == TransportState.connected
+                              ? Colors.green
+                              : Colors.red,
                     ),
                   ),
                   if (connectionState == TransportState.connected)
                     ListTile(
                       title: const Text('Desligar'),
-                      subtitle: const Text('Terminar ligacao ao radio'),
+                      subtitle: const Text('Terminar ligação ao rádio'),
                       leading: const Icon(Icons.link_off),
                       onTap: () async {
-                        await ref.read(connectionProvider.notifier).disconnect();
+                        await ref
+                            .read(connectionProvider.notifier)
+                            .disconnect();
                         if (context.mounted) {
                           context.go('/connect');
                         }
@@ -113,6 +162,10 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
           ),
+          const SizedBox(height: 16),
+
+          // Notifications
+          const _NotificationsCard(),
           const SizedBox(height: 16),
 
           // About
@@ -137,16 +190,17 @@ class SettingsScreen extends ConsumerWidget {
                   const SizedBox(height: 12),
                   const ListTile(
                     title: Text('MeshCore PT'),
-                    subtitle: Text('v0.1.0 - Comunidade Portuguesa MeshCore'),
+                    subtitle: Text('Comunidade Portuguesa MeshCore'),
+                  ),
+                  ListTile(
+                    title: const Text('Versão'),
+                    subtitle: Text(_version.isEmpty ? '…' : _version),
                   ),
                   const ListTile(
                     title: Text('Protocolo'),
                     subtitle: Text('Companion Radio Protocol v3'),
                   ),
-                  const ListTile(
-                    title: Text('Licenca'),
-                    subtitle: Text('MIT'),
-                  ),
+                  const ListTile(title: Text('Licença'), subtitle: Text('MIT')),
                 ],
               ),
             ),
@@ -171,6 +225,50 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
+  void _showOwnQrCode(BuildContext context, SelfInfo selfInfo) {
+    final uri = MeshCoreUri.buildContactUri(
+      name: selfInfo.name,
+      publicKey: selfInfo.publicKey,
+      type: 1,
+    );
+    showDialog<void>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('O meu QR Code'),
+            content: SizedBox(
+              width: 260,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  QrImageView(
+                    data: uri,
+                    size: 240,
+                    backgroundColor: Colors.white,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    selfInfo.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tipo: Companheiro',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Fechar'),
+              ),
+            ],
+          ),
+    );
+  }
+
   void _editName(BuildContext context, WidgetRef ref) {
     final controller = TextEditingController(
       text: ref.read(selfInfoProvider)?.name ?? '',
@@ -178,32 +276,166 @@ class SettingsScreen extends ConsumerWidget {
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Alterar Nome'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Nome do no',
-            hintText: 'Ex: CT1XXX-MC',
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Alterar Nome'),
+            content: TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Nome do no',
+                hintText: 'Ex: CT1XXX-MC',
+              ),
+              maxLength: 32,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final name = controller.text.trim();
+                  if (name.isNotEmpty) {
+                    ref.read(radioServiceProvider)?.setAdvertName(name);
+                  }
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Guardar'),
+              ),
+            ],
           ),
-          maxLength: 32,
+    );
+  }
+}
+
+/// Card that shows notification toggle controls.
+class _NotificationsCard extends ConsumerStatefulWidget {
+  const _NotificationsCard();
+
+  @override
+  ConsumerState<_NotificationsCard> createState() => _NotificationsCardState();
+}
+
+class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
+  bool _permissionGranted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPermission();
+  }
+
+  Future<void> _checkPermission() async {
+    final granted = await NotificationService.instance.isPermissionGranted();
+    if (mounted) setState(() => _permissionGranted = granted);
+  }
+
+  Future<void> _requestPermission() async {
+    final granted = await NotificationService.instance.requestPermission();
+    if (mounted) setState(() => _permissionGranted = granted);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = ref.watch(notificationSettingsProvider);
+    final notifier = ref.read(notificationSettingsProvider.notifier);
+    final theme = Theme.of(context);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.notifications, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Notificações',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+
+            // Master enable
+            SwitchListTile(
+              title: const Text('Activar notificações'),
+              subtitle: const Text('Mostrar alertas para novas mensagens'),
+              value: settings.enabled,
+              onChanged: (v) => notifier.update(settings.copyWith(enabled: v)),
+            ),
+
+            // Permission warning banner
+            if (!_permissionGranted)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber, color: theme.colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Permissão de notificação não concedida.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _requestPermission,
+                      child: const Text('Permitir'),
+                    ),
+                  ],
+                ),
+              ),
+
+            const Divider(height: 8),
+
+            // Sub-toggles — only enabled when master is on
+            SwitchListTile(
+              title: const Text('Mensagens privadas'),
+              subtitle: const Text(
+                'Notificar quando receber uma mensagem direta',
+              ),
+              value: settings.enabled && settings.privateMessages,
+              onChanged:
+                  settings.enabled
+                      ? (v) =>
+                          notifier.update(settings.copyWith(privateMessages: v))
+                      : null,
+            ),
+            SwitchListTile(
+              title: const Text('Mensagens de canal'),
+              subtitle: const Text('Notificar mensagens em canais'),
+              value: settings.enabled && settings.channelMessages,
+              onChanged:
+                  settings.enabled
+                      ? (v) =>
+                          notifier.update(settings.copyWith(channelMessages: v))
+                      : null,
+            ),
+            SwitchListTile(
+              title: const Text('Apenas em segundo plano'),
+              subtitle: const Text(
+                'Só notificar quando a app não está em primeiro plano',
+              ),
+              value: settings.onlyWhenBackground,
+              onChanged:
+                  settings.enabled
+                      ? (v) => notifier.update(
+                        settings.copyWith(onlyWhenBackground: v),
+                      )
+                      : null,
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final name = controller.text.trim();
-              if (name.isNotEmpty) {
-                ref.read(radioServiceProvider)?.setAdvertName(name);
-              }
-              Navigator.pop(ctx);
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
       ),
     );
   }

@@ -5,9 +5,12 @@ import 'screens/connect_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/channels_list_screen.dart';
 import 'screens/channel_chat_screen.dart';
+import 'screens/map_screen.dart';
 import 'screens/private_chat_screen.dart';
 import 'screens/radio_config_screen.dart';
+import 'screens/radio_tab_screen.dart';
 import 'screens/contacts_screen.dart';
+import 'screens/room_screen.dart';
 import 'screens/settings_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -36,6 +39,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/contacts',
             builder: (context, state) => const ContactsScreen(),
           ),
+          GoRoute(path: '/map', builder: (context, state) => const MapScreen()),
           GoRoute(
             path: '/chat/:keyHex',
             builder: (context, state) {
@@ -44,8 +48,15 @@ final routerProvider = Provider<GoRouter>((ref) {
             },
           ),
           GoRoute(
+            path: '/room/:keyHex',
+            builder: (context, state) {
+              final keyHex = state.pathParameters['keyHex']!;
+              return RoomScreen(contactKeyHex: keyHex);
+            },
+          ),
+          GoRoute(
             path: '/radio',
-            builder: (context, state) => const RadioConfigScreen(),
+            builder: (context, state) => const RadioTabScreen(),
           ),
           GoRoute(
             path: '/settings',

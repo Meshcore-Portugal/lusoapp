@@ -31,6 +31,9 @@ class RadioService {
   /// Stream of parsed responses from the radio.
   Stream<CompanionResponse> get responses => _responseController.stream;
 
+  /// Emits when the transport connection is lost unexpectedly.
+  Stream<void> get connectionLost => _transport.connectionLost;
+
   /// Whether transport is connected.
   bool get isConnected => _transport.isConnected;
 
@@ -82,8 +85,18 @@ class RadioService {
     );
   }
 
-  Future<void> sendChannelMessage(int channelIndex, String text) async {
-    await _send(CompanionEncoder.sendChannelMessage(channelIndex, text));
+  Future<void> sendChannelMessage(
+    int channelIndex,
+    String text, {
+    int? timestamp,
+  }) async {
+    await _send(
+      CompanionEncoder.sendChannelMessage(
+        channelIndex,
+        text,
+        timestamp: timestamp,
+      ),
+    );
   }
 
   Future<void> syncNextMessage() async {
@@ -122,6 +135,10 @@ class RadioService {
     await _send(CompanionEncoder.setChannel(index, name, secret));
   }
 
+  Future<void> addUpdateContact(Contact contact) async {
+    await _send(CompanionEncoder.addUpdateContact(contact));
+  }
+
   Future<void> removeContact(Uint8List publicKey) async {
     await _send(CompanionEncoder.removeContact(publicKey));
   }
@@ -146,6 +163,26 @@ class RadioService {
 
   Future<void> login(Uint8List peerPublicKey, String password) async {
     await _send(CompanionEncoder.sendLogin(peerPublicKey, password));
+  }
+
+  Future<void> sendStatusRequest(Uint8List pubKey) async {
+    final payload = BytesBuilder();
+    payload.add(pubKey.sublist(0, pubKey.length < 32 ? pubKey.length : 32));
+    // Pad to 32 bytes
+    if (pubKey.length < 32) payload.add(Uint8List(32 - pubKey.length));
+    await _send(_buildFrame(cmdSendStatusReq, payload.toBytes()));
+  }
+
+  /// Build a raw companion frame without going through CompanionEncoder.
+  Uint8List _buildFrame(int command, Uint8List payload) {
+    final totalLen = 1 + payload.length;
+    final buf = BytesBuilder();
+    buf.addByte(dirAppToRadio);
+    buf.addByte(totalLen & 0xFF);
+    buf.addByte((totalLen >> 8) & 0xFF);
+    buf.addByte(command);
+    buf.add(payload);
+    return buf.toBytes();
   }
 
   // --- Internal ---
@@ -212,6 +249,8 @@ class RadioService {
         selfInfo = info;
         radioConfig = info.radioConfig;
         _log.i('Self: ${info.name}');
+      case ContactsStartResponse():
+        contacts.clear();
       case ContactResponse(:final contact):
         final idx = contacts.indexWhere(
           (c) => _keysEqual(c.publicKey, contact.publicKey),
@@ -221,6 +260,9 @@ class RadioService {
         } else {
           contacts.add(contact);
         }
+      case ContactDeletedPush():
+        // Radio confirmed deletion — handled in the provider layer.
+        break;
       case ChannelInfoResponse(:final channel):
         final idx = channels.indexWhere((c) => c.index == channel.index);
         if (idx >= 0) {

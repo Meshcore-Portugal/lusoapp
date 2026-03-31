@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../providers/radio_providers.dart';
 import '../../transport/radio_transport.dart';
+import '../theme.dart';
 
 /// Main shell screen with bottom navigation.
 class HomeScreen extends ConsumerStatefulWidget {
@@ -16,8 +17,15 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
+  bool _showVolts = false;
 
-  static const _tabs = ['/channels', '/contacts', '/radio', '/settings'];
+  static const _tabs = [
+    '/channels',
+    '/contacts',
+    '/map',
+    '/radio',
+    '/settings',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -37,31 +45,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
         actions: [
-          // Battery indicator
+          // Battery indicator — tap to toggle % / voltage
           if (batteryMv > 0)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Chip(
-                avatar: Icon(
-                  _batteryIcon(batteryMv),
-                  size: 18,
-                  color: _batteryColor(batteryMv),
+              child: GestureDetector(
+                onTap: () => setState(() => _showVolts = !_showVolts),
+                child: Chip(
+                  avatar: Icon(
+                    _batteryIcon(batteryMv),
+                    size: 18,
+                    color: _batteryColor(batteryMv),
+                  ),
+                  label: Text(
+                    _showVolts
+                        ? '${(batteryMv / 1000).toStringAsFixed(3)}V'
+                        : '${_batteryPercent(batteryMv)}%',
+                  ),
                 ),
-                label: Text('${(batteryMv / 1000).toStringAsFixed(1)}V'),
               ),
             ),
-          // Connection indicator
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Icon(
+          // Connection indicator — tap to connect / disconnect
+          IconButton(
+            icon: Icon(
               connectionState == TransportState.connected
                   ? Icons.link
                   : Icons.link_off,
               color:
                   connectionState == TransportState.connected
-                      ? Colors.green
+                      ? AppTheme.primary
                       : Colors.red,
             ),
+            onPressed: () => _onConnectionIconTap(context, connectionState),
           ),
         ],
       ),
@@ -108,6 +123,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             label: 'Contactos',
           ),
           const NavigationDestination(
+            icon: Icon(Icons.map_outlined),
+            selectedIcon: Icon(Icons.map),
+            label: 'Mapa',
+          ),
+          const NavigationDestination(
             icon: Icon(Icons.settings_input_antenna_outlined),
             selectedIcon: Icon(Icons.settings_input_antenna),
             label: 'Rádio',
@@ -115,11 +135,47 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const NavigationDestination(
             icon: Icon(Icons.settings_outlined),
             selectedIcon: Icon(Icons.settings),
-            label: 'Definicoes',
+            label: 'Definições',
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _onConnectionIconTap(
+    BuildContext context,
+    TransportState state,
+  ) async {
+    if (state == TransportState.connected) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Desligar rádio?'),
+              content: const Text('A ligação ao rádio será terminada.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Desligar'),
+                ),
+              ],
+            ),
+      );
+      if (confirm == true && mounted) {
+        await ref.read(connectionProvider.notifier).disconnect();
+      }
+    } else {
+      context.go('/connect');
+    }
+  }
+
+  int _batteryPercent(int mv) {
+    // LiPo curve: 4200 mV = 100%, 3200 mV = 0%
+    return (((mv.clamp(3200, 4200) - 3200) / 1000) * 100).round();
   }
 
   IconData _batteryIcon(int mv) {
@@ -131,7 +187,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Color _batteryColor(int mv) {
     if (mv > 3600) return Colors.green;
-    if (mv > 3300) return Colors.orange;
+    if (mv > 3300) return AppTheme.primary;
     return Colors.red;
   }
 }

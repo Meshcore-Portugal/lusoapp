@@ -24,6 +24,9 @@ class SerialTransport implements RadioTransport {
   Stream<Uint8List> get dataStream => const Stream.empty();
 
   @override
+  Stream<void> get connectionLost => const Stream.empty();
+
+  @override
   Future<bool> connect() async => false;
 
   @override

@@ -20,6 +20,11 @@ abstract class RadioTransport {
   /// Stream of raw bytes received from the radio.
   Stream<Uint8List> get dataStream;
 
+  /// Emits a single event when the connection is lost unexpectedly
+  /// (i.e. not as a result of the app calling [disconnect]).
+  /// Implementations that cannot detect this return an empty stream.
+  Stream<void> get connectionLost => const Stream.empty();
+
   /// Connect to the radio device.
   Future<bool> connect();
 
