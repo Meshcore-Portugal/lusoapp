@@ -128,9 +128,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             label: 'Mapa',
           ),
           const NavigationDestination(
-            icon: Icon(Icons.settings_input_antenna_outlined),
-            selectedIcon: Icon(Icons.settings_input_antenna),
-            label: 'Rádio',
+            icon: Icon(Icons.apps_outlined),
+            selectedIcon: Icon(Icons.apps),
+            label: 'Apps',
           ),
           const NavigationDestination(
             icon: Icon(Icons.settings_outlined),
