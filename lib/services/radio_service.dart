@@ -127,6 +127,13 @@ class RadioService {
     await _send(CompanionEncoder.getBattAndStorage());
   }
 
+  /// Request one stats sub-type from the radio.
+  ///
+  /// Use [statsTypeCore], [statsTypeRadio], or [statsTypePackets].
+  Future<void> requestStats(int subType) async {
+    await _send(CompanionEncoder.getStats(subType));
+  }
+
   Future<void> requestChannel(int index) async {
     await _send(CompanionEncoder.getChannel(index));
   }

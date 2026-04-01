@@ -113,6 +113,14 @@ class CompanionEncoder {
   /// GET_BATT_AND_STORAGE — query battery and storage info.
   static Uint8List getBattAndStorage() => _frame(cmdGetBattAndStorage);
 
+  /// GET_STATS — request statistics from the radio.
+  ///
+  /// [subType] must be one of [statsTypeCore], [statsTypeRadio], or
+  /// [statsTypePackets].
+  static Uint8List getStats(int subType) {
+    return _frame(cmdGetStats, Uint8List.fromList([subType]));
+  }
+
   /// DEVICE_QUERY — get device info.
   static Uint8List deviceQuery({int appVersion = 3}) {
     return _frame(cmdDeviceQuery, Uint8List.fromList([appVersion]));

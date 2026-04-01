@@ -191,6 +191,9 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     _batteryPollTimer = Timer.periodic(const Duration(seconds: 300), (_) {
       if (state == TransportState.connected) {
         service.requestBattAndStorage().catchError((_) {});
+        unawaited(service.requestStats(statsTypeCore).catchError((_) {}));
+        unawaited(service.requestStats(statsTypeRadio).catchError((_) {}));
+        unawaited(service.requestStats(statsTypePackets).catchError((_) {}));
       }
     });
   }
@@ -361,6 +364,12 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           // Radio has updated a contact's cached route — re-sync the contact
           // list so the UI shows the new hop count.
           service.requestContacts().catchError((_) {});
+        case StatsCoreResponse():
+          _ref.read(radioStatsCoreProvider.notifier).state = response;
+        case StatsRadioResponse():
+          _ref.read(radioStatsRadioProvider.notifier).state = response;
+        case StatsPacketsResponse():
+          _ref.read(radioStatsPacketsProvider.notifier).state = response;
         default:
           break;
       }
@@ -427,8 +436,11 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     );
     log.d('DeviceInfo: ${devResp?.runtimeType ?? "TIMEOUT"}');
 
-    // 2. Battery — fire and forget, let it arrive whenever.
+    // 2. Battery + radio stats — fire and forget, let them arrive whenever.
     await service.requestBattAndStorage();
+    unawaited(service.requestStats(statsTypeCore).catchError((_) {}));
+    unawaited(service.requestStats(statsTypeRadio).catchError((_) {}));
+    unawaited(service.requestStats(statsTypePackets).catchError((_) {}));
 
     // 3. Contacts — wait for the end-of-contacts marker.
     _setStep(3, 'A sincronizar contactos...');
@@ -1194,3 +1206,19 @@ final advertAutoAddProvider =
     StateNotifierProvider<AdvertAutoAddNotifier, AdvertAutoAddSettings>(
       (ref) => AdvertAutoAddNotifier(),
     );
+
+// ---------------------------------------------------------------------------
+// Radio hardware stats (CMD_GET_STATS responses)
+// ---------------------------------------------------------------------------
+
+/// Latest core device statistics from the connected radio.
+/// Polled every 5 minutes alongside the battery; null until first response.
+final radioStatsCoreProvider = StateProvider<StatsCoreResponse?>((_) => null);
+
+/// Latest radio-layer statistics (noise floor, RSSI, SNR, airtime).
+final radioStatsRadioProvider = StateProvider<StatsRadioResponse?>((_) => null);
+
+/// Latest packet counters (received, sent, flood/direct breakdown, CRC errors).
+final radioStatsPacketsProvider = StateProvider<StatsPacketsResponse?>(
+  (_) => null,
+);

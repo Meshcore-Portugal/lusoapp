@@ -540,11 +540,43 @@ class CompanionDecoder {
     return SignatureResponse(Uint8List.fromList(data.sublist(0, 64)));
   }
 
-  static StatsResponse? _parseStats(Uint8List data) {
+  static CompanionResponse? _parseStats(Uint8List data) {
     if (data.isEmpty) return null;
     final subType = data[0];
-    final statsData = data.length > 1 ? data.sublist(1) : Uint8List(0);
-    return StatsResponse(subType, statsData);
+    final d = data.length > 1 ? data.sublist(1) : Uint8List(0);
+    switch (subType) {
+      case statsTypeCore:
+        if (d.length < 9) return null;
+        return StatsCoreResponse(
+          batteryMv: _readUint16LE(d, 0),
+          uptimeSecs: _readUint32LE(d, 2),
+          errors: _readUint16LE(d, 6),
+          queueLen: d[8],
+        );
+      case statsTypeRadio:
+        if (d.length < 12) return null;
+        final bd = ByteData.sublistView(d);
+        return StatsRadioResponse(
+          noiseFloor: bd.getInt16(0, Endian.little),
+          lastRssi: bd.getInt8(2),
+          lastSnrDb: bd.getInt8(3) / 4.0,
+          txAirSecs: _readUint32LE(d, 4),
+          rxAirSecs: _readUint32LE(d, 8),
+        );
+      case statsTypePackets:
+        if (d.length < 24) return null;
+        return StatsPacketsResponse(
+          recv: _readUint32LE(d, 0),
+          sent: _readUint32LE(d, 4),
+          floodTx: _readUint32LE(d, 8),
+          directTx: _readUint32LE(d, 12),
+          floodRx: _readUint32LE(d, 16),
+          directRx: _readUint32LE(d, 20),
+          recvErrors: d.length >= 28 ? _readUint32LE(d, 24) : null,
+        );
+      default:
+        return null;
+    }
   }
 
   // --- Utility ---
@@ -751,10 +783,75 @@ class SignatureResponse extends CompanionResponse {
   final Uint8List signature;
 }
 
-class StatsResponse extends CompanionResponse {
-  const StatsResponse(this.subType, this.data);
-  final int subType;
-  final Uint8List data;
+/// Core device statistics (CMD_GET_STATS + STATS_TYPE_CORE).
+class StatsCoreResponse extends CompanionResponse {
+  const StatsCoreResponse({
+    required this.batteryMv,
+    required this.uptimeSecs,
+    required this.errors,
+    required this.queueLen,
+  });
+
+  /// Battery voltage in millivolts.
+  final int batteryMv;
+
+  /// Device uptime in seconds since last boot.
+  final int uptimeSecs;
+
+  /// Error flags bitmask.
+  final int errors;
+
+  /// Outbound packet queue length.
+  final int queueLen;
+}
+
+/// Radio statistics (CMD_GET_STATS + STATS_TYPE_RADIO).
+class StatsRadioResponse extends CompanionResponse {
+  const StatsRadioResponse({
+    required this.noiseFloor,
+    required this.lastRssi,
+    required this.lastSnrDb,
+    required this.txAirSecs,
+    required this.rxAirSecs,
+  });
+
+  /// Radio noise floor in dBm.
+  final int noiseFloor;
+
+  /// Last received signal strength in dBm.
+  final int lastRssi;
+
+  /// Last SNR in dB (already divided by 4, 0.25 dB precision).
+  final double lastSnrDb;
+
+  /// Cumulative transmit airtime in seconds.
+  final int txAirSecs;
+
+  /// Cumulative receive airtime in seconds.
+  final int rxAirSecs;
+}
+
+/// Packet counters (CMD_GET_STATS + STATS_TYPE_PACKETS).
+class StatsPacketsResponse extends CompanionResponse {
+  const StatsPacketsResponse({
+    required this.recv,
+    required this.sent,
+    required this.floodTx,
+    required this.directTx,
+    required this.floodRx,
+    required this.directRx,
+    this.recvErrors,
+  });
+
+  final int recv;
+  final int sent;
+  final int floodTx;
+  final int directTx;
+  final int floodRx;
+  final int directRx;
+
+  /// Receive/CRC errors (RadioLib); present only in 30-byte frame.
+  final int? recvErrors;
 }
 
 class UnknownResponse extends CompanionResponse {

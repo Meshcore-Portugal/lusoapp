@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../protocol/cayenne_lpp.dart';
+import '../../protocol/companion_decoder.dart';
 import '../../providers/radio_providers.dart';
 
 /// Telemetry dashboard — battery history chart, CayenneLPP sensor readings,
@@ -17,6 +18,9 @@ class TelemetryScreen extends ConsumerWidget {
     final battHistoryRaw = ref.watch(batteryHistoryProvider);
     final stats = ref.watch(networkStatsProvider);
     final telemetry = ref.watch(telemetryProvider);
+    final statsCore = ref.watch(radioStatsCoreProvider);
+    final statsRadio = ref.watch(radioStatsRadioProvider);
+    final statsPackets = ref.watch(radioStatsPacketsProvider);
     final theme = Theme.of(context);
 
     return ListView(
@@ -42,6 +46,48 @@ class TelemetryScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 8),
         _NetworkStatsCard(stats: stats, theme: theme),
+        const SizedBox(height: 20),
+
+        // ---- Radio core stats section ----
+        const _SectionHeader(label: 'Rádio — Estado', icon: Icons.memory),
+        const SizedBox(height: 8),
+        if (statsCore == null)
+          _EmptyHint(
+            icon: Icons.hourglass_empty,
+            message: 'A aguardar estatísticas do rádio...',
+            theme: theme,
+          )
+        else
+          _RadioCoreStatsCard(stats: statsCore, theme: theme),
+        const SizedBox(height: 20),
+
+        // ---- Radio RF stats section ----
+        const _SectionHeader(label: 'Rádio — RF', icon: Icons.cell_tower),
+        const SizedBox(height: 8),
+        if (statsRadio == null)
+          _EmptyHint(
+            icon: Icons.hourglass_empty,
+            message: 'A aguardar estatísticas de RF...',
+            theme: theme,
+          )
+        else
+          _RadioRfStatsCard(stats: statsRadio, theme: theme),
+        const SizedBox(height: 20),
+
+        // ---- Packet counters section ----
+        const _SectionHeader(
+          label: 'Rádio — Contadores de Pacotes',
+          icon: Icons.swap_horiz,
+        ),
+        const SizedBox(height: 8),
+        if (statsPackets == null)
+          _EmptyHint(
+            icon: Icons.hourglass_empty,
+            message: 'A aguardar contadores de pacotes...',
+            theme: theme,
+          )
+        else
+          _RadioPacketStatsCard(stats: statsPackets, theme: theme),
         const SizedBox(height: 20),
 
         // ---- CayenneLPP sensor readings ----
@@ -496,6 +542,277 @@ class _ReadingChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Radio core stats card
+// ---------------------------------------------------------------------------
+
+class _RadioCoreStatsCard extends StatelessWidget {
+  const _RadioCoreStatsCard({required this.stats, required this.theme});
+
+  final StatsCoreResponse stats;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final uptime = _formatUptime(stats.uptimeSecs);
+    final volts = (stats.batteryMv / 1000.0).toStringAsFixed(3);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _StatCell(
+                  icon: Icons.battery_charging_full,
+                  color: Colors.green.shade600,
+                  label: 'Bateria',
+                  value: '$volts V',
+                  theme: theme,
+                ),
+                _VertDivider(),
+                _StatCell(
+                  icon: Icons.timer_outlined,
+                  color: theme.colorScheme.primary,
+                  label: 'Uptime',
+                  value: uptime,
+                  theme: theme,
+                ),
+                _VertDivider(),
+                _StatCell(
+                  icon: Icons.inbox,
+                  color: theme.colorScheme.secondary,
+                  label: 'Fila TX',
+                  value: '${stats.queueLen}',
+                  theme: theme,
+                ),
+              ],
+            ),
+            if (stats.errors != 0) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(
+                    Icons.warning_amber,
+                    size: 16,
+                    color: Colors.orange.shade600,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Erros: 0x${stats.errors.toRadixString(16).padLeft(4, '0').toUpperCase()}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.orange.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatUptime(int secs) {
+    if (secs < 60) return '${secs}s';
+    if (secs < 3600) return '${secs ~/ 60}min';
+    final h = secs ~/ 3600;
+    final m = (secs % 3600) ~/ 60;
+    if (h < 24) return '${h}h ${m}min';
+    final d = h ~/ 24;
+    return '${d}d ${h % 24}h';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Radio RF stats card
+// ---------------------------------------------------------------------------
+
+class _RadioRfStatsCard extends StatelessWidget {
+  const _RadioRfStatsCard({required this.stats, required this.theme});
+
+  final StatsRadioResponse stats;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final snr = stats.lastSnrDb.toStringAsFixed(2);
+    final txAir = _formatAirtime(stats.txAirSecs);
+    final rxAir = _formatAirtime(stats.rxAirSecs);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _StatCell(
+                  icon: Icons.signal_cellular_alt,
+                  color: _rssiColor(stats.lastRssi, theme),
+                  label: 'RSSI',
+                  value: '${stats.lastRssi} dBm',
+                  theme: theme,
+                ),
+                _VertDivider(),
+                _StatCell(
+                  icon: Icons.noise_aware,
+                  color: theme.colorScheme.onSurfaceVariant,
+                  label: 'Ruído',
+                  value: '${stats.noiseFloor} dBm',
+                  theme: theme,
+                ),
+                _VertDivider(),
+                _StatCell(
+                  icon: Icons.show_chart,
+                  color: _snrColor(stats.lastSnrDb, theme),
+                  label: 'SNR',
+                  value: '$snr dB',
+                  theme: theme,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _StatCell(
+                  icon: Icons.upload_outlined,
+                  color: theme.colorScheme.primary,
+                  label: 'Airtime TX',
+                  value: txAir,
+                  theme: theme,
+                ),
+                _VertDivider(),
+                _StatCell(
+                  icon: Icons.download_outlined,
+                  color: Colors.green.shade600,
+                  label: 'Airtime RX',
+                  value: rxAir,
+                  theme: theme,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _rssiColor(int rssi, ThemeData theme) {
+    if (rssi >= -90) return Colors.green.shade600;
+    if (rssi >= -110) return Colors.orange.shade600;
+    return Colors.red.shade600;
+  }
+
+  Color _snrColor(double snr, ThemeData theme) {
+    if (snr >= 5) return Colors.green.shade600;
+    if (snr >= 0) return Colors.orange.shade600;
+    return Colors.red.shade600;
+  }
+
+  String _formatAirtime(int secs) {
+    if (secs < 60) return '${secs}s';
+    if (secs < 3600) return '${secs ~/ 60}min ${secs % 60}s';
+    final h = secs ~/ 3600;
+    final m = (secs % 3600) ~/ 60;
+    return '${h}h ${m}min';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Radio packet counters card
+// ---------------------------------------------------------------------------
+
+class _RadioPacketStatsCard extends StatelessWidget {
+  const _RadioPacketStatsCard({required this.stats, required this.theme});
+
+  final StatsPacketsResponse stats;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _StatCell(
+                  icon: Icons.arrow_downward,
+                  color: Colors.green.shade600,
+                  label: 'RX Total',
+                  value: '${stats.recv}',
+                  theme: theme,
+                ),
+                _VertDivider(),
+                _StatCell(
+                  icon: Icons.arrow_upward,
+                  color: theme.colorScheme.primary,
+                  label: 'TX Total',
+                  value: '${stats.sent}',
+                  theme: theme,
+                ),
+                if (stats.recvErrors != null) ...[
+                  _VertDivider(),
+                  _StatCell(
+                    icon: Icons.error_outline,
+                    color: Colors.red.shade600,
+                    label: 'Erros RX',
+                    value: '${stats.recvErrors}',
+                    theme: theme,
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _StatCell(
+                  icon: Icons.waves,
+                  color: theme.colorScheme.secondary,
+                  label: 'Flood TX',
+                  value: '${stats.floodTx}',
+                  theme: theme,
+                ),
+                _VertDivider(),
+                _StatCell(
+                  icon: Icons.waves,
+                  color: Colors.teal.shade600,
+                  label: 'Flood RX',
+                  value: '${stats.floodRx}',
+                  theme: theme,
+                ),
+                _VertDivider(),
+                _StatCell(
+                  icon: Icons.alt_route,
+                  color: Colors.indigo.shade400,
+                  label: 'Direto TX',
+                  value: '${stats.directTx}',
+                  theme: theme,
+                ),
+                _VertDivider(),
+                _StatCell(
+                  icon: Icons.alt_route,
+                  color: Colors.cyan.shade600,
+                  label: 'Direto RX',
+                  value: '${stats.directRx}',
+                  theme: theme,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -52,6 +52,20 @@ const int cmdSendTelemetryReq = 0x27;
 const int cmdSendBinaryReq = 0x32;
 const int cmdSendPathDiscoveryReq = 0x34;
 const int cmdSendControlData = 0x37;
+const int cmdGetStats = 0x38;
+
+// ---------------------------------------------------------------------------
+// CMD_GET_STATS sub-types
+// ---------------------------------------------------------------------------
+
+/// Core device statistics: battery, uptime, errors, queue length.
+const int statsTypeCore = 0;
+
+/// Radio statistics: noise floor, RSSI, SNR, TX/RX airtime.
+const int statsTypeRadio = 1;
+
+/// Packet counters: received, sent, flood/direct breakdown, receive errors.
+const int statsTypePackets = 2;
 
 // ---------------------------------------------------------------------------
 // Radio → App responses
