@@ -168,8 +168,7 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                         if (deviceInfo != null) ...[
                           _InfoRow(
                             label: 'Modelo',
-                            value:
-                                deviceInfo.model ?? deviceInfo.deviceName,
+                            value: deviceInfo.model ?? deviceInfo.deviceName,
                           ),
                           _InfoRow(
                             label: 'Firmware',
@@ -323,9 +322,7 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                         },
                         validator:
                             (v) =>
-                                v == null
-                                    ? 'Selecciona o coding rate'
-                                    : null,
+                                v == null ? 'Selecciona o coding rate' : null,
                       ),
 
                       const SizedBox(height: 16),
@@ -392,6 +389,10 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                 ),
               ],
 
+              // ----- Advert auto-add settings -----
+              const SizedBox(height: 24),
+              const _AdvertAutoAddCard(),
+
               // ----- Telemetry section -----
               const SizedBox(height: 32),
               Text(
@@ -423,10 +424,7 @@ class _EmbeddedTelemetry extends StatelessWidget {
     // TelemetryScreen is a ConsumerWidget with a ListView.
     // We embed it with constrained height so it doesn't conflict with the
     // parent scroll. SizedBox with a generous height lets it render fully.
-    return const SizedBox(
-      height: 600,
-      child: TelemetryScreen(),
-    );
+    return const SizedBox(height: 600, child: TelemetryScreen());
   }
 }
 
@@ -485,10 +483,7 @@ class _ConfigSummaryCard extends StatelessWidget {
               label: 'Coding Rate',
               value: _crLabel(config.codingRate),
             ),
-            _ConfigRow(
-              label: 'Potência TX',
-              value: '${config.txPowerDbm} dBm',
-            ),
+            _ConfigRow(label: 'Potência TX', value: '${config.txPowerDbm} dBm'),
           ],
         ),
       ),
@@ -566,6 +561,108 @@ class _InfoRow extends StatelessWidget {
           Expanded(child: Text(value, style: theme.textTheme.bodyMedium)),
         ],
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Advert auto-add card
+// ---------------------------------------------------------------------------
+
+class _AdvertAutoAddCard extends ConsumerWidget {
+  const _AdvertAutoAddCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final s = ref.watch(advertAutoAddProvider);
+    final n = ref.read(advertAutoAddProvider.notifier);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.person_add_alt_1,
+                  size: 18,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Adição automática de contactos',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Quando um nó envia um advert e o rádio está em modo manual, '
+              'a app pode adicioná-lo automaticamente à tabela de contactos do rádio.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _AutoAddTile(
+              icon: Icons.person,
+              label: 'Companheiro (Chat)',
+              value: s.addChat,
+              onChanged: n.setChat,
+            ),
+            _AutoAddTile(
+              icon: Icons.cell_tower,
+              label: 'Repetidor',
+              value: s.addRepeater,
+              onChanged: n.setRepeater,
+            ),
+            _AutoAddTile(
+              icon: Icons.meeting_room,
+              label: 'Sala (Room)',
+              value: s.addRoom,
+              onChanged: n.setRoom,
+            ),
+            _AutoAddTile(
+              icon: Icons.sensors,
+              label: 'Sensor',
+              value: s.addSensor,
+              onChanged: n.setSensor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AutoAddTile extends StatelessWidget {
+  const _AutoAddTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      secondary: Icon(icon, size: 20),
+      title: Text(label),
+      value: value,
+      onChanged: onChanged,
     );
   }
 }

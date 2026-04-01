@@ -292,6 +292,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   final name = controller.text.trim();
                   if (name.isNotEmpty) {
                     ref.read(radioServiceProvider)?.setAdvertName(name);
+                    // Update local state immediately — the radio sends only
+                    // respOk after SET_ADVERT_NAME, not a new SelfInfo, so we
+                    // must refresh the provider ourselves.
+                    final current = ref.read(selfInfoProvider);
+                    if (current != null) {
+                      ref.read(selfInfoProvider.notifier).state = SelfInfo(
+                        publicKey: current.publicKey,
+                        name: name,
+                        radioConfig: current.radioConfig,
+                        advType: current.advType,
+                        txPower: current.txPower,
+                        maxTxPower: current.maxTxPower,
+                        latitude: current.latitude,
+                        longitude: current.longitude,
+                      );
+                    }
                   }
                   Navigator.pop(ctx);
                 },

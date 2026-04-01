@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -118,8 +119,9 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     switch (_sort) {
       case _Sort.nome:
         filtered.sort(
-          (a, b) =>
-              a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
+          (a, b) => a.displayName.toLowerCase().compareTo(
+            b.displayName.toLowerCase(),
+          ),
         );
       case _Sort.ouvidoRecentemente:
         filtered.sort(
@@ -1087,14 +1089,56 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
   }
 
   Future<void> _login() async {
-    final password = _passCtrl.text; // empty string = no-password repeater
+    final password = _passCtrl.text;
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+
     ref.read(loginResultProvider.notifier).state = null;
     setState(() {
       _waiting = true;
       _loginError = null;
     });
-    final service = ref.read(radioServiceProvider);
-    await service?.login(widget.contact.publicKey, password);
+
+    // Listen for the radio response directly so we can catch ErrorResponse
+    // (e.g. ERR_NOT_FOUND when the contact isn't in the radio's table) and
+    // show a useful message instead of spinning forever.
+    final completer = Completer<String?>(); // null = success, non-null = error
+    late StreamSubscription<CompanionResponse> sub;
+    sub = service.responses.listen((r) {
+      if (completer.isCompleted) return;
+      if (r is LoginSuccessPush) {
+        completer.complete(null);
+      } else if (r is LoginFailPush) {
+        completer.complete('Falhou — verifique a palavra-passe');
+      } else if (r is ErrorResponse) {
+        final msg =
+            r.errorCode == 2
+                ? 'Contacto não encontrado no rádio — force um advert deste nó'
+                : 'Erro do rádio (código ${r.errorCode})';
+        completer.complete(msg);
+      }
+    });
+
+    await service.login(widget.contact.publicKey, password);
+
+    // Timeout after 10 s if radio never replies.
+    final error = await completer.future
+        .timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => 'Sem resposta do rádio (timeout)',
+        )
+        .whenComplete(sub.cancel);
+
+    if (!mounted) return;
+    if (error == null) {
+      // Success — loginResultProvider listener handles the UI transition.
+      ref.read(loginResultProvider.notifier).state = true;
+    } else {
+      setState(() {
+        _waiting = false;
+        _loginError = error;
+      });
+    }
   }
 
   Future<void> _requestStatus() async {
@@ -1112,17 +1156,14 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
     final theme = Theme.of(context);
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
 
-    // Listen for login result push.
+    // Listen for login success from loginResultProvider (set by _login() on success).
     ref.listen<bool?>(loginResultProvider, (_, result) {
-      if (result == null || !mounted) return;
-      setState(() {
-        _waiting = false;
-        if (result) {
+      if (result == true && mounted) {
+        setState(() {
+          _waiting = false;
           _loginError = null;
-        } else {
-          _loginError = 'Falhou — verifique a palavra-passe';
-        }
-      });
+        });
+      }
     });
 
     final loginResult = ref.watch(loginResultProvider);

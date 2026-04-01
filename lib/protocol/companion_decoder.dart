@@ -57,7 +57,7 @@ class CompanionDecoder {
       // Unsolicited push codes
       case pushAdvert:
       case pushNewAdvert:
-        return _parseAdvertPush(data);
+        return _parseAdvertPush(data, isNew: code == pushNewAdvert);
       case pushPathUpdated:
         return PathUpdatedPush(data);
       case pushSendConfirmed:
@@ -472,13 +472,22 @@ class CompanionDecoder {
     );
   }
 
-  static AdvertPush? _parseAdvertPush(Uint8List data) {
-    if (data.length < 33) return null;
+  static AdvertPush? _parseAdvertPush(Uint8List data, {required bool isNew}) {
+    if (data.length < 32) return null;
     final pubKey = Uint8List.fromList(data.sublist(0, 32));
-    final type = data[32];
-    final nameEnd = _findNullTerminator(data, 33, data.length.clamp(33, 65));
-    final name = utf8.decode(data.sublist(33, nameEnd), allowMalformed: true);
-    return AdvertPush(pubKey, type, name.trim());
+
+    // pushNewAdvert (0x8A) uses the full writeContactRespFrame layout —
+    // identical to respContact: type[32] flags[33] pathLen[34] path[35..98] name[99..130]
+    if (isNew && data.length >= 100) {
+      final type = data[32];
+      final nameEnd = _findNullTerminator(data, 99, 131);
+      final name = utf8.decode(data.sublist(99, nameEnd), allowMalformed: true);
+      return AdvertPush(pubKey, type, name.trim(), isNew: true);
+    }
+
+    // pushAdvert (0x80): only 32-byte pub_key — contact already known on radio,
+    // no name/type is transmitted.
+    return AdvertPush(pubKey, 0, '', isNew: false);
   }
 
   static BinaryResponsePush? _parseBinaryResponse(Uint8List data) {
@@ -651,10 +660,15 @@ class ChannelInfoResponse extends CompanionResponse {
 // --- Push responses ---
 
 class AdvertPush extends CompanionResponse {
-  const AdvertPush(this.publicKey, this.type, this.name);
+  const AdvertPush(this.publicKey, this.type, this.name, {this.isNew = false});
   final Uint8List publicKey;
   final int type;
   final String name;
+
+  /// True when push code was pushNewAdvert (0x8A). The radio may NOT have saved
+  /// this contact to its own table (manual-contact mode). The app must reply
+  /// with CMD_ADD_UPDATE_CONTACT to ensure the contact is stored on the radio.
+  final bool isNew;
 }
 
 class PathUpdatedPush extends CompanionResponse {

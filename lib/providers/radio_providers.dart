@@ -298,8 +298,41 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _ref.read(messagesProvider.notifier).markLastOutgoingRoute(routeFlag);
         case ErrorResponse():
           _ref.read(networkStatsProvider.notifier).incrementError();
-        case AdvertPush():
+        case AdvertPush(
+          :final publicKey,
+          :final type,
+          :final name,
+          :final isNew,
+        ):
           _ref.read(networkStatsProvider.notifier).incrementHeard();
+          _ref
+              .read(contactsProvider.notifier)
+              .upsertFromAdvert(publicKey, type, name);
+          // When pushNewAdvert (isNew=true) the radio may NOT have added the
+          // contact to its own table (manual-contact mode). Write it back
+          // explicitly — but only if the user's auto-add setting allows this
+          // node type.
+          if (isNew) {
+            final autoAdd = _ref.read(advertAutoAddProvider);
+            if (type != 0 && autoAdd.allowsType(type)) {
+              final service = _ref.read(radioServiceProvider);
+              if (service != null) {
+                final contact =
+                    _ref
+                        .read(contactsProvider)
+                        .where(
+                          (c) => ContactsNotifier._keysEqual(
+                            c.publicKey,
+                            publicKey,
+                          ),
+                        )
+                        .firstOrNull;
+                if (contact != null) {
+                  service.addUpdateContact(contact).catchError((_) {});
+                }
+              }
+            }
+          }
         case TelemetryPush(:final data):
           final readings = CayenneLPP.decode(data);
           if (readings.isNotEmpty) {
@@ -510,6 +543,44 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
   void remove(Uint8List publicKey) {
     final next =
         state.where((c) => !_keysEqual(c.publicKey, publicKey)).toList();
+    state = next;
+    StorageService.instance.saveContacts(next);
+  }
+
+  /// Called when an AdvertPush is received over the mesh.
+  /// Adds a new contact if unseen, or refreshes the name/type/timestamp if already known.
+  void upsertFromAdvert(Uint8List publicKey, int type, String name) {
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final idx = state.indexWhere((c) => _keysEqual(c.publicKey, publicKey));
+    List<Contact> next;
+    if (idx >= 0) {
+      final existing = state[idx];
+      next = [...state];
+      next[idx] = Contact(
+        publicKey: existing.publicKey,
+        type: type,
+        flags: existing.flags,
+        pathLen: existing.pathLen,
+        name: name.isNotEmpty ? name : existing.name,
+        lastAdvertTimestamp: now,
+        latitude: existing.latitude,
+        longitude: existing.longitude,
+        lastModified: existing.lastModified,
+        customName: existing.customName,
+      );
+    } else {
+      next = [
+        ...state,
+        Contact(
+          publicKey: publicKey,
+          type: type,
+          flags: 0,
+          pathLen: 0,
+          name: name,
+          lastAdvertTimestamp: now,
+        ),
+      ];
+    }
     state = next;
     StorageService.instance.saveContacts(next);
   }
@@ -1016,3 +1087,106 @@ class FavoritesNotifier extends StateNotifier<Set<String>> {
 final favoritesProvider = StateNotifierProvider<FavoritesNotifier, Set<String>>(
   (ref) => FavoritesNotifier(),
 );
+
+// ---------------------------------------------------------------------------
+// Advert auto-add settings (app-side, per contact type)
+// ---------------------------------------------------------------------------
+
+/// Controls whether incoming adverts are automatically written back to the
+/// radio's contact table (via CMD_ADD_UPDATE_CONTACT) for each node type.
+///
+/// All types default to true (auto-add). The user can disable per type
+/// in Radio Settings → "Adição automática de contactos".
+class AdvertAutoAddSettings {
+  const AdvertAutoAddSettings({
+    this.addChat = true,
+    this.addRepeater = true,
+    this.addRoom = true,
+    this.addSensor = true,
+  });
+
+  final bool addChat; // type 1
+  final bool addRepeater; // type 2
+  final bool addRoom; // type 3
+  final bool addSensor; // type 4
+
+  bool allowsType(int type) {
+    switch (type) {
+      case 1:
+        return addChat;
+      case 2:
+        return addRepeater;
+      case 3:
+        return addRoom;
+      case 4:
+        return addSensor;
+      default:
+        return false;
+    }
+  }
+
+  AdvertAutoAddSettings copyWith({
+    bool? addChat,
+    bool? addRepeater,
+    bool? addRoom,
+    bool? addSensor,
+  }) => AdvertAutoAddSettings(
+    addChat: addChat ?? this.addChat,
+    addRepeater: addRepeater ?? this.addRepeater,
+    addRoom: addRoom ?? this.addRoom,
+    addSensor: addSensor ?? this.addSensor,
+  );
+}
+
+class AdvertAutoAddNotifier extends StateNotifier<AdvertAutoAddSettings> {
+  AdvertAutoAddNotifier() : super(const AdvertAutoAddSettings()) {
+    _load();
+  }
+
+  static const _key = 'advert_autoadd_v1';
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = AdvertAutoAddSettings(
+      addChat: prefs.getBool('${_key}_chat') ?? true,
+      addRepeater: prefs.getBool('${_key}_repeater') ?? true,
+      addRoom: prefs.getBool('${_key}_room') ?? true,
+      addSensor: prefs.getBool('${_key}_sensor') ?? true,
+    );
+  }
+
+  Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await Future.wait([
+      prefs.setBool('${_key}_chat', state.addChat),
+      prefs.setBool('${_key}_repeater', state.addRepeater),
+      prefs.setBool('${_key}_room', state.addRoom),
+      prefs.setBool('${_key}_sensor', state.addSensor),
+    ]);
+  }
+
+  void setChat(bool v) {
+    state = state.copyWith(addChat: v);
+    _save();
+  }
+
+  void setRepeater(bool v) {
+    state = state.copyWith(addRepeater: v);
+    _save();
+  }
+
+  void setRoom(bool v) {
+    state = state.copyWith(addRoom: v);
+    _save();
+  }
+
+  void setSensor(bool v) {
+    state = state.copyWith(addSensor: v);
+    _save();
+  }
+}
+
+final advertAutoAddProvider =
+    StateNotifierProvider<AdvertAutoAddNotifier, AdvertAutoAddSettings>(
+      (ref) => AdvertAutoAddNotifier(),
+    );
