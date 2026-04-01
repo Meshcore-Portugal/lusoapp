@@ -357,6 +357,10 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _ref.read(loginResultProvider.notifier).state = true;
         case LoginFailPush():
           _ref.read(loginResultProvider.notifier).state = false;
+        case PathUpdatedPush():
+          // Radio has updated a contact's cached route — re-sync the contact
+          // list so the UI shows the new hop count.
+          service.requestContacts().catchError((_) {});
         default:
           break;
       }

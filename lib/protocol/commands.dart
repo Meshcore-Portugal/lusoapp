@@ -50,6 +50,7 @@ const int cmdSignFinish = 0x23;
 const int cmdSendTracePath = 0x24;
 const int cmdSendTelemetryReq = 0x27;
 const int cmdSendBinaryReq = 0x32;
+const int cmdSendPathDiscoveryReq = 0x34;
 const int cmdSendControlData = 0x37;
 
 // ---------------------------------------------------------------------------

@@ -461,8 +461,8 @@ class _ContactTile extends ConsumerWidget {
         ),
         subtitle: Text(
           contact.customName != null
-              ? '${contact.name.isNotEmpty ? contact.name : contact.shortId}  •  Visto: $lastSeen  |  Saltos: ${contact.pathLen}'
-              : 'Visto: $lastSeen  |  Saltos: ${contact.pathLen}',
+              ? '${contact.name.isNotEmpty ? contact.name : contact.shortId}  •  Visto: $lastSeen  |  Caminho: ${_pathLabel(contact.pathLen)}'
+              : 'Visto: $lastSeen  |  Caminho: ${_pathLabel(contact.pathLen)}',
           style: theme.textTheme.bodySmall,
         ),
         trailing:
@@ -562,6 +562,14 @@ class _ContactTile extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       builder: (_) => _RepeaterAdminSheet(contact: contact),
+    );
+  }
+
+  void _showPathSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _PathSheet(contact: contact),
     );
   }
 
@@ -714,6 +722,21 @@ class _ContactTile extends ConsumerWidget {
                       _showAdminSheet(context, ref);
                     },
                   ),
+                // Path management — available for all node types
+                ListTile(
+                  leading: const Icon(Icons.route),
+                  title: const Text('Gerir caminho'),
+                  subtitle: Text(
+                    'Caminho actual: ${_pathLabel(contact.pathLen)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withAlpha(130),
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showPathSheet(context);
+                  },
+                ),
                 const Divider(),
                 // Delete
                 ListTile(
@@ -795,6 +818,14 @@ class _ContactTile extends ConsumerWidget {
       default:
         return Icons.device_unknown;
     }
+  }
+
+  /// Human-readable path label for a contact's out_path_len value.
+  /// 0xFF = no known path (flood routing), 0 = direct, N = N hops.
+  static String _pathLabel(int pathLen) {
+    if (pathLen == 0xFF) return 'Flood';
+    if (pathLen == 0) return 'Direto';
+    return '$pathLen salto${pathLen == 1 ? '' : 's'}';
   }
 
   Color _typeColor(int type) {
@@ -1042,6 +1073,267 @@ class _AddContactSheetState extends State<_AddContactSheet> {
                     : const Icon(Icons.person_add),
             label: Text(_saving ? 'A adicionar...' : 'Adicionar contacto'),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Path management bottom sheet
+// ---------------------------------------------------------------------------
+
+class _PathSheet extends ConsumerStatefulWidget {
+  const _PathSheet({required this.contact});
+  final Contact contact;
+
+  @override
+  ConsumerState<_PathSheet> createState() => _PathSheetState();
+}
+
+class _PathSheetState extends ConsumerState<_PathSheet> {
+  bool _resetting = false;
+  bool _discovering = false;
+  String? _statusMessage;
+  bool _statusIsError = false;
+
+  Future<void> _resetPath() async {
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+
+    setState(() {
+      _resetting = true;
+      _statusMessage = null;
+    });
+
+    final completer = Completer<String?>(); // null = success
+    late StreamSubscription<CompanionResponse> sub;
+    sub = service.responses.listen((r) {
+      if (completer.isCompleted) return;
+      if (r is OkResponse) {
+        completer.complete(null);
+      } else if (r is ErrorResponse) {
+        final msg =
+            r.errorCode == 2
+                ? 'Contacto não encontrado no rádio'
+                : 'Erro do rádio (código ${r.errorCode})';
+        completer.complete(msg);
+      }
+    });
+
+    await service.resetPath(widget.contact.publicKey);
+
+    final error = await completer.future
+        .timeout(
+          const Duration(seconds: 8),
+          onTimeout: () => 'Sem resposta do rádio (timeout)',
+        )
+        .whenComplete(sub.cancel);
+
+    if (!mounted) return;
+    if (error == null) {
+      // Refresh contacts so the updated pathLen is shown.
+      await service.requestContacts();
+      setState(() {
+        _resetting = false;
+        _statusMessage =
+            'Caminho reiniciado — rádio usará flood na próxima mensagem';
+        _statusIsError = false;
+      });
+    } else {
+      setState(() {
+        _resetting = false;
+        _statusMessage = error;
+        _statusIsError = true;
+      });
+    }
+  }
+
+  Future<void> _discoverPath() async {
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+
+    setState(() {
+      _discovering = true;
+      _statusMessage = null;
+    });
+
+    final pubKeyPrefix = widget.contact.publicKey.sublist(0, 6);
+
+    final completer = Completer<String?>(); // null = no error, message = result
+    late StreamSubscription<CompanionResponse> sub;
+    sub = service.responses.listen((r) {
+      if (completer.isCompleted) return;
+      if (r is PathDiscoveryPush) {
+        // Match by 6-byte prefix
+        if (r.pubKeyPrefix.length >= 6 &&
+            pubKeyPrefix.length >= 6 &&
+            List.generate(
+              6,
+              (i) => r.pubKeyPrefix[i] == pubKeyPrefix[i],
+            ).every((e) => e)) {
+          final out = r.outPath.length;
+          final inn = r.inPath.length;
+          completer.complete(
+            'Caminho descoberto: $out salto${out == 1 ? '' : 's'} (saída)  /  '
+            '$inn salto${inn == 1 ? '' : 's'} (entrada)',
+          );
+        }
+      } else if (r is ErrorResponse) {
+        final msg =
+            r.errorCode == 2
+                ? 'Contacto não encontrado no rádio'
+                : 'Erro do rádio (código ${r.errorCode})';
+        completer.complete('__error__$msg');
+      }
+    });
+
+    await service.sendPathDiscovery(widget.contact.publicKey);
+
+    // Path discovery can take a while (flood + round-trip).
+    final result = await completer.future
+        .timeout(
+          const Duration(seconds: 30),
+          onTimeout: () => '__error__Sem resposta (timeout de 30 s)',
+        )
+        .whenComplete(sub.cancel);
+
+    if (!mounted) return;
+
+    final isError = result?.startsWith('__error__') ?? false;
+    final message =
+        isError ? result!.substring('__error__'.length) : result ?? '';
+
+    if (!isError) {
+      // Refresh contacts to show updated hop count.
+      await service.requestContacts();
+    }
+
+    setState(() {
+      _discovering = false;
+      _statusMessage = message;
+      _statusIsError = isError;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final contact = widget.contact;
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final pathLabel = _ContactTile._pathLabel(contact.pathLen);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurface.withAlpha(40),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.route, color: AppTheme.primary, size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Caminho: ${contact.displayName}',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'ID: ${contact.shortId}  |  Caminho actual: $pathLabel',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const Divider(height: 20),
+
+          // Reset path
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.refresh),
+            title: const Text('Reiniciar caminho'),
+            subtitle: const Text(
+              'Apaga o caminho guardado — o rádio voltará a usar flood na próxima transmissão.',
+            ),
+            trailing:
+                _resetting
+                    ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : null,
+          ),
+          FilledButton.tonalIcon(
+            onPressed: (_resetting || _discovering) ? null : _resetPath,
+            icon: const Icon(Icons.restart_alt),
+            label: const Text('Reiniciar caminho'),
+          ),
+          const SizedBox(height: 12),
+
+          // Discover path
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.search),
+            title: const Text('Descobrir caminho'),
+            subtitle: const Text(
+              'Envia uma sondagem flood para encontrar o melhor caminho até este nó (pode demorar até 30 s).',
+            ),
+            trailing:
+                _discovering
+                    ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : null,
+          ),
+          FilledButton.icon(
+            onPressed: (_resetting || _discovering) ? null : _discoverPath,
+            icon: const Icon(Icons.route),
+            label: const Text('Descobrir caminho'),
+          ),
+          const SizedBox(height: 12),
+
+          // Status message
+          if (_statusMessage != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color:
+                    _statusIsError
+                        ? theme.colorScheme.errorContainer
+                        : theme.colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _statusMessage!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color:
+                      _statusIsError
+                          ? theme.colorScheme.onErrorContainer
+                          : theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
         ],
       ),
     );

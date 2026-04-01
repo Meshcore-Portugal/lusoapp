@@ -300,12 +300,20 @@ class CompanionEncoder {
     return _frame(cmdSendBinaryReq, payload.toBytes());
   }
 
+  /// SEND_PATH_DISCOVERY_REQ — flood the network to discover a path to a contact.
+  /// Spec: {code, reserved(1)=0, pub_key(32)}
+  /// The radio responds with RESP_CODE_SENT, then later with
+  /// PUSH_CODE_PATH_DISCOVERY_RESPONSE (0x8D) when a response is received.
+  static Uint8List sendPathDiscoveryReq(Uint8List publicKey) {
+    final payload = BytesBuilder();
+    payload.addByte(0); // reserved
+    payload.add(publicKey.sublist(0, 32));
+    return _frame(cmdSendPathDiscoveryReq, payload.toBytes());
+  }
+
   /// SEND_CONTROL_DATA — send control data with a sub-type.
   /// Spec: {code, flags(0), sub_type, payload(variable)}
-  static Uint8List sendControlData({
-    required int subType,
-    Uint8List? payload,
-  }) {
+  static Uint8List sendControlData({required int subType, Uint8List? payload}) {
     final buf = BytesBuilder();
     buf.addByte(0); // flags: must be zero
     buf.addByte(subType);

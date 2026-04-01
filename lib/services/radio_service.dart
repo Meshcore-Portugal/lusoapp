@@ -147,6 +147,10 @@ class RadioService {
     await _send(CompanionEncoder.resetPath(publicKey));
   }
 
+  Future<void> sendPathDiscovery(Uint8List publicKey) async {
+    await _send(CompanionEncoder.sendPathDiscoveryReq(publicKey));
+  }
+
   Future<void> tracePath(int tag, {int authCode = 0, Uint8List? path}) async {
     await _send(
       CompanionEncoder.sendTracePath(tag: tag, authCode: authCode, path: path),
