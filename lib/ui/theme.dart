@@ -93,7 +93,7 @@ class AppTheme {
             return const TextStyle(
               color: primary,
               fontWeight: FontWeight.bold,
-              fontSize: 12,
+              fontSize: 11,
             );
           }
           return const TextStyle(color: Color(0xFF888888), fontSize: 12);

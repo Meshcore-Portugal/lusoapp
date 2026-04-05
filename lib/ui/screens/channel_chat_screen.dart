@@ -303,6 +303,60 @@ class ChannelsTabScreen extends ConsumerWidget {
 }
 
 // ---------------------------------------------------------------------------
+// Heard-by-repeaters badge
+// ---------------------------------------------------------------------------
+
+/// Small pill badge shown below outgoing channel message bubbles indicating
+/// how many repeaters have echoed the message back to the radio.
+///
+/// - count == 0: amber pill "A propagar..." (not yet picked up by a repeater)
+/// - count  > 0: green pill with a broadcast icon + count
+class _HeardBadge extends StatelessWidget {
+  const _HeardBadge({required this.count, required this.theme});
+
+  final int count;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final heard = count > 0;
+    final bgColor =
+        heard
+            ? Colors.green.shade700.withAlpha(200)
+            : Colors.amber.shade800.withAlpha(180);
+    const fgColor = Colors.white;
+    final icon = heard ? Icons.cell_tower : Icons.hourglass_empty;
+    final label =
+        heard ? '$count Repetidor${count > 1 ? 'es' : ''}' : 'A propagar...';
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 11, color: fgColor),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: (theme.textTheme.labelSmall ?? const TextStyle())
+                    .copyWith(color: fgColor, fontSize: 10),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Shared widgets
 // ---------------------------------------------------------------------------
 
@@ -334,8 +388,7 @@ Widget _buildMentionText(
         name.trim().toLowerCase() == selfName.trim().toLowerCase();
     final pillColor =
         isSelf ? theme.colorScheme.tertiary : theme.colorScheme.primary;
-    final textColor =
-        isSelf ? theme.colorScheme.onTertiary : Colors.white;
+    final textColor = isSelf ? theme.colorScheme.onTertiary : Colors.white;
     spans.add(
       WidgetSpan(
         alignment: PlaceholderAlignment.middle,
@@ -413,10 +466,6 @@ class _MessageBubble extends StatelessWidget {
         parts.add('Ouvido $hops Repetidor${hops > 1 ? 'es' : ''}');
       }
     }
-    // Sent channel messages are always flooded — firmware returns no hop count.
-    if (msg.isOutgoing && msg.isChannel && msg.pathLen == null) {
-      parts.add('Ouvido 1 Repetidor');
-    }
     return parts.join(' • ');
   }
 
@@ -485,7 +534,14 @@ class _MessageBubble extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 2),
+              // Heard-by-repeaters badge — only for channel messages
+              if (message.isChannel)
+                Padding(
+                  padding: const EdgeInsets.only(top: 1, right: 4, bottom: 2),
+                  child: _HeardBadge(count: message.heardCount, theme: theme),
+                )
+              else
+                const SizedBox(height: 2),
             ],
           ),
         ),

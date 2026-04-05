@@ -115,6 +115,7 @@ class ChatMessage extends Equatable {
     sentRouteFlag:
         json['sentRouteFlag'] as int? ??
         (json['sentViaFlood'] == true ? 1 : null),
+    packetHashHex: json['packetHashHex'] as String?,
   );
   const ChatMessage({
     required this.text,
@@ -128,6 +129,7 @@ class ChatMessage extends Equatable {
     this.pathLen,
     this.heardCount = 0,
     this.sentRouteFlag,
+    this.packetHashHex,
   });
 
   final String text;
@@ -145,6 +147,10 @@ class ChatMessage extends Equatable {
   /// Route flag from RESP_CODE_SENT: null=unknown, 0=direct, 1=flood (via repeaters).
   final int? sentRouteFlag;
 
+  /// 8-byte packet hash (hex) from 0x88 LogRxData frames.
+  /// Used to track how many repeaters re-broadcast this message.
+  final String? packetHashHex;
+
   bool get isChannel => channelIndex != null;
   bool get isPrivate => channelIndex == null;
 
@@ -160,6 +166,7 @@ class ChatMessage extends Equatable {
     int? pathLen,
     int? heardCount,
     int? sentRouteFlag,
+    String? packetHashHex,
   }) {
     return ChatMessage(
       text: text ?? this.text,
@@ -173,6 +180,7 @@ class ChatMessage extends Equatable {
       pathLen: pathLen ?? this.pathLen,
       heardCount: heardCount ?? this.heardCount,
       sentRouteFlag: sentRouteFlag ?? this.sentRouteFlag,
+      packetHashHex: packetHashHex ?? this.packetHashHex,
     );
   }
 
@@ -188,6 +196,7 @@ class ChatMessage extends Equatable {
     'pathLen': pathLen,
     'heardCount': heardCount,
     'sentRouteFlag': sentRouteFlag,
+    'packetHashHex': packetHashHex,
   };
 
   @override
@@ -198,6 +207,7 @@ class ChatMessage extends Equatable {
     channelIndex,
     heardCount,
     sentRouteFlag,
+    packetHashHex,
   ];
 }
 

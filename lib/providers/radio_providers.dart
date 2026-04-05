@@ -50,6 +50,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   final Ref _ref;
 
   StreamSubscription<void>? _connectionLostSub;
+  StreamSubscription<CompanionResponse>? _responseSub;
   Timer? _batteryPollTimer;
 
   void _setStep(int step, String label) {
@@ -152,6 +153,9 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     _batteryPollTimer = null;
     await _connectionLostSub?.cancel();
     _connectionLostSub = null;
+    await _responseSub?.cancel();
+    _responseSub = null;
+    _ref.read(packetHeardProvider.notifier).reset();
     final service = _ref.read(radioServiceProvider);
     if (service != null) {
       await service.dispose();
@@ -219,7 +223,8 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   }
 
   void _setupListeners(RadioService service) {
-    service.responses.listen((response) {
+    _responseSub?.cancel();
+    _responseSub = service.responses.listen((response) {
       switch (response) {
         case ContactResponse():
           _ref.read(contactsProvider.notifier).refresh(service.contacts);
@@ -260,16 +265,32 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
             );
           }
         case ChannelMessageResponse(:final message):
+          // Channel messages arrive via CMD_SYNC_NEXT_MESSAGE.
+          // Heard-by-repeater counting is driven by PUSH_CODE_LOG_RX_DATA
+          // (0x88) packet-hash deduplication — not loopback text matching.
+          //
+          // Skip if this is a loopback echo of our own sent message.
+          // The firmware may pass the first repeater echo through dedup and
+          // queue it.  We already have the outgoing copy from addOutgoing().
+          final isLoopback =
+              message.channelIndex != null &&
+              _ref
+                  .read(messagesProvider)
+                  .any(
+                    (m) =>
+                        m.isOutgoing &&
+                        m.channelIndex == message.channelIndex &&
+                        m.timestamp == message.timestamp,
+                  );
+          if (isLoopback) break;
           _ref.read(messagesProvider.notifier).addMessage(message);
           if (!message.isOutgoing) {
             _ref.read(networkStatsProvider.notifier).incrementRx();
-          }
-          if (message.channelIndex != null) {
-            _ref
-                .read(unreadCountsProvider.notifier)
-                .incrementChannel(message.channelIndex!);
-          }
-          if (!message.isOutgoing) {
+            if (message.channelIndex != null) {
+              _ref
+                  .read(unreadCountsProvider.notifier)
+                  .incrementChannel(message.channelIndex!);
+            }
             final channels = _ref.read(channelsProvider);
             final idx = message.channelIndex ?? 0;
             final channel = channels.where((c) => c.index == idx).firstOrNull;
@@ -297,7 +318,6 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         case SendConfirmedPush():
           _ref.read(messagesProvider.notifier).confirmLastOutgoing();
         case SentResponse(:final routeFlag):
-          _ref.read(networkStatsProvider.notifier).incrementTx();
           _ref.read(messagesProvider.notifier).markLastOutgoingRoute(routeFlag);
         case ErrorResponse():
           _ref.read(networkStatsProvider.notifier).incrementError();
@@ -370,10 +390,79 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _ref.read(radioStatsRadioProvider.notifier).state = response;
         case StatsPacketsResponse():
           _ref.read(radioStatsPacketsProvider.notifier).state = response;
+        case LogRxDataPush(:final data):
+          _processLogRxData(data);
         default:
           break;
       }
     });
+  }
+
+  /// Process a PUSH_CODE_LOG_RX_DATA (0x88) frame.
+  ///
+  /// Parses the raw RF packet, computes its SHA-256 packet hash, and checks
+  /// for duplicate hashes.  Each duplicate = another repeater heard the
+  /// packet.  For outgoing channel messages the heard count on the matching
+  /// [ChatMessage] is incremented.
+  void _processLogRxData(Uint8List data) {
+    final parsed = parseLogRxData(data);
+    if (parsed == null || parsed.packet == null) return;
+
+    final pkt = parsed.packet!;
+    final hashHex = pkt.packetHashHex;
+    final log = Logger(printer: SimplePrinter(printTime: false));
+    log.d(
+      '0x88: type=0x${pkt.payloadType.toRadixString(16)} '
+      'hash=$hashHex chHash=${pkt.channelHashByte} '
+      'path=${pkt.pathHashCount}hops snr=${parsed.snr} rssi=${parsed.rssi}',
+    );
+
+    // Update the global packet-heard tracker.
+    final tracker = _ref.read(packetHeardProvider.notifier);
+    final count = tracker.record(
+      hashHex,
+      snr: parsed.snr,
+      rssi: parsed.rssi,
+      pathBytes: pkt.pathBytes,
+    );
+
+    // Only GRP_TXT packets can match outgoing channel messages.
+    if (pkt.payloadType != payloadTypeGrpTxt) return;
+    // For our outgoing messages the radio never receives its own TX via 0x88,
+    // so every 0x88 occurrence with a GRP_TXT hash IS a repeater echo.
+
+    // Determine which channel index this RF packet belongs to by comparing
+    // the 1-byte channel hash from the raw payload against our known channels.
+    final rxChHash = pkt.channelHashByte;
+    if (rxChHash == null) return;
+
+    final channels = _ref.read(channelsProvider);
+    int? matchedChannelIdx;
+    for (final ch in channels) {
+      if (ch.secret != null && !ch.isEmpty) {
+        if (computeChannelHash(ch.secret!) == rxChHash) {
+          matchedChannelIdx = ch.index;
+          break;
+        }
+      }
+    }
+    if (matchedChannelIdx == null) {
+      log.d(
+        '0x88: no channel matched for chHash=0x${rxChHash.toRadixString(16)}',
+      );
+      return;
+    }
+    log.i('0x88: GRP_TXT ch=$matchedChannelIdx hash=$hashHex count=$count');
+
+    // Increment heard count on the most recent outgoing message for this
+    // channel whose hash matches (or whose hash is not yet assigned).
+    _ref
+        .read(messagesProvider.notifier)
+        .incrementHeardByHash(
+          matchedChannelIdx,
+          hashHex,
+          count, // every 0x88 for our outgoing = a repeater echo
+        );
   }
 
   /// Wait for a specific response type from the radio after sending a command.
@@ -640,11 +729,21 @@ final channelsProvider =
 
 // Messages
 class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
-  MessagesNotifier() : super([]);
+  MessagesNotifier(this._ref) : super([]);
+  final Ref _ref;
 
   final Set<String> _loadedKeys = {};
 
   void addMessage(ChatMessage message) {
+    // Dedup: skip if an identical message already exists in state.
+    final dominated = state.any(
+      (m) =>
+          m.timestamp == message.timestamp &&
+          m.channelIndex == message.channelIndex &&
+          m.text == message.text &&
+          m.isOutgoing == message.isOutgoing,
+    );
+    if (dominated) return;
     state = [...state, message];
     _saveForMessage(message);
   }
@@ -652,31 +751,51 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   void addOutgoing(ChatMessage message) {
     state = [...state, message];
     _saveForMessage(message);
+    _ref.read(networkStatsProvider.notifier).incrementTx();
   }
 
-  /// Increment the heard-by-repeater count on the matching sent channel message.
-  /// Called when a loopback echo of our own channel message is received.
-  /// Matches first by [channelIndex] + [timestamp] (exact, since both encoder
-  /// and stored message now share the same computed second), then falls back
-  /// to body-text match as a safeguard for messages sent before this fix.
-  void incrementHeardCount(
-    int channelIndex,
-    String bodyText, {
-    int? timestamp,
-  }) {
+  /// Increment heard count on an outgoing channel message matched by packet
+  /// hash.  The first 0x88 duplicate for a GRP_TXT packet is the original
+  /// transmission; subsequent duplicates are repeater echoes.  [totalHeard]
+  /// is the cumulative repeater count (duplicates minus 1).
+  ///
+  /// If [hashHex] matches a message that already has the same packetHashHex,
+  /// update its heardCount.  Otherwise try to assign the hash to the most
+  /// recent outgoing message on [channelIndex] that has no hash yet.
+  void incrementHeardByHash(int channelIndex, String hashHex, int totalHeard) {
+    // First pass — find a message already tagged with this hash.
+    for (var i = state.length - 1; i >= 0; i--) {
+      final msg = state[i];
+      if (msg.packetHashHex == hashHex) {
+        if (msg.heardCount != totalHeard) {
+          final updated = msg.copyWith(heardCount: totalHeard);
+          final newList = List<ChatMessage>.from(state);
+          newList[i] = updated;
+          state = newList;
+          _saveForMessage(updated);
+        }
+        return;
+      }
+    }
+    // Second pass — assign hash to the most recent outgoing message on this
+    // channel that does not yet have a packetHashHex.
+    // Only consider messages sent in the last 60 seconds to avoid wrongly
+    // assigning an incoming packet's hash to a stale outgoing message.
+    final cutoff = DateTime.now().millisecondsSinceEpoch ~/ 1000 - 60;
     for (var i = state.length - 1; i >= 0; i--) {
       final msg = state[i];
       if (!msg.isOutgoing || msg.channelIndex != channelIndex) continue;
-      final matchByTs = timestamp != null && msg.timestamp == timestamp;
-      final matchByText = msg.text == bodyText;
-      if (matchByTs || matchByText) {
-        final updated = msg.copyWith(heardCount: msg.heardCount + 1);
-        final newList = List<ChatMessage>.from(state);
-        newList[i] = updated;
-        state = newList;
-        _saveForMessage(updated);
-        return;
-      }
+      if (msg.packetHashHex != null) continue;
+      if (msg.timestamp < cutoff) break; // too old — stop searching
+      final updated = msg.copyWith(
+        packetHashHex: hashHex,
+        heardCount: totalHeard,
+      );
+      final newList = List<ChatMessage>.from(state);
+      newList[i] = updated;
+      state = newList;
+      _saveForMessage(updated);
+      return;
     }
   }
 
@@ -809,7 +928,7 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
 
 final messagesProvider =
     StateNotifierProvider<MessagesNotifier, List<ChatMessage>>((ref) {
-      return MessagesNotifier();
+      return MessagesNotifier(ref);
     });
 
 // ---------------------------------------------------------------------------
@@ -1222,3 +1341,40 @@ final radioStatsRadioProvider = StateProvider<StatsRadioResponse?>((_) => null);
 final radioStatsPacketsProvider = StateProvider<StatsPacketsResponse?>(
   (_) => null,
 );
+
+// ---------------------------------------------------------------------------
+// Packet heard tracker (driven by 0x88 raw RF log)
+// ---------------------------------------------------------------------------
+
+/// Tracks how many times each unique packet hash has been received.
+///
+/// The firmware pushes `PUSH_CODE_LOG_RX_DATA` (0x88) for every raw RF
+/// reception **before** mesh deduplication.  Identical packet hashes mean the
+/// same logical packet was heard multiple times — each duplicate represents
+/// a different repeater that forwarded it.
+///
+/// The state maps `packetHashHex` → total reception count.
+class PacketHeardNotifier extends StateNotifier<Map<String, int>> {
+  PacketHeardNotifier() : super({});
+
+  /// Record a reception of [hashHex].  Returns the new total count.
+  int record(
+    String hashHex, {
+    required double snr,
+    required int rssi,
+    required Uint8List pathBytes,
+  }) {
+    final prev = state[hashHex] ?? 0;
+    final next = prev + 1;
+    state = {...state, hashHex: next};
+    return next;
+  }
+
+  /// Reset all tracked hashes (e.g. on disconnect).
+  void reset() => state = {};
+}
+
+final packetHeardProvider =
+    StateNotifierProvider<PacketHeardNotifier, Map<String, int>>(
+      (ref) => PacketHeardNotifier(),
+    );

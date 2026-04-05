@@ -28,8 +28,8 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
   DateTime _now = DateTime.now();
 
   // Station-name / city / locality controllers (used in config card)
-  final _nameCtrl     = TextEditingController();
-  final _cityCtrl     = TextEditingController();
+  final _nameCtrl = TextEditingController();
+  final _cityCtrl = TextEditingController();
   final _localityCtrl = TextEditingController();
   bool _configDirty = false;
 
@@ -45,8 +45,8 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
   /// Populate text-field controllers from stored config (runs once after build).
   void _syncControllers() {
     final cfg = ref.read(plan333ConfigProvider);
-    _nameCtrl.text     = cfg.stationName;
-    _cityCtrl.text     = cfg.city;
+    _nameCtrl.text = cfg.stationName;
+    _cityCtrl.text = cfg.city;
     _localityCtrl.text = cfg.locality;
   }
 
@@ -60,7 +60,9 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
   }
 
   Future<void> _saveConfig() async {
-    final cfg = ref.read(plan333ConfigProvider).copyWith(
+    final cfg = ref
+        .read(plan333ConfigProvider)
+        .copyWith(
           stationName: _nameCtrl.text.trim(),
           city: _cityCtrl.text.trim(),
           locality: _localityCtrl.text.trim(),
@@ -71,19 +73,19 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
 
   @override
   Widget build(BuildContext context) {
-    final config      = ref.watch(plan333ConfigProvider);
-    final autoState   = ref.watch(plan333AutoSendProvider);
-    final connState   = ref.watch(connectionProvider);
-    final cbEnabled   = ref.watch(plan333EnabledProvider);
-    final channels    = ref.watch(channelsProvider);
+    final config = ref.watch(plan333ConfigProvider);
+    final autoState = ref.watch(plan333AutoSendProvider);
+    final connState = ref.watch(connectionProvider);
+    final cbEnabled = ref.watch(plan333EnabledProvider);
+    final channels = ref.watch(channelsProvider);
 
-    final meshActive  = Plan333Service.isMeshEventActive(_now);
-    final qslActive   = Plan333Service.isMeshQslActive(_now);
-    final nextMesh    = Plan333Service.nextMeshEvent(_now);
-    final cbActive    = Plan333Service.isWindowActive(_now);
-    final nextCb      = Plan333Service.nextWindowTime(_now);
+    final meshActive = Plan333Service.isMeshEventActive(_now);
+    final qslActive = Plan333Service.isMeshQslActive(_now);
+    final nextMesh = Plan333Service.nextMeshEvent(_now);
+    final cbActive = Plan333Service.isWindowActive(_now);
+    final nextCb = Plan333Service.nextWindowTime(_now);
     final cbRemaining = nextCb.difference(_now);
-    final cbProgress  = Plan333Service.windowProgress(_now);
+    final cbProgress = Plan333Service.windowProgress(_now);
     final satTraining = Plan333Service.nextSaturdayTraining(_now);
 
     final radioConnected = connState == TransportState.connected;
@@ -102,8 +104,8 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
             config: config,
             autoState: autoState,
             radioConnected: radioConnected,
-            onSendCq: () =>
-                ref.read(plan333AutoSendProvider.notifier).sendManualCq(),
+            onSendCq:
+                () => ref.read(plan333AutoSendProvider.notifier).sendManualCq(),
           ),
           const SizedBox(height: 16),
 
@@ -150,8 +152,8 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
           // ── 5. Notifications ─────────────────────────────────────────────
           _NotificationsCard(
             enabled: cbEnabled,
-            onChanged: (v) =>
-                ref.read(plan333EnabledProvider.notifier).setEnabled(v),
+            onChanged:
+                (v) => ref.read(plan333EnabledProvider.notifier).setEnabled(v),
           ),
           const SizedBox(height: 16),
         ],
@@ -187,8 +189,8 @@ class _MeshStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme   = Theme.of(context);
-    final accent  = meshActive ? const Color(0xFF00E676) : AppTheme.primary;
+    final theme = Theme.of(context);
+    final accent = meshActive ? const Color(0xFF00E676) : AppTheme.primary;
     final remaining = nextMesh.difference(now);
 
     return Card(
@@ -219,15 +221,19 @@ class _MeshStatusCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 if (meshActive)
-                  _Pill(
-                    label: '● EVENTO ACTIVO',
-                    color: const Color(0xFF00E676),
+                  Flexible(
+                    child: _Pill(
+                      label: '● EVENTO ACTIVO',
+                      color: const Color(0xFF00E676),
+                    ),
                   )
                 else
-                  _Pill(
-                    label: _daysLabel(remaining),
-                    color: theme.colorScheme.onSurfaceVariant,
-                    border: true,
+                  Flexible(
+                    child: _Pill(
+                      label: _daysLabel(remaining),
+                      color: theme.colorScheme.onSurfaceVariant,
+                      border: true,
+                    ),
                   ),
               ],
             ),
@@ -255,19 +261,25 @@ class _MeshStatusCard extends StatelessWidget {
               // CQ sent status — 3 dots
               Row(
                 children: [
-                  Text('CQ enviados:',
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                  Text(
+                    'CQ enviados:',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   ...List.generate(3, (i) {
                     final sent = i < autoState.cqSentCount;
                     return Padding(
                       padding: const EdgeInsets.only(right: 6),
                       child: Icon(
-                        sent ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                        color: sent
-                            ? const Color(0xFF00E676)
-                            : theme.colorScheme.onSurfaceVariant,
+                        sent
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_unchecked,
+                        color:
+                            sent
+                                ? const Color(0xFF00E676)
+                                : theme.colorScheme.onSurfaceVariant,
                         size: 20,
                       ),
                     );
@@ -275,8 +287,9 @@ class _MeshStatusCard extends StatelessWidget {
                   if (autoState.lastCqTime != null)
                     Text(
                       '(último: ${_fmtTime(autoState.lastCqTime!)})',
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                 ],
               ),
@@ -295,10 +308,13 @@ class _MeshStatusCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  Text(
-                    _fmtDate(nextMesh),
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
+                  Flexible(
+                    child: Text(
+                      _fmtDate(nextMesh),
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -313,8 +329,9 @@ class _MeshStatusCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 'Sábados 21:00–22:00  •  CQ Presenças MeshCore',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
 
@@ -324,8 +341,11 @@ class _MeshStatusCard extends StatelessWidget {
             // Report link teaser
             Row(
               children: [
-                Icon(Icons.bar_chart, size: 14,
-                    color: theme.colorScheme.onSurfaceVariant),
+                Icon(
+                  Icons.bar_chart,
+                  size: 14,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -406,10 +426,7 @@ class _SendButton extends StatelessWidget {
       width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: canSend ? onTap : null,
-        icon: Icon(
-          allSent ? Icons.check_circle : Icons.send,
-          size: 18,
-        ),
+        icon: Icon(allSent ? Icons.check_circle : Icons.send, size: 18),
         label: Text(label),
         style: ElevatedButton.styleFrom(
           backgroundColor: canSend ? color.withAlpha(200) : null,
@@ -453,8 +470,7 @@ class _ConfigCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final activeChannels =
-        channels.where((c) => !c.isEmpty).toList();
+    final activeChannels = channels.where((c) => !c.isEmpty).toList();
 
     return Card(
       child: Padding(
@@ -466,9 +482,12 @@ class _ConfigCard extends StatelessWidget {
               children: [
                 Icon(Icons.settings, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
-                Text('Configuração do Evento',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold)),
+                Text(
+                  'Configuração do Evento',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const Spacer(),
                 if (dirty)
                   FilledButton(
@@ -525,24 +544,23 @@ class _ConfigCard extends StatelessWidget {
             // Channel dropdown
             DropdownButtonFormField<int>(
               value: _resolveChannel(activeChannels, config.meshChannelIndex),
-              decoration: const InputDecoration(
-                labelText: 'Canal MeshCore',
-              ),
-              items: activeChannels.isEmpty
-                  ? [
-                      const DropdownMenuItem(
-                        value: 0,
-                        child: Text('Canal 0 (rádio não ligado)'),
-                      ),
-                    ]
-                  : activeChannels.map((ch) {
-                      final label =
-                          ch.name.isNotEmpty ? ch.name : 'Canal ${ch.index}';
-                      return DropdownMenuItem(
-                        value: ch.index,
-                        child: Text(label),
-                      );
-                    }).toList(),
+              decoration: const InputDecoration(labelText: 'Canal MeshCore'),
+              items:
+                  activeChannels.isEmpty
+                      ? [
+                        const DropdownMenuItem(
+                          value: 0,
+                          child: Text('Canal 0 (rádio não ligado)'),
+                        ),
+                      ]
+                      : activeChannels.map((ch) {
+                        final label =
+                            ch.name.isNotEmpty ? ch.name : 'Canal ${ch.index}';
+                        return DropdownMenuItem(
+                          value: ch.index,
+                          child: Text(label),
+                        );
+                      }).toList(),
               onChanged: (v) {
                 if (v != null) onChannelChanged(v);
               },
@@ -553,8 +571,9 @@ class _ConfigCard extends StatelessWidget {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Envio automático de CQ'),
-              subtitle:
-                  const Text('Envia até 3 CQs automaticamente durante o evento'),
+              subtitle: const Text(
+                'Envia até 3 CQs automaticamente durante o evento',
+              ),
               value: config.autoSendCq,
               onChanged: onAutoSendChanged,
             ),
@@ -595,9 +614,10 @@ class _FormatsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cq = config.isConfigured
-        ? config.cqMessage
-        : 'CQ Plano 333, [Nome], [Cidade], [Localidade]';
+    final cq =
+        config.isConfigured
+            ? config.cqMessage
+            : 'CQ Plano 333, [Nome], [Cidade], [Localidade]';
 
     return Card(
       child: Padding(
@@ -607,12 +627,17 @@ class _FormatsCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.chat_bubble_outline,
-                    color: theme.colorScheme.primary),
+                Icon(
+                  Icons.chat_bubble_outline,
+                  color: theme.colorScheme.primary,
+                ),
                 const SizedBox(width: 8),
-                Text('Formatos de Mensagem',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold)),
+                Text(
+                  'Formatos de Mensagem',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -635,8 +660,7 @@ class _FormatsCard extends StatelessWidget {
 
             // Meshtastic note (secondary)
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: theme.colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(8),
@@ -714,25 +738,26 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
   bool _resultOk = false;
 
   Future<void> _configure() async {
-    final service   = ref.read(radioServiceProvider);
-    final channels  = ref.read(channelsProvider);
-    final config    = ref.read(plan333ConfigProvider);
+    final service = ref.read(radioServiceProvider);
+    final channels = ref.read(channelsProvider);
+    final config = ref.read(plan333ConfigProvider);
 
     if (service == null) return;
 
-    setState(() { _loading = true; _resultMessage = null; });
+    setState(() {
+      _loading = true;
+      _resultMessage = null;
+    });
 
     try {
       // Find the slot: existing #plano333 slot → first empty slot → slot 1.
-      int slot = channels
-          .where((c) => c.name == Plan333Service.meshCoreHashtag)
-          .map((c) => c.index)
-          .firstOrNull
-          ?? channels
-              .where((c) => c.isEmpty)
+      int slot =
+          channels
+              .where((c) => c.name == Plan333Service.meshCoreHashtag)
               .map((c) => c.index)
-              .firstOrNull
-          ?? 1;
+              .firstOrNull ??
+          channels.where((c) => c.isEmpty).map((c) => c.index).firstOrNull ??
+          1;
 
       await service.setChannel(
         slot,
@@ -769,11 +794,11 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme       = Theme.of(context);
-    final connState   = ref.watch(connectionProvider);
-    final channels    = ref.watch(channelsProvider);
+    final theme = Theme.of(context);
+    final connState = ref.watch(connectionProvider);
+    final channels = ref.watch(channelsProvider);
     final isConnected = connState == TransportState.connected;
-    final alreadySet  = channels.any(
+    final alreadySet = channels.any(
       (c) => c.name == Plan333Service.meshCoreHashtag,
     );
 
@@ -801,16 +826,18 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
               const SizedBox(width: 8),
               Text(
                 'Canal MeshCore  #plano333',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
             'Adiciona o canal ao rádio ligado ou consulte os dados manualmente.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -819,25 +846,28 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
             width: double.infinity,
             child: FilledButton.icon(
               onPressed: _loading || !isConnected ? null : _configure,
-              icon: _loading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.black87),
-                    )
-                  : Icon(
-                      alreadySet ? Icons.sync : Icons.add_circle_outline,
-                      size: 18,
-                    ),
+              icon:
+                  _loading
+                      ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.black87,
+                        ),
+                      )
+                      : Icon(
+                        alreadySet ? Icons.sync : Icons.add_circle_outline,
+                        size: 18,
+                      ),
               label: Text(
                 !isConnected
                     ? 'Rádio não ligado'
                     : _loading
-                        ? 'A configurar...'
-                        : alreadySet
-                            ? 'Re-configurar no Rádio'
-                            : 'Adicionar ao Rádio',
+                    ? 'A configurar...'
+                    : alreadySet
+                    ? 'Re-configurar no Rádio'
+                    : 'Adicionar ao Rádio',
               ),
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -854,18 +884,20 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
                 Icon(
                   _resultOk ? Icons.check_circle : Icons.error_outline,
                   size: 14,
-                  color: _resultOk
-                      ? const Color(0xFF00E676)
-                      : theme.colorScheme.error,
+                  color:
+                      _resultOk
+                          ? const Color(0xFF00E676)
+                          : theme.colorScheme.error,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     _resultMessage!,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: _resultOk
-                          ? const Color(0xFF00E676)
-                          : theme.colorScheme.error,
+                      color:
+                          _resultOk
+                              ? const Color(0xFF00E676)
+                              : theme.colorScheme.error,
                     ),
                   ),
                 ),
@@ -895,7 +927,8 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
             borderRadius: BorderRadius.circular(6),
             onTap: () {
               Clipboard.setData(
-                  const ClipboardData(text: Plan333Service.reportUrl));
+                const ClipboardData(text: Plan333Service.reportUrl),
+              );
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('URL do relatório copiado'),
@@ -907,8 +940,11 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  Icon(Icons.bar_chart,
-                      size: 14, color: theme.colorScheme.primary),
+                  Icon(
+                    Icons.bar_chart,
+                    size: 14,
+                    color: theme.colorScheme.primary,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -919,8 +955,11 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
                       ),
                     ),
                   ),
-                  Icon(Icons.copy_outlined,
-                      size: 14, color: theme.colorScheme.primary),
+                  Icon(
+                    Icons.copy_outlined,
+                    size: 14,
+                    color: theme.colorScheme.primary,
+                  ),
                 ],
               ),
             ),
@@ -951,9 +990,12 @@ class _ChannelConfigRow extends StatelessWidget {
       children: [
         SizedBox(
           width: 80,
-          child: Text(label,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          child: Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
         ),
         Expanded(
           child: Text(
@@ -1025,11 +1067,13 @@ class _CbPmrCard extends StatelessWidget {
               children: [
                 Icon(Icons.radio, color: color, size: 20),
                 const SizedBox(width: 8),
-                Text('CB / PMR 446',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                    )),
+                Text(
+                  'CB / PMR 446',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
                 const Spacer(),
                 if (cbActive)
                   _Pill(label: '● À ESCUTA AGORA', color: color)
@@ -1074,18 +1118,20 @@ class _CbPmrCard extends StatelessWidget {
             Wrap(
               spacing: 6,
               runSpacing: 6,
-              children: Plan333Service.windowHours.map((h) {
-                final label = '${h.toString().padLeft(2, '0')}:00';
-                final isNext = nextCb.hour == h && nextCb.day == now.day;
-                return _TimeChip(label: label, highlight: isNext);
-              }).toList(),
+              children:
+                  Plan333Service.windowHours.map((h) {
+                    final label = '${h.toString().padLeft(2, '0')}:00';
+                    final isNext = nextCb.hour == h && nextCb.day == now.day;
+                    return _TimeChip(label: label, highlight: isNext);
+                  }).toList(),
             ),
 
             const SizedBox(height: 6),
             Text(
               '±3 min  •  Treino: Sábados 21:00  •  Sem tom (PMR)',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -1107,8 +1153,7 @@ class _CbPmrCard extends StatelessWidget {
 // ============================================================================
 
 class _NotificationsCard extends StatelessWidget {
-  const _NotificationsCard(
-      {required this.enabled, required this.onChanged});
+  const _NotificationsCard({required this.enabled, required this.onChanged});
   final bool enabled;
   final void Function(bool) onChanged;
 
@@ -1123,19 +1168,25 @@ class _NotificationsCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.notifications_active,
-                    color: theme.colorScheme.primary),
+                Icon(
+                  Icons.notifications_active,
+                  color: theme.colorScheme.primary,
+                ),
                 const SizedBox(width: 8),
-                Text('Alertas CB/PMR',
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.bold)),
+                Text(
+                  'Alertas CB/PMR',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Lembretes de janela CB/PMR'),
-              subtitle:
-                  const Text('Notificação 3 min antes de cada janela (8×/dia)'),
+              subtitle: const Text(
+                'Notificação 3 min antes de cada janela (8×/dia)',
+              ),
               value: enabled,
               onChanged: onChanged,
             ),
@@ -1171,20 +1222,28 @@ class _Pill extends StatelessWidget {
         color: color.withAlpha(border ? 0 : 30),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-            color: border ? color.withAlpha(80) : color.withAlpha(120)),
+          color: border ? color.withAlpha(80) : color.withAlpha(120),
+        ),
       ),
       child: Text(
         label,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
-            color: color, fontSize: 11, fontWeight: FontWeight.bold),
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
 }
 
 class _PhaseChip extends StatelessWidget {
-  const _PhaseChip(
-      {required this.label, required this.active, required this.color});
+  const _PhaseChip({
+    required this.label,
+    required this.active,
+    required this.color,
+  });
   final String label;
   final bool active;
   final Color color;
@@ -1197,7 +1256,8 @@ class _PhaseChip extends StatelessWidget {
         color: active ? color.withAlpha(40) : Colors.transparent,
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
-            color: active ? color.withAlpha(140) : Colors.grey.withAlpha(80)),
+          color: active ? color.withAlpha(140) : Colors.grey.withAlpha(80),
+        ),
       ),
       child: Text(
         label,
@@ -1222,16 +1282,21 @@ class _FreqChip extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
         const SizedBox(width: 4),
-        Text(freq,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: AppTheme.primary,
-              fontFamily: 'monospace',
-            )),
+        Text(
+          freq,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: AppTheme.primary,
+            fontFamily: 'monospace',
+          ),
+        ),
       ],
     );
   }
@@ -1266,8 +1331,11 @@ class _TimeChip extends StatelessWidget {
 }
 
 class _PhraseRow extends StatelessWidget {
-  const _PhraseRow(
-      {required this.label, required this.phase, required this.phrase});
+  const _PhraseRow({
+    required this.label,
+    required this.phase,
+    required this.phrase,
+  });
   final String label;
   final String phase;
   final String phrase;
@@ -1280,13 +1348,20 @@ class _PhraseRow extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(label,
-                style: theme.textTheme.labelMedium?.copyWith(
-                    color: AppTheme.primary, fontWeight: FontWeight.bold)),
+            Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: AppTheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const Spacer(),
-            Text(phase,
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            Text(
+              phase,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 4),
@@ -1317,8 +1392,9 @@ class _InlinePhrase extends StatelessWidget {
           Expanded(
             child: SelectableText(
               text,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(fontFamily: 'monospace'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontFamily: 'monospace',
+              ),
             ),
           ),
           InkWell(
