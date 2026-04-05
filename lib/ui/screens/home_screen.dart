@@ -29,6 +29,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   /// Returns the tab index whose prefix matches [path].
   static int _tabIndexForPath(String path) {
+    // Private chat and room screens are launched from the Contacts tab.
+    if (path.startsWith('/chat/') || path.startsWith('/room/')) return 1;
     for (var i = 0; i < _tabs.length; i++) {
       if (path == _tabs[i] || path.startsWith('${_tabs[i]}/')) return i;
     }
