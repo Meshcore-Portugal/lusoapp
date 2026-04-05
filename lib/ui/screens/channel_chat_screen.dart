@@ -368,6 +368,34 @@ class _HeardBadge extends StatelessWidget {
 Color _pillTextColor(Color bg) =>
     bg.computeLuminance() > 0.45 ? Colors.black : Colors.white;
 
+/// Replaces lone UTF-16 surrogate code units with U+FFFD so that the Flutter
+/// text engine never receives a malformed UTF-16 string.  Lone surrogates can
+/// arrive when radio firmware sends raw binary inside a text field.
+String _sanitizeUtf16(String s) {
+  final buf = StringBuffer();
+  for (var i = 0; i < s.length; i++) {
+    final c = s.codeUnitAt(i);
+    if (c >= 0xD800 && c <= 0xDBFF) {
+      // High surrogate — valid only if immediately followed by a low surrogate.
+      if (i + 1 < s.length) {
+        final next = s.codeUnitAt(i + 1);
+        if (next >= 0xDC00 && next <= 0xDFFF) {
+          buf.writeCharCode(c);
+          buf.writeCharCode(next);
+          i++;
+          continue;
+        }
+      }
+      buf.writeCharCode(0xFFFD); // unpaired high surrogate
+    } else if (c >= 0xDC00 && c <= 0xDFFF) {
+      buf.writeCharCode(0xFFFD); // unpaired low surrogate
+    } else {
+      buf.writeCharCode(c);
+    }
+  }
+  return buf.toString();
+}
+
 /// Renders text with all `@[name]` mentions as pill chips anywhere in the message.
 /// Mentions matching [selfName] use [selfMentionColor] (or the theme tertiary);
 /// all other mentions use [otherMentionColor] (or the theme primary).
@@ -379,6 +407,7 @@ Widget _buildMentionText(
   Color? selfMentionColor,
   Color? otherMentionColor,
 }) {
+  text = _sanitizeUtf16(text);
   final pattern = RegExp(r'@\[([^\]]+)\]');
   final matches = pattern.allMatches(text).toList();
   if (matches.isEmpty) return Text(text, style: style);
@@ -1082,7 +1111,7 @@ class _ReplyStrip extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  message.text,
+                  _sanitizeUtf16(message.text),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(

@@ -145,7 +145,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                 salas: rooms.length,
                 sensores: sensors.length,
               ),
-              onChanged: (f) => ref.read(contactFilterProvider.notifier).state = f,
+              onChanged: (f) => ref.read(contactFilterProvider.notifier).set(f),
             ),
 
             // Search bar + sort button
@@ -190,7 +190,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                     ),
                     tooltip: 'Ordenar',
                     initialValue: sort,
-                    onSelected: (s) => ref.read(contactSortProvider.notifier).state = s,
+                    onSelected: (s) => ref.read(contactSortProvider.notifier).set(s),
                     itemBuilder:
                         (_) => [
                           const PopupMenuItem(

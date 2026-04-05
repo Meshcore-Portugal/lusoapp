@@ -6,6 +6,32 @@ import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 import '../theme.dart';
 
+/// Replaces lone UTF-16 surrogate code units with U+FFFD.
+/// Lone surrogates crash the Flutter text engine ("string is not well-formed UTF-16").
+String _sanitizeUtf16(String s) {
+  final buf = StringBuffer();
+  for (var i = 0; i < s.length; i++) {
+    final c = s.codeUnitAt(i);
+    if (c >= 0xD800 && c <= 0xDBFF) {
+      if (i + 1 < s.length) {
+        final next = s.codeUnitAt(i + 1);
+        if (next >= 0xDC00 && next <= 0xDFFF) {
+          buf.writeCharCode(c);
+          buf.writeCharCode(next);
+          i++;
+          continue;
+        }
+      }
+      buf.writeCharCode(0xFFFD);
+    } else if (c >= 0xDC00 && c <= 0xDFFF) {
+      buf.writeCharCode(0xFFFD);
+    } else {
+      buf.writeCharCode(c);
+    }
+  }
+  return buf.toString();
+}
+
 // ---------------------------------------------------------------------------
 // Room screen — login gate + chat
 // ---------------------------------------------------------------------------
@@ -512,7 +538,7 @@ class _RoomMessageBubble extends StatelessWidget {
                   ),
                 ),
               ),
-            Text(message.text),
+            Text(_sanitizeUtf16(message.text)),
             const SizedBox(height: 4),
             Row(
               mainAxisSize: MainAxisSize.min,

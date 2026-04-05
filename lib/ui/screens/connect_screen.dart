@@ -279,7 +279,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       _connectingTarget = target;
       _cachedContactCount = ref.read(contactsProvider).length;
       _cachedChannelCount =
-          ref.read(channelsProvider).where((c) => c.name.isNotEmpty).length;
+          ref.read(channelsProvider).where((c) => !c.isEmpty).length;
     });
     final connection = ref.read(connectionProvider.notifier);
     final name = target.device.name;
@@ -333,7 +333,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       );
       _cachedContactCount = ref.read(contactsProvider).length;
       _cachedChannelCount =
-          ref.read(channelsProvider).where((c) => c.name.isNotEmpty).length;
+          ref.read(channelsProvider).where((c) => !c.isEmpty).length;
     });
     if (last.type == 'ble' && !_checkBluetoothOn()) return;
 
@@ -403,7 +403,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                   channelCount:
                       ref
                           .watch(channelsProvider)
-                          .where((c) => c.name.isNotEmpty)
+                          .where((c) => !c.isEmpty)
                           .length,
                   cachedContactCount: _cachedContactCount,
                   cachedChannelCount: _cachedChannelCount,

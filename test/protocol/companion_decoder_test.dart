@@ -659,41 +659,106 @@ void main() {
     });
   });
 
-  group('StatsResponse (0x18)', () {
-    test('parses sub_type and variable-length data', () {
-      final statsData = [0x01, 0x02, 0x03, 0x04];
+  group('Stats responses (0x18)', () {
+    test('statsTypeCore (0x00) parses battery, uptime, errors, queueLen', () {
+      // batteryMv=4100 (0x1004 LE), uptimeSecs=3600 (0x100E0000 LE),
+      // errors=0, queueLen=2
+      final d = ByteData(9)
+        ..setUint16(0, 4100, Endian.little)
+        ..setUint32(2, 3600, Endian.little)
+        ..setUint16(6, 0, Endian.little)
+        ..setUint8(8, 2);
       final payload = Uint8List.fromList([
         respStats,
-        0x05, // sub_type
-        ...statsData,
+        statsTypeCore, // 0x00
+        ...d.buffer.asUint8List(),
       ]);
 
       final result = CompanionDecoder.decode(payload);
 
-      expect(result, isA<StatsResponse>());
-      final resp = result as StatsResponse;
-      expect(resp.subType, 0x05);
-      expect(resp.data.length, 4);
-      expect(resp.data[0], 0x01);
+      expect(result, isA<StatsCoreResponse>());
+      final resp = result as StatsCoreResponse;
+      expect(resp.batteryMv, 4100);
+      expect(resp.uptimeSecs, 3600);
+      expect(resp.errors, 0);
+      expect(resp.queueLen, 2);
     });
 
-    test('handles empty data after sub_type', () {
-      final payload = Uint8List.fromList([respStats, 0x02]);
+    test('statsTypeCore returns null when payload too short', () {
+      final payload = Uint8List.fromList([
+        respStats,
+        statsTypeCore,
+        0x01, 0x02, // only 2 bytes — need 9
+      ]);
+
+      expect(CompanionDecoder.decode(payload), isNull);
+    });
+
+    test('statsTypeRadio (0x01) parses radio fields', () {
+      final d = ByteData(12)
+        ..setInt16(0, -90, Endian.little)   // noiseFloor
+        ..setInt8(2, -80)                   // lastRssi
+        ..setInt8(3, 20)                    // lastSnr raw (20/4 = 5.0 dB)
+        ..setUint32(4, 120, Endian.little)  // txAirSecs
+        ..setUint32(8, 300, Endian.little); // rxAirSecs
+      final payload = Uint8List.fromList([
+        respStats,
+        statsTypeRadio, // 0x01
+        ...d.buffer.asUint8List(),
+      ]);
 
       final result = CompanionDecoder.decode(payload);
 
-      expect(result, isA<StatsResponse>());
-      final resp = result as StatsResponse;
-      expect(resp.subType, 0x02);
-      expect(resp.data.length, 0);
+      expect(result, isA<StatsRadioResponse>());
+      final resp = result as StatsRadioResponse;
+      expect(resp.noiseFloor, -90);
+      expect(resp.lastRssi, -80);
+      expect(resp.lastSnrDb, closeTo(5.0, 0.01));
+      expect(resp.txAirSecs, 120);
+      expect(resp.rxAirSecs, 300);
+    });
+
+    test('statsTypePackets (0x02) parses packet counters', () {
+      final d = ByteData(24);
+      d.setUint32(0, 10, Endian.little);  // recv
+      d.setUint32(4, 5, Endian.little);   // sent
+      d.setUint32(8, 3, Endian.little);   // floodTx
+      d.setUint32(12, 2, Endian.little);  // directTx
+      d.setUint32(16, 8, Endian.little);  // floodRx
+      d.setUint32(20, 2, Endian.little);  // directRx
+      final payload = Uint8List.fromList([
+        respStats,
+        statsTypePackets, // 0x02
+        ...d.buffer.asUint8List(),
+      ]);
+
+      final result = CompanionDecoder.decode(payload);
+
+      expect(result, isA<StatsPacketsResponse>());
+      final resp = result as StatsPacketsResponse;
+      expect(resp.recv, 10);
+      expect(resp.sent, 5);
+      expect(resp.floodTx, 3);
+      expect(resp.directTx, 2);
+      expect(resp.floodRx, 8);
+      expect(resp.directRx, 2);
+      expect(resp.recvErrors, isNull); // no extra bytes
+    });
+
+    test('returns null for unknown sub_type', () {
+      final payload = Uint8List.fromList([
+        respStats,
+        0xFF, // unknown sub_type
+        0x01, 0x02, 0x03, 0x04,
+      ]);
+
+      expect(CompanionDecoder.decode(payload), isNull);
     });
 
     test('returns null when no sub_type present', () {
       final payload = Uint8List.fromList([respStats]);
 
-      final result = CompanionDecoder.decode(payload);
-
-      expect(result, isNull);
+      expect(CompanionDecoder.decode(payload), isNull);
     });
   });
 

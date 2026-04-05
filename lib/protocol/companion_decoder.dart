@@ -476,18 +476,15 @@ class CompanionDecoder {
     if (data.length < 32) return null;
     final pubKey = Uint8List.fromList(data.sublist(0, 32));
 
-    // pushNewAdvert (0x8A) uses the full writeContactRespFrame layout —
-    // identical to respContact: type[32] flags[33] pathLen[34] path[35..98] name[99..130]
-    if (isNew && data.length >= 100) {
-      final type = data[32];
-      final nameEnd = _findNullTerminator(data, 99, 131);
-      final name = utf8.decode(data.sublist(99, nameEnd), allowMalformed: true);
-      return AdvertPush(pubKey, type, name.trim(), isNew: true);
+    // Both pushAdvert (0x80) and pushNewAdvert (0x8A) use the same layout:
+    // pubkey[0..31] type[32] name[33..end] (null-terminated or end-of-data)
+    if (data.length < 33) {
+      return AdvertPush(pubKey, 0, '', isNew: isNew);
     }
-
-    // pushAdvert (0x80): only 32-byte pub_key — contact already known on radio,
-    // no name/type is transmitted.
-    return AdvertPush(pubKey, 0, '', isNew: false);
+    final type = data[32];
+    final nameEnd = _findNullTerminator(data, 33, data.length);
+    final name = utf8.decode(data.sublist(33, nameEnd), allowMalformed: true);
+    return AdvertPush(pubKey, type, name.trim(), isNew: isNew);
   }
 
   static BinaryResponsePush? _parseBinaryResponse(Uint8List data) {

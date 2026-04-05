@@ -228,8 +228,14 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     _responseSub = service.responses.listen((response) {
       switch (response) {
         case ContactResponse():
-          _ref.read(contactsProvider.notifier).refresh(service.contacts);
+          // Do NOT refresh here — service.contacts is still partial (the radio
+          // sends contacts one-by-one after clearing its list on ContactsStart).
+          // Refreshing on each individual response would drop all locally-cached
+          // contacts and make the provider count drop to 1, 2, 3... during sync,
+          // breaking the connect-screen "+N new" badge.  Wait for EndContacts.
+          break;
         case EndContactsResponse():
+          // Full list has arrived — replace provider state with final radio list.
           _ref.read(contactsProvider.notifier).refresh(service.contacts);
           _pushWidget();
         case ContactDeletedPush():
@@ -1380,23 +1386,65 @@ final packetHeardProvider =
       (ref) => PacketHeardNotifier(),
     );
 
-// Contacts screen persistent UI state
+// ---------------------------------------------------------------------------
+// Contacts screen persistent UI state (survives app restarts)
+// ---------------------------------------------------------------------------
+
 enum ContactFilter { todos, favoritos, companheiros, repetidores, salas, sensores }
 enum ContactSort { nome, ouvidoRecentemente, ultimaMensagem }
 
-final contactFilterProvider = StateProvider<ContactFilter>(
-  (_) => ContactFilter.todos,
-);
-final contactSortProvider = StateProvider<ContactSort>(
-  (_) => ContactSort.ouvidoRecentemente,
-);
+class _ContactFilterNotifier extends StateNotifier<ContactFilter> {
+  _ContactFilterNotifier() : super(ContactFilter.todos) { _load(); }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final idx = prefs.getInt('contacts_filter');
+    if (idx != null && idx >= 0 && idx < ContactFilter.values.length) {
+      state = ContactFilter.values[idx];
+    }
+  }
+
+  Future<void> set(ContactFilter f) async {
+    state = f;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('contacts_filter', f.index);
+  }
+}
+
+class _ContactSortNotifier extends StateNotifier<ContactSort> {
+  _ContactSortNotifier() : super(ContactSort.ouvidoRecentemente) { _load(); }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final idx = prefs.getInt('contacts_sort');
+    if (idx != null && idx >= 0 && idx < ContactSort.values.length) {
+      state = ContactSort.values[idx];
+    }
+  }
+
+  Future<void> set(ContactSort s) async {
+    state = s;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('contacts_sort', s.index);
+  }
+}
+
+final contactFilterProvider =
+    StateNotifierProvider<_ContactFilterNotifier, ContactFilter>(
+      (_) => _ContactFilterNotifier(),
+    );
+
+final contactSortProvider =
+    StateNotifierProvider<_ContactSortNotifier, ContactSort>(
+      (_) => _ContactSortNotifier(),
+    );
 
 // ---------------------------------------------------------------------------
 // Mention pill colours (persisted to SharedPreferences)
 // ---------------------------------------------------------------------------
 
 class MentionColorNotifier extends StateNotifier<Color> {
-  MentionColorNotifier(Color defaultColor, this._key) : super(defaultColor) {
+  MentionColorNotifier(super.defaultColor, this._key) {
     _load();
   }
   final String _key;
