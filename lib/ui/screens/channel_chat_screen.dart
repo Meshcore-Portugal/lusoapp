@@ -124,6 +124,8 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
     });
 
     final selfName = ref.watch(selfInfoProvider)?.name;
+    final selfMentionColor = ref.watch(selfMentionColorProvider);
+    final otherMentionColor = ref.watch(otherMentionColorProvider);
     final channels = ref.watch(channelsProvider);
     final allMessages = ref.watch(messagesProvider);
     final channelMessages =
@@ -198,6 +200,8 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
                       return _MessageBubble(
                         message: msg,
                         selfName: selfName,
+                        selfMentionColor: selfMentionColor,
+                        otherMentionColor: otherMentionColor,
                         onReply:
                             msg.isOutgoing
                                 ? null
@@ -360,14 +364,20 @@ class _HeardBadge extends StatelessWidget {
 // Shared widgets
 // ---------------------------------------------------------------------------
 
+/// Returns black or white for readable text on [bg].
+Color _pillTextColor(Color bg) =>
+    bg.computeLuminance() > 0.45 ? Colors.black : Colors.white;
+
 /// Renders text with all `@[name]` mentions as pill chips anywhere in the message.
-/// Mentions matching [selfName] use the tertiary colour for emphasis;
-/// all other mentions use the primary colour.
+/// Mentions matching [selfName] use [selfMentionColor] (or the theme tertiary);
+/// all other mentions use [otherMentionColor] (or the theme primary).
 Widget _buildMentionText(
   String text,
   ThemeData theme,
   TextStyle? style, {
   String? selfName,
+  Color? selfMentionColor,
+  Color? otherMentionColor,
 }) {
   final pattern = RegExp(r'@\[([^\]]+)\]');
   final matches = pattern.allMatches(text).toList();
@@ -386,9 +396,10 @@ Widget _buildMentionText(
     final isSelf =
         selfName != null &&
         name.trim().toLowerCase() == selfName.trim().toLowerCase();
-    final pillColor =
-        isSelf ? theme.colorScheme.tertiary : theme.colorScheme.primary;
-    final textColor = isSelf ? theme.colorScheme.onTertiary : Colors.white;
+    final pillColor = isSelf
+        ? (selfMentionColor ?? theme.colorScheme.tertiary)
+        : (otherMentionColor ?? theme.colorScheme.primary);
+    final textColor = _pillTextColor(pillColor);
     spans.add(
       WidgetSpan(
         alignment: PlaceholderAlignment.middle,
@@ -420,10 +431,18 @@ Widget _buildMentionText(
 }
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.message, this.onReply, this.selfName});
+  const _MessageBubble({
+    required this.message,
+    this.onReply,
+    this.selfName,
+    this.selfMentionColor,
+    this.otherMentionColor,
+  });
   final ChatMessage message;
   final VoidCallback? onReply;
   final String? selfName;
+  final Color? selfMentionColor;
+  final Color? otherMentionColor;
 
   static const _avatarPalette = [
     Color(0xFF7B61FF),
@@ -631,6 +650,8 @@ class _MessageBubble extends StatelessWidget {
                     theme,
                     theme.textTheme.bodyMedium,
                     selfName: selfName,
+                    selfMentionColor: selfMentionColor,
+                    otherMentionColor: otherMentionColor,
                   ),
                 ),
                 Padding(
@@ -742,6 +763,8 @@ class _MessageBubble extends StatelessWidget {
                     theme,
                     theme.textTheme.bodyMedium,
                     selfName: selfName,
+                    selfMentionColor: selfMentionColor,
+                    otherMentionColor: otherMentionColor,
                   ),
                 ),
                 Padding(

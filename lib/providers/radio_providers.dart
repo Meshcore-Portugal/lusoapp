@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart' show Color;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1389,3 +1390,55 @@ final contactFilterProvider = StateProvider<ContactFilter>(
 final contactSortProvider = StateProvider<ContactSort>(
   (_) => ContactSort.ouvidoRecentemente,
 );
+
+// ---------------------------------------------------------------------------
+// Mention pill colours (persisted to SharedPreferences)
+// ---------------------------------------------------------------------------
+
+class MentionColorNotifier extends StateNotifier<Color> {
+  MentionColorNotifier(Color defaultColor, this._key) : super(defaultColor) {
+    _load();
+  }
+  final String _key;
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final val = prefs.getInt(_key);
+    if (val != null) {
+      state = Color.fromARGB(
+        (val >> 24) & 0xFF,
+        (val >> 16) & 0xFF,
+        (val >> 8) & 0xFF,
+        val & 0xFF,
+      );
+    }
+  }
+
+  Future<void> setColor(Color color) async {
+    state = color;
+    final prefs = await SharedPreferences.getInstance();
+    final a = (color.a * 255).round();
+    final r = (color.r * 255).round();
+    final g = (color.g * 255).round();
+    final b = (color.b * 255).round();
+    await prefs.setInt(_key, (a << 24) | (r << 16) | (g << 8) | b);
+  }
+}
+
+/// Pill background for @[YourName] (you are mentioned).  Default: amber.
+final selfMentionColorProvider =
+    StateNotifierProvider<MentionColorNotifier, Color>(
+      (ref) => MentionColorNotifier(
+        const Color.fromARGB(0xFF, 0xFF, 0xB3, 0x47), // amber
+        'mention_color_self',
+      ),
+    );
+
+/// Pill background for @[OtherName] (someone else mentioned).  Default: orange.
+final otherMentionColorProvider =
+    StateNotifierProvider<MentionColorNotifier, Color>(
+      (ref) => MentionColorNotifier(
+        const Color.fromARGB(0xFF, 0xFF, 0x6B, 0x00), // orange
+        'mention_color_other',
+      ),
+    );
