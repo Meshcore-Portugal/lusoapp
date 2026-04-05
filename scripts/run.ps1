@@ -88,6 +88,13 @@ function Invoke-Run {
     }
 }
 
+function Invoke-RunWeb {
+    $port = if ($Args.Count -gt 0) { $Args[0] } else { "8080" }
+    Log "Running app on web-server (port $port)..."
+    Log "Open http://localhost:$port in your browser"
+    flutter run -d web-server --web-port $port
+}
+
 function Invoke-BuildApk {
     Log "Building release APK..."
     flutter build apk --release
@@ -163,6 +170,8 @@ function Show-Help {
     Write-Host "  run            Run on connected device (debug)"
     Write-Host "  run release    Run in release mode"
     Write-Host "  run profile    Run in profile mode"
+    Write-Host "  web            Run web-server (avoids browser launch issues)"
+    Write-Host "  web <port>     Run web-server on custom port (default 8080)"
     Write-Host "  build          Build release APK"
     Write-Host "  build-apk      Build release APK"
     Write-Host "  build-aab      Build release App Bundle (Google Play)"
@@ -178,7 +187,9 @@ function Show-Help {
     Write-Host ""
     Write-Host "Examples:" -ForegroundColor Yellow
     Write-Host "  .\scripts\run.ps1 setup        # First time"
-    Write-Host "  .\scripts\run.ps1 run           # Debug run"
+    Write-Host "  .\scripts\run.ps1 run           # Debug run (pick device)
+  .\scripts\run.ps1 web           # Web server on port 8080
+  .\scripts\run.ps1 web 3000      # Web server on port 3000"
     Write-Host "  .\scripts\run.ps1 build         # Release APK"
     Write-Host "  .\scripts\run.ps1 build-win     # Windows desktop"
     Write-Host ""
@@ -191,6 +202,7 @@ Test-Flutter
 try {
     switch ($Command) {
         "run"         { Invoke-Run }
+        "web"         { Invoke-RunWeb }
         "build"       { Invoke-BuildApk }
         "build-apk"  { Invoke-BuildApk }
         "build-aab"  { Invoke-BuildAab }

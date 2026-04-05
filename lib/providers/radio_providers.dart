@@ -1378,3 +1378,14 @@ final packetHeardProvider =
     StateNotifierProvider<PacketHeardNotifier, Map<String, int>>(
       (ref) => PacketHeardNotifier(),
     );
+
+// Contacts screen persistent UI state
+enum ContactFilter { todos, favoritos, companheiros, repetidores, salas, sensores }
+enum ContactSort { nome, ouvidoRecentemente, ultimaMensagem }
+
+final contactFilterProvider = StateProvider<ContactFilter>(
+  (_) => ContactFilter.todos,
+);
+final contactSortProvider = StateProvider<ContactSort>(
+  (_) => ContactSort.ouvidoRecentemente,
+);

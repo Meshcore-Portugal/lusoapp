@@ -463,10 +463,130 @@ class _MessageBubble extends StatelessWidget {
       if (hops <= 0) {
         parts.add('Directo');
       } else {
-        parts.add('Ouvido $hops Repetidor${hops > 1 ? 'es' : ''}');
+        parts.add('$hops hop${hops > 1 ? 's' : ''}');
       }
     }
     return parts.join(' • ');
+  }
+
+  void _showMsgContextMenu(BuildContext context, ChatMessage msg) {
+    final theme = Theme.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (!msg.isOutgoing && onReply != null)
+              ListTile(
+                leading: const Icon(Icons.reply),
+                title: const Text('Responder'),
+                onTap: () { Navigator.pop(context); onReply!(); },
+              ),
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('Copiar texto'),
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: msg.text));
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Texto copiado'),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+              },
+            ),
+            if (msg.pathLen != null || msg.snr != null)
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('Detalhes'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showMsgDetails(context, msg, theme);
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMsgDetails(BuildContext context, ChatMessage msg, ThemeData theme) {
+    final time = DateTime.fromMillisecondsSinceEpoch(msg.timestamp * 1000);
+    final timeStr =
+        '${time.year}-${time.month.toString().padLeft(2, '0')}-${time.day.toString().padLeft(2, '0')} '
+        '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}';
+    int? hops;
+    if (msg.pathLen != null) {
+      hops = msg.pathLen == 0xFF ? 0 : msg.pathLen! & 0x3F;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.info_outline, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Detalhes da mensagem',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 20),
+              _DetailRow(
+                icon: Icons.access_time,
+                label: 'Hora',
+                value: timeStr,
+                theme: theme,
+              ),
+              if (hops != null)
+                _DetailRow(
+                  icon: Icons.route,
+                  label: 'Caminho',
+                  value: hops == 0 ? 'Directo' : '$hops hop${hops > 1 ? 's' : ''}',
+                  theme: theme,
+                ),
+              if (msg.snr != null)
+                _DetailRow(
+                  icon: Icons.signal_cellular_alt,
+                  label: 'SNR',
+                  value: '${msg.snr!.toStringAsFixed(1)} dB',
+                  theme: theme,
+                ),
+              if (msg.isChannel && msg.heardCount > 0)
+                _DetailRow(
+                  icon: Icons.cell_tower,
+                  label: 'Repetidores',
+                  value: '${msg.heardCount}',
+                  theme: theme,
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -480,69 +600,72 @@ class _MessageBubble extends StatelessWidget {
     final metaLine = meta.isNotEmpty ? '$timeStr • $meta' : timeStr;
 
     if (isMe) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 2),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Container(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.72,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(4),
-                    bottomLeft: Radius.circular(16),
-                    bottomRight: Radius.circular(16),
+      return GestureDetector(
+        onLongPress: () => _showMsgContextMenu(context, message),
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.72,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(4),
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: _buildMentionText(
+                    message.text,
+                    theme,
+                    theme.textTheme.bodyMedium,
+                    selfName: selfName,
                   ),
                 ),
-                child: _buildMentionText(
-                  message.text,
-                  theme,
-                  theme.textTheme.bodyMedium,
-                  selfName: selfName,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(top: 3, right: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      metaLine,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withAlpha(100),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      message.confirmed ? Icons.done_all : Icons.done,
-                      size: 13,
-                      color:
-                          message.confirmed
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurface.withAlpha(130),
-                    ),
-                  ],
-                ),
-              ),
-              // Heard-by-repeaters badge — only for channel messages
-              if (message.isChannel)
                 Padding(
-                  padding: const EdgeInsets.only(top: 1, right: 4, bottom: 2),
-                  child: _HeardBadge(count: message.heardCount, theme: theme),
-                )
-              else
-                const SizedBox(height: 2),
-            ],
+                  padding: const EdgeInsets.only(top: 3, right: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        metaLine,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withAlpha(100),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        message.confirmed ? Icons.done_all : Icons.done,
+                        size: 13,
+                        color:
+                            message.confirmed
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurface.withAlpha(130),
+                      ),
+                    ],
+                  ),
+                ),
+                // Heard-by-repeaters badge — only for channel messages
+                if (message.isChannel)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1, right: 4, bottom: 2),
+                    child: _HeardBadge(count: message.heardCount, theme: theme),
+                  )
+                else
+                  const SizedBox(height: 2),
+              ],
+            ),
           ),
         ),
       );
@@ -638,10 +761,14 @@ class _MessageBubble extends StatelessWidget {
       ),
     );
 
+    final rowWithPress = GestureDetector(
+      onLongPress: () => _showMsgContextMenu(context, message),
+      child: row,
+    );
     if (onReply != null) {
-      return _SwipeToReplyWrapper(onReply: onReply!, child: row);
+      return _SwipeToReplyWrapper(onReply: onReply!, child: rowWithPress);
     }
-    return row;
+    return rowWithPress;
   }
 }
 
@@ -947,6 +1074,49 @@ class _ReplyStrip extends StatelessWidget {
             onPressed: onCancel,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Detail row helper
+// ---------------------------------------------------------------------------
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.theme,
+  });
+  final IconData icon;
+  final String label;
+  final String value;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: theme.colorScheme.primary),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),

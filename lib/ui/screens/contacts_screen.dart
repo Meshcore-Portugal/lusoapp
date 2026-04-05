@@ -14,11 +14,6 @@ import '../../providers/radio_providers.dart';
 import '../theme.dart';
 import 'qr_scanner_screen.dart';
 
-// Filter tabs
-enum _Filter { todos, favoritos, companheiros, repetidores, salas, sensores }
-
-// Sort order
-enum _Sort { nome, ouvidoRecentemente, ultimaMensagem }
 
 /// Contacts list screen with filter tabs.
 class ContactsScreen extends ConsumerStatefulWidget {
@@ -29,8 +24,6 @@ class ContactsScreen extends ConsumerStatefulWidget {
 }
 
 class _ContactsScreenState extends ConsumerState<ContactsScreen> {
-  _Filter _filter = _Filter.todos;
-  _Sort _sort = _Sort.ouvidoRecentemente;
   final _searchCtrl = TextEditingController();
   String _query = '';
 
@@ -59,6 +52,8 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final filter = ref.watch(contactFilterProvider);
+    final sort = ref.watch(contactSortProvider);
     final contacts = ref.watch(contactsProvider);
     final favorites = ref.watch(favoritesProvider);
     final messages = ref.watch(messagesProvider);
@@ -79,18 +74,18 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
             .toList();
 
     List<Contact> filtered;
-    switch (_filter) {
-      case _Filter.companheiros:
+    switch (filter) {
+      case ContactFilter.companheiros:
         filtered = chatContacts;
-      case _Filter.repetidores:
+      case ContactFilter.repetidores:
         filtered = repeaters;
-      case _Filter.salas:
+      case ContactFilter.salas:
         filtered = rooms;
-      case _Filter.sensores:
+      case ContactFilter.sensores:
         filtered = sensors;
-      case _Filter.favoritos:
+      case ContactFilter.favoritos:
         filtered = favoriteContacts;
-      case _Filter.todos:
+      case ContactFilter.todos:
         filtered = contacts;
     }
 
@@ -116,18 +111,18 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     }
 
     filtered = [...filtered];
-    switch (_sort) {
-      case _Sort.nome:
+    switch (sort) {
+      case ContactSort.nome:
         filtered.sort(
           (a, b) => a.displayName.toLowerCase().compareTo(
             b.displayName.toLowerCase(),
           ),
         );
-      case _Sort.ouvidoRecentemente:
+      case ContactSort.ouvidoRecentemente:
         filtered.sort(
           (a, b) => b.lastAdvertTimestamp.compareTo(a.lastAdvertTimestamp),
         );
-      case _Sort.ultimaMensagem:
+      case ContactSort.ultimaMensagem:
         filtered.sort((a, b) {
           final aTs = lastMsgTs[_hex6(a.publicKey)] ?? 0;
           final bTs = lastMsgTs[_hex6(b.publicKey)] ?? 0;
@@ -140,8 +135,8 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
         Column(
           children: [
             // Filter chips bar
-            _FilterBar(
-              filter: _filter,
+            ContactFilterBar(
+              filter: filter,
               counts: (
                 todos: contacts.length,
                 favoritos: favoriteContacts.length,
@@ -150,7 +145,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                 salas: rooms.length,
                 sensores: sensors.length,
               ),
-              onChanged: (f) => setState(() => _filter = f),
+              onChanged: (f) => ref.read(contactFilterProvider.notifier).state = f,
             ),
 
             // Search bar + sort button
@@ -185,29 +180,29 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                       ),
                     ),
                   ),
-                  PopupMenuButton<_Sort>(
+                  PopupMenuButton<ContactSort>(
                     icon: Icon(
                       Icons.sort,
                       color:
-                          _sort != _Sort.ouvidoRecentemente
+                          sort != ContactSort.ouvidoRecentemente
                               ? Theme.of(context).colorScheme.primary
                               : null,
                     ),
                     tooltip: 'Ordenar',
-                    initialValue: _sort,
-                    onSelected: (s) => setState(() => _sort = s),
+                    initialValue: sort,
+                    onSelected: (s) => ref.read(contactSortProvider.notifier).state = s,
                     itemBuilder:
                         (_) => [
                           const PopupMenuItem(
-                            value: _Sort.nome,
+                            value: ContactSort.nome,
                             child: Text('Nome (A-Z)'),
                           ),
                           const PopupMenuItem(
-                            value: _Sort.ouvidoRecentemente,
+                            value: ContactSort.ouvidoRecentemente,
                             child: Text('Ouvido recentemente'),
                           ),
                           const PopupMenuItem(
-                            value: _Sort.ultimaMensagem,
+                            value: ContactSort.ultimaMensagem,
                             child: Text('Última mensagem'),
                           ),
                         ],
@@ -221,7 +216,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
               child:
                   filtered.isEmpty
                       ? _EmptyState(
-                        filter: _filter,
+                        filter: filter,
                         onAdvert:
                             () => ref
                                 .read(radioServiceProvider)
@@ -293,16 +288,16 @@ typedef _Counts =
       int sensores,
     });
 
-class _FilterBar extends StatelessWidget {
-  const _FilterBar({
+class ContactFilterBar extends StatelessWidget {
+  const ContactFilterBar({
     required this.filter,
     required this.counts,
     required this.onChanged,
   });
 
-  final _Filter filter;
+  final ContactFilter filter;
   final _Counts counts;
-  final ValueChanged<_Filter> onChanged;
+  final ValueChanged<ContactFilter> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -312,28 +307,28 @@ class _FilterBar extends StatelessWidget {
       child: Row(
         spacing: 8,
         children: [
-          _chip(_Filter.todos, 'Todos', Icons.people, counts.todos),
-          _chip(_Filter.favoritos, 'Favoritos', Icons.star, counts.favoritos),
+          _chip(ContactFilter.todos, 'Todos', Icons.people, counts.todos),
+          _chip(ContactFilter.favoritos, 'Favoritos', Icons.star, counts.favoritos),
           _chip(
-            _Filter.companheiros,
+            ContactFilter.companheiros,
             'Companheiros',
             Icons.person,
             counts.companheiros,
           ),
           _chip(
-            _Filter.repetidores,
+            ContactFilter.repetidores,
             'Repetidores',
             Icons.cell_tower,
             counts.repetidores,
           ),
-          _chip(_Filter.salas, 'Salas', Icons.meeting_room, counts.salas),
-          _chip(_Filter.sensores, 'Sensores', Icons.sensors, counts.sensores),
+          _chip(ContactFilter.salas, 'Salas', Icons.meeting_room, counts.salas),
+          _chip(ContactFilter.sensores, 'Sensores', Icons.sensors, counts.sensores),
         ],
       ),
     );
   }
 
-  Widget _chip(_Filter f, String label, IconData icon, int count) {
+  Widget _chip(ContactFilter f, String label, IconData icon, int count) {
     final selected = filter == f;
     return FilterChip(
       selected: selected,
@@ -351,19 +346,19 @@ class _FilterBar extends StatelessWidget {
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.filter, required this.onAdvert});
-  final _Filter filter;
+  final ContactFilter filter;
   final VoidCallback onAdvert;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final (icon, msg) = switch (filter) {
-      _Filter.companheiros => (Icons.person_off, 'Sem companheiros na rede'),
-      _Filter.repetidores => (Icons.cell_tower, 'Sem repetidores na rede'),
-      _Filter.salas => (Icons.meeting_room, 'Sem salas na rede'),
-      _Filter.sensores => (Icons.sensors_off, 'Sem sensores na rede'),
-      _Filter.todos => (Icons.contacts_outlined, 'Sem contactos'),
-      _Filter.favoritos => (Icons.star_border, 'Sem favoritos'),
+      ContactFilter.companheiros => (Icons.person_off, 'Sem companheiros na rede'),
+      ContactFilter.repetidores => (Icons.cell_tower, 'Sem repetidores na rede'),
+      ContactFilter.salas => (Icons.meeting_room, 'Sem salas na rede'),
+      ContactFilter.sensores => (Icons.sensors_off, 'Sem sensores na rede'),
+      ContactFilter.todos => (Icons.contacts_outlined, 'Sem contactos'),
+      ContactFilter.favoritos => (Icons.star_border, 'Sem favoritos'),
     };
 
     return Center(

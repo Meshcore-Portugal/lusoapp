@@ -14,6 +14,13 @@ import 'storage_service.dart';
 // ---------------------------------------------------------------------------
 
 class Plan333Config {
+  factory Plan333Config.fromJson(Map<String, dynamic> json) => Plan333Config(
+    stationName: (json['station_name'] as String?) ?? '',
+    city: (json['city'] as String?) ?? '',
+    locality: (json['locality'] as String?) ?? '',
+    meshChannelIndex: (json['mesh_channel'] as int?) ?? 0,
+    autoSendCq: (json['auto_send'] as bool?) ?? false,
+  );
   const Plan333Config({
     this.stationName = '',
     this.city = '',
@@ -49,30 +56,21 @@ class Plan333Config {
     String? locality,
     int? meshChannelIndex,
     bool? autoSendCq,
-  }) =>
-      Plan333Config(
-        stationName: stationName ?? this.stationName,
-        city: city ?? this.city,
-        locality: locality ?? this.locality,
-        meshChannelIndex: meshChannelIndex ?? this.meshChannelIndex,
-        autoSendCq: autoSendCq ?? this.autoSendCq,
-      );
+  }) => Plan333Config(
+    stationName: stationName ?? this.stationName,
+    city: city ?? this.city,
+    locality: locality ?? this.locality,
+    meshChannelIndex: meshChannelIndex ?? this.meshChannelIndex,
+    autoSendCq: autoSendCq ?? this.autoSendCq,
+  );
 
   Map<String, dynamic> toJson() => {
-        'station_name': stationName,
-        'city': city,
-        'locality': locality,
-        'mesh_channel': meshChannelIndex,
-        'auto_send': autoSendCq,
-      };
-
-  factory Plan333Config.fromJson(Map<String, dynamic> json) => Plan333Config(
-        stationName: (json['station_name'] as String?) ?? '',
-        city: (json['city'] as String?) ?? '',
-        locality: (json['locality'] as String?) ?? '',
-        meshChannelIndex: (json['mesh_channel'] as int?) ?? 0,
-        autoSendCq: (json['auto_send'] as bool?) ?? false,
-      );
+    'station_name': stationName,
+    'city': city,
+    'locality': locality,
+    'mesh_channel': meshChannelIndex,
+    'auto_send': autoSendCq,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -153,6 +151,7 @@ class Plan333Service {
     }
     return out;
   }
+
   static const String reportUrl =
       'https://www.meshcore.pt/pt/projects/plano333';
 
@@ -162,9 +161,9 @@ class Plan333Service {
       'AlRIqQuRL8WUxq2xIk2xjxJenYAXvzjCT8nY2lFnx2k=';
 
   // ── Mesh ─────────────────────────────────────────────────────────────────
-  static const int _meshHour = 21;   // event start
-  static const int _meshEnd = 22;    // event end (exclusive)
-  static const int _qslMinute = 30;  // QSL phase starts at xx:30
+  static const int _meshHour = 21; // event start
+  static const int _meshEnd = 22; // event end (exclusive)
+  static const int _qslMinute = 30; // QSL phase starts at xx:30
 
   /// True when [now] is Saturday 21:00–22:00 (presence window for MeshCore).
   static bool isMeshEventActive(DateTime now) =>
@@ -182,7 +181,9 @@ class Plan333Service {
   static DateTime nextMeshEvent(DateTime now) {
     var d = DateTime(now.year, now.month, now.day, _meshHour, 0);
     if (d.isBefore(now)) d = d.add(const Duration(days: 1));
-    while (d.weekday != DateTime.saturday) d = d.add(const Duration(days: 1));
+    while (d.weekday != DateTime.saturday) {
+      d = d.add(const Duration(days: 1));
+    }
     return d;
   }
 
@@ -194,7 +195,9 @@ class Plan333Service {
   static DateTime nextSaturdayTraining(DateTime now) {
     var d = DateTime(now.year, now.month, now.day, 21, 0);
     if (d.isBefore(now)) d = d.add(const Duration(days: 1));
-    while (d.weekday != DateTime.saturday) d = d.add(const Duration(days: 1));
+    while (d.weekday != DateTime.saturday) {
+      d = d.add(const Duration(days: 1));
+    }
     return d;
   }
 }
@@ -205,7 +208,8 @@ class Plan333Service {
 
 final plan333ConfigProvider =
     StateNotifierProvider<Plan333ConfigNotifier, Plan333Config>(
-        (ref) => Plan333ConfigNotifier());
+      (ref) => Plan333ConfigNotifier(),
+    );
 
 class Plan333ConfigNotifier extends StateNotifier<Plan333Config> {
   Plan333ConfigNotifier() : super(const Plan333Config());
@@ -220,7 +224,9 @@ class Plan333ConfigNotifier extends StateNotifier<Plan333Config> {
 
   Future<void> update(Plan333Config config) async {
     state = config;
-    await StorageService.instance.savePlan333Config(jsonEncode(config.toJson()));
+    await StorageService.instance.savePlan333Config(
+      jsonEncode(config.toJson()),
+    );
   }
 }
 
@@ -228,8 +234,9 @@ class Plan333ConfigNotifier extends StateNotifier<Plan333Config> {
 // plan333EnabledProvider — CB/PMR window notification toggle
 // ---------------------------------------------------------------------------
 
-final plan333EnabledProvider =
-    StateNotifierProvider<Plan333Notifier, bool>((ref) => Plan333Notifier());
+final plan333EnabledProvider = StateNotifierProvider<Plan333Notifier, bool>(
+  (ref) => Plan333Notifier(),
+);
 
 class Plan333Notifier extends StateNotifier<bool> {
   Plan333Notifier() : super(false);
@@ -257,7 +264,8 @@ class Plan333Notifier extends StateNotifier<bool> {
 
 final plan333AutoSendProvider =
     StateNotifierProvider<Plan333AutoSendNotifier, Plan333AutoSendState>(
-        (ref) => Plan333AutoSendNotifier(ref));
+      (ref) => Plan333AutoSendNotifier(ref),
+    );
 
 class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
   Plan333AutoSendNotifier(this._ref) : super(const Plan333AutoSendState()) {
@@ -302,7 +310,9 @@ class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
     final ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final msg = config.cqMessage;
 
-    _ref.read(messagesProvider.notifier).addOutgoing(
+    _ref
+        .read(messagesProvider.notifier)
+        .addOutgoing(
           ChatMessage(
             text: msg,
             timestamp: ts,

@@ -135,7 +135,7 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
           const SizedBox(height: 16),
 
           // ── 3b. MeshCore channel config reference ─────────────────────────
-          _MeshCoreChannelCard(),
+          const _MeshCoreChannelCard(),
           const SizedBox(height: 16),
 
           // ── 4. CB / PMR (secondary) ──────────────────────────────────────
@@ -221,10 +221,10 @@ class _MeshStatusCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 if (meshActive)
-                  Flexible(
+                  const Flexible(
                     child: _Pill(
                       label: '● EVENTO ACTIVO',
-                      color: const Color(0xFF00E676),
+                      color: Color(0xFF00E676),
                     ),
                   )
                 else
@@ -543,7 +543,10 @@ class _ConfigCard extends StatelessWidget {
 
             // Channel dropdown
             DropdownButtonFormField<int>(
-              value: _resolveChannel(activeChannels, config.meshChannelIndex),
+              initialValue: _resolveChannel(
+                activeChannels,
+                config.meshChannelIndex,
+              ),
               decoration: const InputDecoration(labelText: 'Canal MeshCore'),
               items:
                   activeChannels.isEmpty
@@ -649,7 +652,7 @@ class _FormatsCard extends StatelessWidget {
               phrase: cq,
             ),
             const Divider(height: 20),
-            _PhraseRow(
+            const _PhraseRow(
               label: 'QSL (confirmação)',
               phase: 'Opcional 21:30–22:00',
               phrase:
@@ -910,13 +913,13 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
           const SizedBox(height: 12),
 
           // ── Credentials (reference / manual) ───────────────────────────
-          _ChannelConfigRow(
+          const _ChannelConfigRow(
             label: 'Hashtag',
             value: Plan333Service.meshCoreHashtag,
             copyable: true,
           ),
           const Divider(height: 20),
-          _ChannelConfigRow(
+          const _ChannelConfigRow(
             label: 'Secret Key',
             value: Plan333Service.meshCoreSecretKey,
             monospace: true,
@@ -1103,7 +1106,7 @@ class _CbPmrCard extends StatelessWidget {
             const SizedBox(height: 10),
 
             // Frequencies — inline, compact
-            Wrap(
+            const Wrap(
               spacing: 16,
               runSpacing: 4,
               children: [
