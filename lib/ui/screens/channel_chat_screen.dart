@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -313,25 +315,79 @@ class ChannelsTabScreen extends ConsumerWidget {
 /// Small pill badge shown below outgoing channel message bubbles indicating
 /// how many repeaters have echoed the message back to the radio.
 ///
-/// - count == 0: amber pill "A propagar..." (not yet picked up by a repeater)
+/// - count == 0, not yet timed out: amber pill "A propagar..."
+/// - count == 0, confirmed + 10 s elapsed with no repeater: blue pill "Enviada"
 /// - count  > 0: green pill with a broadcast icon + count
-class _HeardBadge extends StatelessWidget {
-  const _HeardBadge({required this.count, required this.theme});
+class _HeardBadge extends StatefulWidget {
+  const _HeardBadge({
+    required this.count,
+    required this.theme,
+    required this.confirmed,
+  });
 
   final int count;
   final ThemeData theme;
+  final bool confirmed;
+
+  @override
+  State<_HeardBadge> createState() => _HeardBadgeState();
+}
+
+class _HeardBadgeState extends State<_HeardBadge> {
+  Timer? _timer;
+  bool _timedOut = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _maybeStartTimer();
+  }
+
+  @override
+  void didUpdateWidget(_HeardBadge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.count > 0) {
+      _timer?.cancel();
+      _timer = null;
+    } else if (widget.confirmed && !_timedOut && _timer == null) {
+      _maybeStartTimer();
+    }
+  }
+
+  void _maybeStartTimer() {
+    if (widget.confirmed && widget.count == 0 && !_timedOut) {
+      _timer = Timer(const Duration(seconds: 10), () {
+        if (mounted) setState(() => _timedOut = true);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final heard = count > 0;
-    final bgColor =
-        heard
-            ? Colors.green.shade700.withAlpha(200)
+    final heard = widget.count > 0;
+    final showSent = !heard && _timedOut;
+    final bgColor = heard
+        ? Colors.green.shade700.withAlpha(200)
+        : showSent
+            ? Colors.blue.shade700.withAlpha(200)
             : Colors.amber.shade800.withAlpha(180);
     const fgColor = Colors.white;
-    final icon = heard ? Icons.cell_tower : Icons.hourglass_empty;
-    final label =
-        heard ? '$count Repetidor${count > 1 ? 'es' : ''}' : 'A propagar...';
+    final icon = heard
+        ? Icons.cell_tower
+        : showSent
+            ? Icons.check_circle_outline
+            : Icons.hourglass_empty;
+    final label = heard
+        ? '${widget.count} Repetidor${widget.count > 1 ? 'es' : ''}'
+        : showSent
+            ? 'Enviada'
+            : 'A propagar...';
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -349,7 +405,7 @@ class _HeardBadge extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 label,
-                style: (theme.textTheme.labelSmall ?? const TextStyle())
+                style: (widget.theme.textTheme.labelSmall ?? const TextStyle())
                     .copyWith(color: fgColor, fontSize: 10),
               ),
             ],
@@ -710,7 +766,7 @@ class _MessageBubble extends StatelessWidget {
                 if (message.isChannel)
                   Padding(
                     padding: const EdgeInsets.only(top: 1, right: 4, bottom: 2),
-                    child: _HeardBadge(count: message.heardCount, theme: theme),
+                    child: _HeardBadge(count: message.heardCount, theme: theme, confirmed: message.confirmed),
                   )
                 else
                   const SizedBox(height: 2),
