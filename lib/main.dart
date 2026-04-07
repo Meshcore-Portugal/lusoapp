@@ -57,6 +57,9 @@ class _McAppPtState extends ConsumerState<McAppPt> {
     // Restore cached channels for offline browsing.
     await ref.read(channelsProvider.notifier).loadFromStorage();
 
+    // Restore persisted message paths so path details are available after reboot.
+    await ref.read(packetHeardProvider.notifier).loadFromStorage();
+
     // Restore last connected device for the quick-connect card.
     final last = await StorageService.instance.loadLastDevice();
     if (last != null && mounted) {

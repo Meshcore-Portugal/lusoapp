@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
+import '../widgets/path_sheet.dart';
 
 /// Private (1:1) chat screen with a specific contact.
 class PrivateChatScreen extends ConsumerStatefulWidget {
@@ -20,6 +22,7 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   bool _waitingForTrace = false;
+  Timer? _traceTimeout;
   ChatMessage? _replyingTo;
   bool _atBottom = true;
 
@@ -132,6 +135,7 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
 
   @override
   void dispose() {
+    _traceTimeout?.cancel();
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -152,7 +156,9 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     ref.listen<TraceResult?>(traceResultProvider, (prev, next) {
       if (!_waitingForTrace || next == null || !mounted) return;
       if (prev?.tag == next.tag && prev?.timestamp == next.timestamp) return;
-      _waitingForTrace = false;
+      _traceTimeout?.cancel();
+      _traceTimeout = null;
+      setState(() => _waitingForTrace = false);
       _showTraceSheet(next);
     });
 
@@ -182,73 +188,110 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
       children: [
         // Contact header
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             color: theme.colorScheme.surfaceContainerHighest,
           ),
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              CircleAvatar(
-                backgroundColor: theme.colorScheme.primaryContainer,
-                child: Icon(
-                  _contactIcon(contact?.type ?? 0),
-                  color: theme.colorScheme.onPrimaryContainer,
-                  size: 20,
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Text(
-                      contact?.displayName ?? 'Contacto',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                    CircleAvatar(
+                      backgroundColor: theme.colorScheme.primaryContainer,
+                      child: Icon(
+                        _contactIcon(contact?.type ?? 0),
+                        color: theme.colorScheme.onPrimaryContainer,
+                        size: 20,
                       ),
                     ),
-                    if (contact != null)
-                      Text(
-                        '${_contactTypeName(contact.type)} - ${contact.shortId}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withAlpha(120),
-                        ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            contact?.displayName ?? 'Contacto',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if (contact != null)
+                            GestureDetector(
+                              onTap:
+                                  () => showModalBottomSheet<void>(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    builder:
+                                        (_) =>
+                                            ContactPathSheet(contact: contact),
+                                  ),
+                              child: _ContactPathSubtitle(
+                                contact: contact,
+                                theme: theme,
+                              ),
+                            ),
+                        ],
                       ),
+                    ),
+                    // Actions
+                    PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (contact == null) return;
+                        switch (value) {
+                          case 'trace':
+                            _doTrace(contact);
+                          case 'path':
+                            showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              builder:
+                                  (_) => ContactPathSheet(contact: contact),
+                            );
+                        }
+                      },
+                      itemBuilder:
+                          (_) => const [
+                            PopupMenuItem(
+                              value: 'trace',
+                              child: ListTile(
+                                leading: Icon(Icons.route),
+                                title: Text('Traçar rota'),
+                                dense: true,
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'path',
+                              child: ListTile(
+                                leading: Icon(Icons.alt_route),
+                                title: Text('Gerir caminho'),
+                                dense: true,
+                              ),
+                            ),
+                          ],
+                    ),
                   ],
                 ),
               ),
-              // Actions
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  final service = ref.read(radioServiceProvider);
-                  if (service == null || contact == null) return;
-                  switch (value) {
-                    case 'trace':
-                      setState(() => _waitingForTrace = true);
-                      service.tracePath(Random().nextInt(0x7FFFFFFF));
-                    case 'reset_path':
-                      service.resetPath(contact.publicKey);
-                  }
-                },
-                itemBuilder:
-                    (_) => [
-                      const PopupMenuItem(
-                        value: 'trace',
-                        child: ListTile(
-                          leading: Icon(Icons.route),
-                          title: Text('Tracar rota'),
-                          dense: true,
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'reset_path',
-                        child: ListTile(
-                          leading: Icon(Icons.refresh),
-                          title: Text('Limpar caminho'),
-                          dense: true,
-                        ),
-                      ),
-                    ],
+              // Trace-in-progress banner — visible in the header itself
+              AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                child:
+                    _waitingForTrace
+                        ? _TracingBanner(
+                          contactName: contact?.displayName ?? 'contacto',
+                          onCancel: () {
+                            _traceTimeout?.cancel();
+                            setState(() => _waitingForTrace = false);
+                          },
+                          theme: theme,
+                        )
+                        : const SizedBox.shrink(),
               ),
             ],
           ),
@@ -342,6 +385,99 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     return true;
   }
 
+  bool _prefixMatch6(Uint8List a, Uint8List b) {
+    if (a.length < 6 || b.length < 6) return false;
+    for (var i = 0; i < 6; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  /// Convert a `List<int>` of uint32-LE values (as decoded from PathDiscoveryPush)
+  /// back into the raw byte sequence the firmware expects as path bytes.
+  Uint8List _outPathToBytes(List<int> outPath) {
+    final bytes = Uint8List(outPath.length * 4);
+    var i = 0;
+    for (final val in outPath) {
+      bytes[i++] = val & 0xFF;
+      bytes[i++] = (val >> 8) & 0xFF;
+      bytes[i++] = (val >> 16) & 0xFF;
+      bytes[i++] = (val >> 24) & 0xFF;
+    }
+    return bytes;
+  }
+
+  /// Full trace flow:
+  ///  1. Check path cache — if hit, send trace immediately.
+  ///  2. Cache miss — run path discovery (CMD_SEND_PATH_DISCOVERY_REQ 0x34),
+  ///     wait for PathDiscoveryPush (0x8D), then send trace with discovered path.
+  ///  3. On any timeout or missing path → snackbar + cancel spinner.
+  Future<void> _doTrace(Contact contact) async {
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+
+    _traceTimeout?.cancel();
+    setState(() => _waitingForTrace = true);
+
+    Uint8List? pathBytes;
+
+    final cached = ref.read(pathCacheProvider)[_prefix6Hex];
+    if (cached != null && cached.isNotEmpty) {
+      pathBytes = _outPathToBytes(cached);
+    } else {
+      // Discover the path first — firmware needs hop-hash bytes, not the public key.
+      final pubKeyPrefix = contact.publicKey.sublist(0, 6);
+      final completer = Completer<List<int>?>();
+      late StreamSubscription<CompanionResponse> sub;
+      sub = service.responses.listen((r) {
+        if (completer.isCompleted) return;
+        if (r is PathDiscoveryPush &&
+            _prefixMatch6(r.pubKeyPrefix, pubKeyPrefix)) {
+          completer.complete(r.outPath);
+        }
+      });
+
+      await service.sendPathDiscovery(contact.publicKey);
+
+      final outPath = await completer.future
+          .timeout(const Duration(seconds: 15), onTimeout: () => null)
+          .whenComplete(sub.cancel);
+
+      if (outPath != null && outPath.isNotEmpty) {
+        pathBytes = _outPathToBytes(outPath);
+      }
+    }
+
+    if (!mounted || !_waitingForTrace) return;
+
+    if (pathBytes == null) {
+      setState(() => _waitingForTrace = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível descobrir a rota — tente novamente'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    // Send trace with correct hop-hash path bytes.
+    await service.tracePath(Random().nextInt(0x7FFFFFFF), path: pathBytes);
+
+    // Arm timeout for the trace-data response (PUSH_CODE_TRACE_DATA 0x89).
+    _traceTimeout = Timer(const Duration(seconds: 15), () {
+      if (mounted && _waitingForTrace) {
+        setState(() => _waitingForTrace = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sem resposta à rota — tente novamente'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    });
+  }
+
   IconData _contactIcon(int type) {
     switch (type) {
       case 1:
@@ -354,21 +490,6 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
         return Icons.sensors;
       default:
         return Icons.device_unknown;
-    }
-  }
-
-  String _contactTypeName(int type) {
-    switch (type) {
-      case 1:
-        return 'Chat';
-      case 2:
-        return 'Repetidor';
-      case 3:
-        return 'Sala';
-      case 4:
-        return 'Sensor';
-      default:
-        return 'Desconhecido';
     }
   }
 
@@ -445,9 +566,10 @@ Widget _buildMentionText(
     final isSelf =
         selfName != null &&
         name.trim().toLowerCase() == selfName.trim().toLowerCase();
-    final pillColor = isSelf
-        ? (selfMentionColor ?? theme.colorScheme.tertiary)
-        : (otherMentionColor ?? theme.colorScheme.primary);
+    final pillColor =
+        isSelf
+            ? (selfMentionColor ?? theme.colorScheme.tertiary)
+            : (otherMentionColor ?? theme.colorScheme.primary);
     final textColor = _pillTextColor(pillColor);
     spans.add(
       WidgetSpan(
@@ -527,86 +649,113 @@ class _PrivateMessageBubble extends StatelessWidget {
     return (s.length >= 2 ? s.substring(0, 2) : s).toUpperCase();
   }
 
-  static String _metaSuffix(ChatMessage msg, {int? contactPathLen}) {
-    final parts = <String>[];
-    if (msg.snr != null) parts.add('SNR ${msg.snr!.toStringAsFixed(1)} dB');
+  static String _metaSuffix(ChatMessage msg) {
+    if (msg.snr != null) return 'SNR ${msg.snr!.toStringAsFixed(1)} dB';
+    return '';
+  }
+
+  /// Returns the route (label, icon, colour) for a message bubble.
+  ///
+  /// For **incoming** messages we use [msg.pathLen] — the actual hop count
+  /// reported by the radio when the frame arrived.
+  ///
+  /// For **outgoing** messages we rely solely on [msg.sentRouteFlag]:
+  ///   0 → sent via the stored direct path ("Direto")
+  ///   1 → sent via flood ("Flood")
+  ///
+  /// We deliberately do NOT derive hop count from the contact's current
+  /// [contactPathLen] for outgoing messages. That value changes whenever the
+  /// path is reset or rediscovered, which would cause historical message
+  /// labels to silently flip — that's the confusing behaviour we're avoiding.
+  static (String label, IconData icon, Color? color)? _msgRouteInfo(
+    ChatMessage msg,
+    ThemeData theme,
+  ) {
+    // Incoming: use the path length the radio reported for this frame.
+    // Firmware convention: 0xFF = arrived via direct (stored) route;
+    //                      N    = arrived via flood with (N & 0x3F) hops.
     if (msg.pathLen != null) {
-      final hops = msg.pathLen == 0xFF ? -1 : msg.pathLen! & 0x3F;
-      if (hops <= 0) {
-        parts.add('Directo');
-      } else {
-        parts.add('$hops hop${hops > 1 ? 's' : ''}');
+      final pathLen = msg.pathLen!;
+      if (pathLen == 0xFF) {
+        return ('Direto', Icons.arrow_forward, Colors.green.shade600);
       }
+      final hops = pathLen & 0x3F;
+      if (hops == 0) {
+        return ('Flood', Icons.waves, theme.colorScheme.onSurfaceVariant);
+      }
+      return (
+        '$hops salto${hops > 1 ? 's' : ''}',
+        Icons.route,
+        theme.colorScheme.secondary,
+      );
     }
-    if (msg.isOutgoing && msg.sentRouteFlag != null && msg.pathLen == null) {
+
+    // Outgoing: use only the routing mode chosen at send time.
+    if (msg.isOutgoing && msg.sentRouteFlag != null) {
       if (msg.sentRouteFlag == 0) {
-        // Direct routing — use contact's known path length for hop count.
-        final cHops =
-            (contactPathLen != null && contactPathLen != 0xFF)
-                ? contactPathLen & 0x3F
-                : 0;
-        if (cHops > 0) {
-          parts.add('$cHops hop${cHops > 1 ? 's' : ''}');
-        } else {
-          parts.add('Directo');
-        }
+        return ('Direto', Icons.arrow_forward, Colors.green.shade600);
       } else {
-        parts.add('1 hop');
+        return ('Flood', Icons.waves, theme.colorScheme.onSurfaceVariant);
       }
     }
-    return parts.join(' • ');
+
+    return null;
   }
 
   void _showMsgContextMenu(BuildContext context, ChatMessage msg) {
     final theme = Theme.of(context);
     showModalBottomSheet<void>(
       context: context,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (!msg.isOutgoing && onReply != null)
-              ListTile(
-                leading: const Icon(Icons.reply),
-                title: const Text('Responder'),
-                onTap: () { Navigator.pop(context); onReply!(); },
-              ),
-            ListTile(
-              leading: const Icon(Icons.copy),
-              title: const Text('Copiar texto'),
-              onTap: () {
-                Clipboard.setData(ClipboardData(text: msg.text));
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Texto copiado'),
-                    duration: Duration(seconds: 1),
+      builder:
+          (_) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                );
-              },
+                ),
+                const SizedBox(height: 8),
+                if (!msg.isOutgoing && onReply != null)
+                  ListTile(
+                    leading: const Icon(Icons.reply),
+                    title: const Text('Responder'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      onReply!();
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.copy),
+                  title: const Text('Copiar texto'),
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: msg.text));
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Texto copiado'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text('Detalhes'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showMsgDetails(context, msg, theme);
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('Detalhes'),
-              onTap: () {
-                Navigator.pop(context);
-                _showMsgDetails(context, msg, theme);
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+          ),
     );
   }
 
@@ -632,65 +781,72 @@ class _PrivateMessageBubble extends StatelessWidget {
 
     showModalBottomSheet<void>(
       context: context,
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+      builder:
+          (_) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline, color: theme.colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Detalhes da mensagem',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Detalhes da mensagem',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
+                  const Divider(height: 20),
+                  _DetailRow(
+                    icon: Icons.access_time,
+                    label: 'Hora',
+                    value: timeStr,
+                    theme: theme,
+                  ),
+                  if (hops != null)
+                    _DetailRow(
+                      icon: Icons.route,
+                      label: 'Caminho',
+                      value:
+                          hops == 0
+                              ? 'Direto'
+                              : '$hops salto${hops > 1 ? 's' : ''}',
+                      theme: theme,
+                    ),
+                  if (msg.snr != null)
+                    _DetailRow(
+                      icon: Icons.signal_cellular_alt,
+                      label: 'SNR',
+                      value: '${msg.snr!.toStringAsFixed(1)} dB',
+                      theme: theme,
+                    ),
+                  if (msg.isOutgoing && msg.sentRouteFlag != null)
+                    _DetailRow(
+                      icon: Icons.send,
+                      label: 'Enviado via',
+                      value: msg.sentRouteFlag == 0 ? 'Direto' : 'Flood',
+                      theme: theme,
+                    ),
+                  if (msg.isOutgoing)
+                    _DetailRow(
+                      icon: msg.confirmed ? Icons.done_all : Icons.done,
+                      label: 'Estado',
+                      value: msg.confirmed ? 'Confirmado' : 'Pendente',
+                      theme: theme,
+                    ),
+                  const SizedBox(height: 8),
                 ],
               ),
-              const Divider(height: 20),
-              _DetailRow(
-                icon: Icons.access_time,
-                label: 'Hora',
-                value: timeStr,
-                theme: theme,
-              ),
-              if (hops != null)
-                _DetailRow(
-                  icon: Icons.route,
-                  label: 'Caminho',
-                  value: hops == 0 ? 'Directo' : '$hops hop${hops > 1 ? 's' : ''}',
-                  theme: theme,
-                ),
-              if (msg.snr != null)
-                _DetailRow(
-                  icon: Icons.signal_cellular_alt,
-                  label: 'SNR',
-                  value: '${msg.snr!.toStringAsFixed(1)} dB',
-                  theme: theme,
-                ),
-              if (msg.isOutgoing && msg.sentRouteFlag != null)
-                _DetailRow(
-                  icon: Icons.send,
-                  label: 'Enviado via',
-                  value: msg.sentRouteFlag == 0 ? 'Directo' : 'Flood',
-                  theme: theme,
-                ),
-              if (msg.isOutgoing)
-                _DetailRow(
-                  icon: msg.confirmed ? Icons.done_all : Icons.done,
-                  label: 'Estado',
-                  value: msg.confirmed ? 'Confirmado' : 'Pendente',
-                  theme: theme,
-                ),
-              const SizedBox(height: 8),
-            ],
+            ),
           ),
-        ),
-      ),
     );
   }
 
@@ -701,72 +857,90 @@ class _PrivateMessageBubble extends StatelessWidget {
     final time = DateTime.fromMillisecondsSinceEpoch(message.timestamp * 1000);
     final timeStr =
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-    final meta = _metaSuffix(message, contactPathLen: contactPathLen);
+    final meta = _metaSuffix(message);
     final metaLine = meta.isNotEmpty ? '$timeStr • $meta' : timeStr;
+    final routeInfo = _msgRouteInfo(message, theme);
 
     if (isMe) {
       return GestureDetector(
         onLongPress: () => _showMsgContextMenu(context, message),
         child: Padding(
-        padding: const EdgeInsets.only(bottom: 2),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Container(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.72,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(4),
-                    bottomLeft: Radius.circular(16),
-                    bottomRight: Radius.circular(16),
+          padding: const EdgeInsets.only(bottom: 2),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.72,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(4),
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: _buildMentionText(
+                    message.text,
+                    theme,
+                    theme.textTheme.bodyMedium,
+                    selfName: selfName,
+                    selfMentionColor: selfMentionColor,
+                    otherMentionColor: otherMentionColor,
                   ),
                 ),
-                child: _buildMentionText(
-                  message.text,
-                  theme,
-                  theme.textTheme.bodyMedium,
-                  selfName: selfName,
-                  selfMentionColor: selfMentionColor,
-                  otherMentionColor: otherMentionColor,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(top: 3, right: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      metaLine,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withAlpha(100),
+                Padding(
+                  padding: const EdgeInsets.only(top: 3, right: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        metaLine,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withAlpha(100),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      message.confirmed ? Icons.done_all : Icons.done,
-                      size: 13,
-                      color:
-                          message.confirmed
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurface.withAlpha(130),
-                    ),
-                  ],
+                      if (routeInfo != null) ...[
+                        Text(
+                          ' • ',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurface.withAlpha(100),
+                          ),
+                        ),
+                        Icon(routeInfo.$2, size: 11, color: routeInfo.$3),
+                        const SizedBox(width: 2),
+                        Text(
+                          routeInfo.$1,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: routeInfo.$3,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(width: 4),
+                      Icon(
+                        message.confirmed ? Icons.done_all : Icons.done,
+                        size: 13,
+                        color:
+                            message.confirmed
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurface.withAlpha(130),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-            ],
+                const SizedBox(height: 2),
+              ],
+            ),
           ),
-        ),
         ),
       );
     }
@@ -841,11 +1015,33 @@ class _PrivateMessageBubble extends StatelessWidget {
                 ),
                 Padding(
                   padding: const EdgeInsets.only(top: 3, left: 2),
-                  child: Text(
-                    metaLine,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withAlpha(100),
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        metaLine,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withAlpha(100),
+                        ),
+                      ),
+                      if (routeInfo != null) ...[
+                        Text(
+                          ' • ',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurface.withAlpha(100),
+                          ),
+                        ),
+                        Icon(routeInfo.$2, size: 11, color: routeInfo.$3),
+                        const SizedBox(width: 2),
+                        Text(
+                          routeInfo.$1,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: routeInfo.$3,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -1069,6 +1265,151 @@ class _ReplyStrip extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tracing banner — shown inside the header while waiting for a trace reply
+// ---------------------------------------------------------------------------
+
+class _TracingBanner extends StatelessWidget {
+  const _TracingBanner({
+    required this.contactName,
+    required this.onCancel,
+    required this.theme,
+  });
+
+  final String contactName;
+  final VoidCallback onCancel;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withAlpha(180),
+        border: Border(
+          top: BorderSide(
+            color: theme.colorScheme.primary.withAlpha(60),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'A traçar rota para $contactName...',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onPrimaryContainer,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onCancel,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              'Cancelar',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Contact path subtitle — shown under the name in the chat header
+// ---------------------------------------------------------------------------
+
+/// Compact one-line subtitle combining contact type, shortId, and route info.
+/// Route uses `pathLen`: 0 = Direct, 0xFF = Flood, N = N hops.
+class _ContactPathSubtitle extends StatelessWidget {
+  const _ContactPathSubtitle({required this.contact, required this.theme});
+
+  final Contact contact;
+  final ThemeData theme;
+
+  static String _typeName(int type) {
+    switch (type) {
+      case 1:
+        return 'Chat';
+      case 2:
+        return 'Repetidor';
+      case 3:
+        return 'Sala';
+      case 4:
+        return 'Sensor';
+      default:
+        return 'Desconhecido';
+    }
+  }
+
+  static (String label, IconData icon, Color? color) _routeInfo(
+    int pathLen,
+    ThemeData theme,
+  ) {
+    if (pathLen == 0xFF) {
+      return ('Flood', Icons.waves, theme.colorScheme.onSurfaceVariant);
+    }
+    if (pathLen == 0) {
+      return ('Direto', Icons.arrow_forward, Colors.green.shade600);
+    }
+    final hops = pathLen & 0x3F;
+    return (
+      '$hops salto${hops > 1 ? 's' : ''}',
+      Icons.route,
+      theme.colorScheme.secondary,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final (routeLabel, routeIcon, routeColor) = _routeInfo(
+      contact.pathLen,
+      theme,
+    );
+    final dimColor = theme.colorScheme.onSurface.withAlpha(120);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '${_typeName(contact.type)} · ${contact.shortId}',
+          style: theme.textTheme.bodySmall?.copyWith(color: dimColor),
+        ),
+        const SizedBox(width: 6),
+        Container(width: 1, height: 10, color: dimColor.withAlpha(80)),
+        const SizedBox(width: 6),
+        Icon(routeIcon, size: 11, color: routeColor),
+        const SizedBox(width: 3),
+        Text(
+          routeLabel,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: routeColor,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

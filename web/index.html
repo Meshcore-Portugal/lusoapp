@@ -1,46 +1,54 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-PT">
 <head>
   <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
+    The base href is replaced by `flutter build web --base-href=...`
+    It must start and end with "/" for the router to work correctly.
   -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
 
-  <!-- iOS meta tags & icons -->
+  <!-- Responsive viewport — required for PWA and correct Flutter rendering -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+  <meta name="description" content="Aplicação companheira MeshCore — comunidade portuguesa de rádio mesh LoRa">
+
+  <!-- PWA theme colour — matches app primary orange (#FF6B00) -->
+  <meta name="theme-color" content="#FF6B00" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#FF6B00">
+
+  <!-- Android / Chrome PWA -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="mcapppt">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <!-- iOS Safari full-screen / standalone -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MeshCore">
 
-  <title>mcapppt</title>
+  <!-- Icons -->
+  <link rel="apple-touch-icon" sizes="192x192" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="icons/Icon-512.png">
+  <link rel="icon" type="image/png" href="favicon.png">
+
+  <!-- Web App Manifest -->
   <link rel="manifest" href="manifest.json">
+
+  <title>MeshCore PT</title>
+
+  <!-- Inline splash / loading style so the user sees dark bg immediately,
+       before Flutter paints its first frame. -->
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: #111111;
+      height: 100%;
+    }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

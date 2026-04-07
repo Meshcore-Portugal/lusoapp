@@ -1,23 +1,30 @@
 {
-    "name": "mcapppt",
-    "short_name": "mcapppt",
-    "start_url": ".",
+    "name": "MeshCore PT",
+    "short_name": "MeshCore",
+    "description": "Aplicação companheira MeshCore — comunidade portuguesa de rádio mesh LoRa",
+    "id": "/",
+    "start_url": "/",
+    "scope": "/",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
     "orientation": "portrait-primary",
+    "background_color": "#111111",
+    "theme_color": "#FF6B00",
+    "lang": "pt-PT",
+    "dir": "ltr",
+    "categories": ["utilities", "communication"],
     "prefer_related_applications": false,
     "icons": [
         {
             "src": "icons/Icon-192.png",
             "sizes": "192x192",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any"
         },
         {
             "src": "icons/Icon-512.png",
             "sizes": "512x512",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any"
         },
         {
             "src": "icons/Icon-maskable-192.png",
@@ -30,6 +37,22 @@
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Canais",
+            "short_name": "Canais",
+            "description": "Abrir lista de canais",
+            "url": "/channels",
+            "icons": [{ "src": "icons/Icon-192.png", "sizes": "192x192" }]
+        },
+        {
+            "name": "Mapa",
+            "short_name": "Mapa",
+            "description": "Ver mapa de nós",
+            "url": "/map",
+            "icons": [{ "src": "icons/Icon-192.png", "sizes": "192x192" }]
         }
     ]
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -315,8 +316,8 @@ class ChannelsTabScreen extends ConsumerWidget {
 /// Small pill badge shown below outgoing channel message bubbles indicating
 /// how many repeaters have echoed the message back to the radio.
 ///
-/// - count == 0, not yet timed out: amber pill "A propagar..."
-/// - count == 0, confirmed + 10 s elapsed with no repeater: blue pill "Enviada"
+/// - count == 0, within 10 s of first render: amber pill "A propagar..."
+/// - count == 0, 10 s elapsed with no repeater heard: blue pill "Enviada"
 /// - count  > 0: green pill with a broadcast icon + count
 class _HeardBadge extends StatefulWidget {
   const _HeardBadge({
@@ -327,7 +328,7 @@ class _HeardBadge extends StatefulWidget {
 
   final int count;
   final ThemeData theme;
-  final bool confirmed;
+  final bool confirmed; // kept for potential future use
 
   @override
   State<_HeardBadge> createState() => _HeardBadgeState();
@@ -340,25 +341,23 @@ class _HeardBadgeState extends State<_HeardBadge> {
   @override
   void initState() {
     super.initState();
-    _maybeStartTimer();
+    // Start the timer immediately — if no repeater is heard within 10 s,
+    // we show "Enviada". The radio does not always send SendConfirmedPush
+    // for channel messages so we cannot gate this on widget.confirmed.
+    if (widget.count == 0) {
+      _timer = Timer(const Duration(seconds: 10), () {
+        if (mounted) setState(() => _timedOut = true);
+      });
+    }
   }
 
   @override
   void didUpdateWidget(_HeardBadge oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // A repeater was heard — timer no longer needed.
     if (widget.count > 0) {
       _timer?.cancel();
       _timer = null;
-    } else if (widget.confirmed && !_timedOut && _timer == null) {
-      _maybeStartTimer();
-    }
-  }
-
-  void _maybeStartTimer() {
-    if (widget.confirmed && widget.count == 0 && !_timedOut) {
-      _timer = Timer(const Duration(seconds: 10), () {
-        if (mounted) setState(() => _timedOut = true);
-      });
     }
   }
 
@@ -372,20 +371,23 @@ class _HeardBadgeState extends State<_HeardBadge> {
   Widget build(BuildContext context) {
     final heard = widget.count > 0;
     final showSent = !heard && _timedOut;
-    final bgColor = heard
-        ? Colors.green.shade700.withAlpha(200)
-        : showSent
+    final bgColor =
+        heard
+            ? Colors.green.shade700.withAlpha(200)
+            : showSent
             ? Colors.blue.shade700.withAlpha(200)
             : Colors.amber.shade800.withAlpha(180);
     const fgColor = Colors.white;
-    final icon = heard
-        ? Icons.cell_tower
-        : showSent
+    final icon =
+        heard
+            ? Icons.cell_tower
+            : showSent
             ? Icons.check_circle_outline
             : Icons.hourglass_empty;
-    final label = heard
-        ? '${widget.count} Repetidor${widget.count > 1 ? 'es' : ''}'
-        : showSent
+    final label =
+        heard
+            ? '${widget.count} Repetidor${widget.count > 1 ? 'es' : ''}'
+            : showSent
             ? 'Enviada'
             : 'A propagar...';
 
@@ -481,9 +483,10 @@ Widget _buildMentionText(
     final isSelf =
         selfName != null &&
         name.trim().toLowerCase() == selfName.trim().toLowerCase();
-    final pillColor = isSelf
-        ? (selfMentionColor ?? theme.colorScheme.tertiary)
-        : (otherMentionColor ?? theme.colorScheme.primary);
+    final pillColor =
+        isSelf
+            ? (selfMentionColor ?? theme.colorScheme.tertiary)
+            : (otherMentionColor ?? theme.colorScheme.primary);
     final textColor = _pillTextColor(pillColor);
     spans.add(
       WidgetSpan(
@@ -515,7 +518,7 @@ Widget _buildMentionText(
   return Text.rich(TextSpan(children: spans));
 }
 
-class _MessageBubble extends StatelessWidget {
+class _MessageBubble extends ConsumerWidget {
   const _MessageBubble({
     required this.message,
     this.onReply,
@@ -559,6 +562,80 @@ class _MessageBubble extends StatelessWidget {
     return (s.length >= 2 ? s.substring(0, 2) : s).toUpperCase();
   }
 
+  /// Builds the compact path line shown inside the bubble.
+  ///
+  /// Outgoing: ⟳ heardCount  ↪ hop1, hop2, …
+  /// Incoming: ↪ hopA, hopB, …  (from recorded path bytes; falls back to hop count)
+  static Widget _buildPathLine({
+    required ThemeData theme,
+    required Color subtleColor,
+    required bool isOutgoing,
+    required int heardCount,
+    required int? pathLen,
+    required List<MessagePath> paths,
+  }) {
+    // Hop IDs from the first recorded path — available for BOTH in/outgoing.
+    final hopIds = <String>[];
+    if (paths.isNotEmpty) {
+      final p = paths.first;
+      for (var h = 0; h < p.pathHashCount; h++) {
+        final off = h * p.pathHashSize;
+        if (off < p.pathBytes.length) {
+          hopIds.add(
+            p.pathBytes[off].toRadixString(16).padLeft(2, '0').toUpperCase(),
+          );
+        }
+      }
+    }
+
+    // Fallback for incoming when no path bytes recorded yet (e.g. live message
+    // arrived but 0x88 frame hasn't been processed yet).
+    final incomingHopCount =
+        (hopIds.isEmpty && !isOutgoing && pathLen != null && pathLen != 0xFF)
+            ? (pathLen & 0x3F)
+            : 0;
+
+    final showHeard = isOutgoing && heardCount > 0;
+    final showHopIds = hopIds.isNotEmpty;
+    final showIncomingHops = !isOutgoing && incomingHopCount > 0;
+
+    if (!showHeard && !showHopIds && !showIncomingHops) {
+      return const SizedBox.shrink();
+    }
+
+    // Truncate long hop lists: first 2, …, last 1.
+    String hopStr = '';
+    if (showHopIds) {
+      hopStr =
+          hopIds.length <= 5
+              ? hopIds.join(', ')
+              : '${hopIds.take(2).join(', ')}, …, ${hopIds.last}';
+    } else if (showIncomingHops) {
+      hopStr = '$incomingHopCount salto${incomingHopCount == 1 ? '' : 's'}';
+    }
+
+    final ts = TextStyle(fontSize: 11, color: subtleColor);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (showHeard) ...<Widget>[
+          Icon(Icons.repeat, size: 12, color: subtleColor),
+          const SizedBox(width: 2),
+          Text('$heardCount', style: ts),
+          if (hopStr.isNotEmpty) const SizedBox(width: 6),
+        ],
+        if (hopStr.isNotEmpty) ...<Widget>[
+          Icon(Icons.subdirectory_arrow_right, size: 12, color: subtleColor),
+          const SizedBox(width: 2),
+          Flexible(
+            child: Text(hopStr, style: ts, overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      ],
+    );
+  }
+
   static String _metaSuffix(ChatMessage msg) {
     final parts = <String>[];
     if (msg.snr != null) parts.add('SNR ${msg.snr!.toStringAsFixed(1)} dB');
@@ -577,53 +654,81 @@ class _MessageBubble extends StatelessWidget {
     final theme = Theme.of(context);
     showModalBottomSheet<void>(
       context: context,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (!msg.isOutgoing && onReply != null)
-              ListTile(
-                leading: const Icon(Icons.reply),
-                title: const Text('Responder'),
-                onTap: () { Navigator.pop(context); onReply!(); },
-              ),
-            ListTile(
-              leading: const Icon(Icons.copy),
-              title: const Text('Copiar texto'),
-              onTap: () {
-                Clipboard.setData(ClipboardData(text: msg.text));
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Texto copiado'),
-                    duration: Duration(seconds: 1),
+      builder:
+          (_) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                );
-              },
+                ),
+                const SizedBox(height: 8),
+                if (!msg.isOutgoing && onReply != null)
+                  ListTile(
+                    leading: const Icon(Icons.reply),
+                    title: const Text('Responder'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      onReply!();
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.copy),
+                  title: const Text('Copiar texto'),
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: msg.text));
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Texto copiado'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                ),
+                if (msg.packetHashHex != null)
+                  ListTile(
+                    leading: const Icon(Icons.call_merge),
+                    title: const Text('Ver caminhos da mensagem'),
+                    subtitle: Text(
+                      msg.isOutgoing
+                          ? 'Ouvida ${msg.heardCount} ${msg.heardCount == 1 ? 'vez' : 'vezes'} por repetidores'
+                          : 'Recebida via repetidores',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showMessagePaths(context, msg);
+                    },
+                  ),
+                if (msg.pathLen != null || msg.snr != null)
+                  ListTile(
+                    leading: const Icon(Icons.info_outline),
+                    title: const Text('Detalhes'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showMsgDetails(context, msg, theme);
+                    },
+                  ),
+                const SizedBox(height: 8),
+              ],
             ),
-            if (msg.pathLen != null || msg.snr != null)
-              ListTile(
-                leading: const Icon(Icons.info_outline),
-                title: const Text('Detalhes'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showMsgDetails(context, msg, theme);
-                },
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+          ),
+    );
+  }
+
+  void _showMessagePaths(BuildContext context, ChatMessage msg) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _MessagePathsSheet(msg: msg),
     );
   }
 
@@ -638,65 +743,78 @@ class _MessageBubble extends StatelessWidget {
     }
     showModalBottomSheet<void>(
       context: context,
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+      builder:
+          (_) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline, color: theme.colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Detalhes da mensagem',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Detalhes da mensagem',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
+                  const Divider(height: 20),
+                  _DetailRow(
+                    icon: Icons.access_time,
+                    label: 'Hora',
+                    value: timeStr,
+                    theme: theme,
+                  ),
+                  if (hops != null)
+                    _DetailRow(
+                      icon: Icons.route,
+                      label: 'Caminho',
+                      value:
+                          hops == 0
+                              ? 'Directo'
+                              : '$hops hop${hops > 1 ? 's' : ''}',
+                      theme: theme,
+                    ),
+                  if (msg.snr != null)
+                    _DetailRow(
+                      icon: Icons.signal_cellular_alt,
+                      label: 'SNR',
+                      value: '${msg.snr!.toStringAsFixed(1)} dB',
+                      theme: theme,
+                    ),
+                  if (msg.isChannel && msg.heardCount > 0)
+                    _DetailRow(
+                      icon: Icons.cell_tower,
+                      label: 'Repetidores',
+                      value: '${msg.heardCount}',
+                      theme: theme,
+                    ),
+                  const SizedBox(height: 8),
                 ],
               ),
-              const Divider(height: 20),
-              _DetailRow(
-                icon: Icons.access_time,
-                label: 'Hora',
-                value: timeStr,
-                theme: theme,
-              ),
-              if (hops != null)
-                _DetailRow(
-                  icon: Icons.route,
-                  label: 'Caminho',
-                  value: hops == 0 ? 'Directo' : '$hops hop${hops > 1 ? 's' : ''}',
-                  theme: theme,
-                ),
-              if (msg.snr != null)
-                _DetailRow(
-                  icon: Icons.signal_cellular_alt,
-                  label: 'SNR',
-                  value: '${msg.snr!.toStringAsFixed(1)} dB',
-                  theme: theme,
-                ),
-              if (msg.isChannel && msg.heardCount > 0)
-                _DetailRow(
-                  icon: Icons.cell_tower,
-                  label: 'Repetidores',
-                  value: '${msg.heardCount}',
-                  theme: theme,
-                ),
-              const SizedBox(height: 8),
-            ],
+            ),
           ),
-        ),
-      ),
     );
   }
 
   @override
-  Widget build(BuildContext context) {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isMe = message.isOutgoing;
+    final allPaths = ref.watch(packetHeardProvider);
+    final paths =
+        message.packetHashHex != null
+            ? (allPaths[message.packetHashHex] ?? <MessagePath>[])
+            : <MessagePath>[];
     final time = DateTime.fromMillisecondsSinceEpoch(message.timestamp * 1000);
     final timeStr =
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
@@ -730,13 +848,37 @@ class _MessageBubble extends StatelessWidget {
                       bottomRight: Radius.circular(16),
                     ),
                   ),
-                  child: _buildMentionText(
-                    message.text,
-                    theme,
-                    theme.textTheme.bodyMedium,
-                    selfName: selfName,
-                    selfMentionColor: selfMentionColor,
-                    otherMentionColor: otherMentionColor,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildMentionText(
+                        message.text,
+                        theme,
+                        theme.textTheme.bodyMedium,
+                        selfName: selfName,
+                        selfMentionColor: selfMentionColor,
+                        otherMentionColor: otherMentionColor,
+                      ),
+                      Builder(
+                        builder: (_) {
+                          final line = _buildPathLine(
+                            theme: theme,
+                            subtleColor: theme.colorScheme.onPrimaryContainer
+                                .withAlpha(160),
+                            isOutgoing: true,
+                            heardCount: message.heardCount,
+                            pathLen: message.pathLen,
+                            paths: paths,
+                          );
+                          if (line is SizedBox) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: line,
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
                 Padding(
@@ -766,7 +908,11 @@ class _MessageBubble extends StatelessWidget {
                 if (message.isChannel)
                   Padding(
                     padding: const EdgeInsets.only(top: 1, right: 4, bottom: 2),
-                    child: _HeardBadge(count: message.heardCount, theme: theme, confirmed: message.confirmed),
+                    child: _HeardBadge(
+                      count: message.heardCount,
+                      theme: theme,
+                      confirmed: message.confirmed,
+                    ),
                   )
                 else
                   const SizedBox(height: 2),
@@ -843,13 +989,38 @@ class _MessageBubble extends StatelessWidget {
                       bottomRight: Radius.circular(16),
                     ),
                   ),
-                  child: _buildMentionText(
-                    displayText,
-                    theme,
-                    theme.textTheme.bodyMedium,
-                    selfName: selfName,
-                    selfMentionColor: selfMentionColor,
-                    otherMentionColor: otherMentionColor,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildMentionText(
+                        displayText,
+                        theme,
+                        theme.textTheme.bodyMedium,
+                        selfName: selfName,
+                        selfMentionColor: selfMentionColor,
+                        otherMentionColor: otherMentionColor,
+                      ),
+                      Builder(
+                        builder: (_) {
+                          final line = _buildPathLine(
+                            theme: theme,
+                            subtleColor: theme.colorScheme.onSurface.withAlpha(
+                              110,
+                            ),
+                            isOutgoing: false,
+                            heardCount: 0,
+                            pathLen: message.pathLen,
+                            paths: paths,
+                          );
+                          if (line is SizedBox) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: line,
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
                 Padding(
@@ -1185,6 +1356,438 @@ class _ReplyStrip extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Message paths sheet
+// ---------------------------------------------------------------------------
+
+/// Bottom sheet showing per-path reception details for an outgoing channel
+/// message.  Requires [packetHeardProvider] data to be present (in-session
+/// 0x88 frames only — data is not persisted across restarts).
+class _MessagePathsSheet extends ConsumerWidget {
+  const _MessagePathsSheet({required this.msg});
+  final ChatMessage msg;
+
+  /// Extract the sender name from a channel message (same logic as the bubble).
+  static String _senderName(ChatMessage msg) {
+    if (msg.senderName != null && msg.senderName!.isNotEmpty) {
+      return msg.senderName!;
+    }
+    final colonIdx = msg.text.indexOf(': ');
+    if (colonIdx > 0) return msg.text.substring(0, colonIdx).trim();
+    return 'Desconhecido';
+  }
+
+  /// Try to match a hop hash (first [hashSize] bytes of a pubkey) against
+  /// the contacts list.  Returns the contact's displayName only when exactly
+  /// one non-client contact matches — if multiple contacts share the same
+  /// Try to match a hop hash against the contacts list.
+  ///
+  /// Only repeaters (type=2) and rooms (type=3) are considered — these are
+  /// the only MeshCore node types that forward packets.  Clients (type=1)
+  /// and sensors (type=4) never relay and are explicitly excluded.
+  ///
+  /// With PATH_HASH_SIZE=1 (firmware default) two relay contacts can share
+  /// the same first byte.  We return the first match found.  False-positives
+  /// from client nodes are prevented by the type filter above; name
+  /// collisions between two relay contacts are unavoidable without larger
+  /// hashes and are an accepted limitation of the 1-byte firmware config.
+  static String? _matchContact(Uint8List hopHash, List<Contact> contacts) {
+    final candidates = <Contact>[];
+    for (final c in contacts) {
+      // Only relay-capable types: repeater (2) and room (3).
+      if (!c.isRepeater && !c.isRoom) continue;
+      if (c.publicKey.length < hopHash.length) continue;
+      var match = true;
+      for (var i = 0; i < hopHash.length; i++) {
+        if (c.publicKey[i] != hopHash[i]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) candidates.add(c);
+    }
+    if (candidates.isEmpty) return null;
+    // Tiebreak: most recently modified → most recently advertised → alphabetical.
+    candidates.sort((a, b) {
+      final lmA = a.lastModified ?? 0;
+      final lmB = b.lastModified ?? 0;
+      if (lmA != lmB) return lmB.compareTo(lmA);
+      if (a.lastAdvertTimestamp != b.lastAdvertTimestamp) {
+        return b.lastAdvertTimestamp.compareTo(a.lastAdvertTimestamp);
+      }
+      return a.displayName.compareTo(b.displayName);
+    });
+    return candidates.first.displayName;
+  }
+
+  static const _avatarPalette = [
+    Color(0xFF7B61FF),
+    Color(0xFF00897B),
+    Color(0xFFE91E63),
+    Color(0xFF1976D2),
+    Color(0xFFFF6D00),
+    Color(0xFF6D4C41),
+    Color(0xFF558B2F),
+    Color(0xFF6A1B9A),
+  ];
+
+  static Color _avatarColor(String name) {
+    if (name.isEmpty) return _avatarPalette[0];
+    var hash = 0;
+    for (final c in name.codeUnits) {
+      hash = (hash * 31 + c) & 0x7FFFFFFF;
+    }
+    return _avatarPalette[hash % _avatarPalette.length];
+  }
+
+  static String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts[0].isEmpty) return '?';
+    if (parts.length >= 2 && parts[1].isNotEmpty) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    final s = parts[0];
+    return (s.length >= 2 ? s.substring(0, 2) : s).toUpperCase();
+  }
+
+  /// Renders a single node row (sender / relay hop / receiver) in the path chain.
+  static Widget _buildChainRow({
+    required ThemeData theme,
+    required Widget leading,
+    required String title,
+    required String subtitle,
+    Color? subtitleColor,
+    Widget? trailing,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        leading,
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                subtitle,
+                style: TextStyle(fontSize: 12, color: subtitleColor),
+              ),
+            ],
+          ),
+        ),
+        if (trailing != null) ...[const SizedBox(width: 8), trailing],
+      ],
+    );
+  }
+
+  /// Vertical connector line drawn between chain nodes.
+  static Widget _buildConnector(ThemeData theme) {
+    return Padding(
+      // left=19 centres the 2px line under a 40px diameter CircleAvatar.
+      padding: const EdgeInsets.only(left: 19),
+      child: Container(
+        width: 2,
+        height: 20,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.outlineVariant,
+          borderRadius: BorderRadius.circular(1),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final allPaths = ref.watch(packetHeardProvider);
+    final paths =
+        msg.packetHashHex != null
+            ? (allPaths[msg.packetHashHex] ?? <MessagePath>[])
+            : <MessagePath>[];
+    final contacts = ref.watch(contactsProvider);
+    final senderName = _senderName(msg);
+
+    final heardTimes = paths.length;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.55,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      expand: false,
+      builder:
+          (ctx, scrollController) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.call_merge, color: theme.colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Ouvido $heardTimes ${heardTimes == 1 ? 'vez' : 'vezes'}',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: theme.colorScheme.onPrimaryContainer,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          msg.isOutgoing
+                              ? 'O teu rádio ouviu esta mensagem pelos seguintes caminhos.'
+                              : 'O teu rádio recebeu esta mensagem pelos seguintes caminhos.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onPrimaryContainer,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              if (paths.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'Os dados de caminho não estão disponíveis.\nReconecta o rádio para registar novos caminhos.',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.separated(
+                    controller: scrollController,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: paths.length,
+                    separatorBuilder:
+                        (_, __) => const Divider(height: 1, indent: 16),
+                    itemBuilder: (ctx, i) {
+                      final path = paths[i];
+                      final isDirect = path.pathHashCount == 0;
+                      final hops = path.pathHashCount;
+
+                      // ── Sender node ──────────────────────────────────────
+                      final Widget senderLeading;
+                      final String senderTitle;
+                      if (msg.isOutgoing) {
+                        senderLeading = CircleAvatar(
+                          backgroundColor: theme.colorScheme.primary,
+                          child: Icon(
+                            Icons.radio,
+                            color: theme.colorScheme.onPrimary,
+                            size: 20,
+                          ),
+                        );
+                        senderTitle = 'O teu rádio';
+                      } else {
+                        senderLeading = CircleAvatar(
+                          backgroundColor: _avatarColor(senderName),
+                          child: Text(
+                            _initials(senderName),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                            ),
+                          ),
+                        );
+                        senderTitle = senderName;
+                      }
+
+                      // ── Intermediate relay hops ───────────────────────────
+                      final hopWidgets = <Widget>[];
+                      for (var h = 0; h < hops; h++) {
+                        final offset = h * path.pathHashSize;
+                        final hexId =
+                            offset < path.pathBytes.length
+                                ? path.pathBytes[offset]
+                                    .toRadixString(16)
+                                    .padLeft(2, '0')
+                                : '?';
+                        final String? hopName;
+                        if (offset + path.pathHashSize <=
+                            path.pathBytes.length) {
+                          hopName = _matchContact(
+                            path.pathBytes.sublist(
+                              offset,
+                              offset + path.pathHashSize,
+                            ),
+                            contacts,
+                          );
+                        } else {
+                          hopName = null;
+                        }
+                        hopWidgets.add(_buildConnector(theme));
+                        hopWidgets.add(
+                          _buildChainRow(
+                            theme: theme,
+                            leading: CircleAvatar(
+                              backgroundColor:
+                                  theme.colorScheme.secondaryContainer,
+                              child: Text(
+                                hexId,
+                                style: TextStyle(
+                                  color: theme.colorScheme.onSecondaryContainer,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            title: hopName ?? 'Nó desconhecido',
+                            subtitle: 'Salto ${h + 1} · Repetiu',
+                            subtitleColor:
+                                hopName != null
+                                    ? Colors.orange.shade700
+                                    : theme.colorScheme.onSurfaceVariant,
+                          ),
+                        );
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Sender
+                            _buildChainRow(
+                              theme: theme,
+                              leading: senderLeading,
+                              title: senderTitle,
+                              subtitle:
+                                  msg.isOutgoing
+                                      ? 'Enviaste a mensagem'
+                                      : 'Enviou a mensagem',
+                              subtitleColor: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            // Relay hops (each with its own connector above)
+                            ...hopWidgets,
+                            // Connector before receiver
+                            _buildConnector(theme),
+                            // Receiver — always our radio
+                            _buildChainRow(
+                              theme: theme,
+                              leading: CircleAvatar(
+                                backgroundColor: theme.colorScheme.primary,
+                                child: Icon(
+                                  Icons.phone_android,
+                                  color: theme.colorScheme.onPrimary,
+                                  size: 20,
+                                ),
+                              ),
+                              title: 'O teu rádio',
+                              subtitle:
+                                  isDirect
+                                      ? 'Ouvido diretamente'
+                                      : 'Recebeu a mensagem',
+                              subtitleColor:
+                                  isDirect
+                                      ? Colors.green.shade600
+                                      : theme.colorScheme.onSurfaceVariant,
+                              trailing: _SnrBar(snr: path.snr, theme: theme),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+    );
+  }
+}
+
+/// Signal-strength bar widget matching the visual style in the paths sheet.
+class _SnrBar extends StatelessWidget {
+  const _SnrBar({required this.snr, required this.theme});
+  final double snr;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    // Map SNR → 1–4 bars: <0 → 1, 0–5 → 2, 5–10 → 3, >10 → 4
+    final bars =
+        snr < 0
+            ? 1
+            : snr < 5
+            ? 2
+            : snr < 10
+            ? 3
+            : 4;
+    const maxBars = 4;
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (var b = 1; b <= maxBars; b++)
+              Container(
+                width: 5,
+                height: (5 + b * 4).toDouble(),
+                margin: const EdgeInsets.only(left: 2),
+                decoration: BoxDecoration(
+                  color:
+                      b <= bars ? Colors.green.shade600 : Colors.grey.shade600,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '${snr.toStringAsFixed(1)}dB',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 }

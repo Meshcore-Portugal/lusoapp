@@ -17,7 +17,7 @@ class StorageService {
   static const _keyLastDeviceType = 'last_device_type';
   static const _keyLastDeviceName = 'last_device_name';
   static const _keyContacts = 'contacts_v1';
-  static const int maxMessagesPerKey = 500;
+  static const int maxMessagesPerKey = 2000;
 
   static String _messagesKey(String key) => 'msgs_v1_$key';
 
@@ -174,7 +174,7 @@ class StorageService {
   // ---------------------------------------------------------------------------
 
   static const _keyPlan333Enabled = 'plan333_enabled';
-  static const _keyPlan333Config  = 'plan333_config';
+  static const _keyPlan333Config = 'plan333_config';
 
   Future<void> savePlan333Enabled(bool enabled) async {
     try {
@@ -228,6 +228,47 @@ class StorageService {
       if (raw == null) return {};
       final list = jsonDecode(raw) as List<dynamic>;
       return list.cast<String>().toSet();
+    } catch (_) {
+      return {};
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Message paths  (packetHashHex → list of MessagePath)
+  // ---------------------------------------------------------------------------
+
+  static const _keyMessagePaths = 'msg_paths_v1';
+  static const int _maxPathsPerHash = 10;
+
+  Future<void> saveMessagePaths(Map<String, List<MessagePath>> paths) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final map = <String, dynamic>{};
+      for (final entry in paths.entries) {
+        final list = entry.value;
+        final tail =
+            list.length > _maxPathsPerHash
+                ? list.sublist(list.length - _maxPathsPerHash)
+                : list;
+        map[entry.key] = tail.map((p) => p.toJson()).toList();
+      }
+      await prefs.setString(_keyMessagePaths, jsonEncode(map));
+    } catch (_) {}
+  }
+
+  Future<Map<String, List<MessagePath>>> loadMessagePaths() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_keyMessagePaths);
+      if (raw == null) return {};
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return {
+        for (final entry in map.entries)
+          entry.key:
+              (entry.value as List<dynamic>)
+                  .map((e) => MessagePath.fromJson(e as Map<String, dynamic>))
+                  .toList(),
+      };
     } catch (_) {
       return {};
     }

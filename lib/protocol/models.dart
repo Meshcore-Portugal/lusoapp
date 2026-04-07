@@ -96,6 +96,50 @@ class Contact extends Equatable {
   };
 }
 
+/// A single reception path recorded for an outgoing channel message.
+/// Each instance corresponds to one 0x88 LogRxData frame (a repeater echo).
+class MessagePath {
+  const MessagePath({
+    required this.snr,
+    required this.rssi,
+    required this.pathHashCount,
+    required this.pathHashSize,
+    required this.pathBytes,
+  });
+
+  factory MessagePath.fromJson(Map<String, dynamic> json) => MessagePath(
+    snr: (json['snr'] as num).toDouble(),
+    rssi: json['rssi'] as int,
+    pathHashCount: json['pathHashCount'] as int,
+    pathHashSize: json['pathHashSize'] as int,
+    pathBytes: base64Decode(json['pathBytes'] as String),
+  );
+
+  /// Signal-to-noise ratio in dB.
+  final double snr;
+
+  /// Received signal strength in dBm.
+  final int rssi;
+
+  /// Number of relay hops recorded in the packet path.
+  final int pathHashCount;
+
+  /// Bytes per hop hash (1–3).
+  final int pathHashSize;
+
+  /// Concatenated hop hash bytes: [pathHashCount] × [pathHashSize] bytes.
+  /// Each hop hash is the first [pathHashSize] bytes of the relay node's public key.
+  final Uint8List pathBytes;
+
+  Map<String, dynamic> toJson() => {
+    'snr': snr,
+    'rssi': rssi,
+    'pathHashCount': pathHashCount,
+    'pathHashSize': pathHashSize,
+    'pathBytes': base64Encode(pathBytes),
+  };
+}
+
 /// A chat message (private or channel).
 class ChatMessage extends Equatable {
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
