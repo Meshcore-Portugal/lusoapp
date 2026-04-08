@@ -33,12 +33,8 @@ Uint8List _publicChannelSecret() {
   );
 }
 
-/// Derives the 16-byte hashtag channel key: first 16 bytes of sha256("#name").
-Uint8List _hashtagKey(String name) {
-  final withHash = name.startsWith('#') ? name : '#$name';
-  final digest = sha256.convert(utf8.encode(withHash));
-  return Uint8List.fromList(digest.bytes.sublist(0, 16));
-}
+/// Derives the 16-byte hashtag channel key (delegates to shared protocol implementation).
+Uint8List _hashtagKey(String name) => hashtagChannelKey(name);
 
 String _toHex(Uint8List bytes) =>
     bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
@@ -998,103 +994,108 @@ class _EditChannelSheetState extends State<_EditChannelSheet> {
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header
-          Row(
-            children: [
-              Icon(Icons.edit_outlined, color: theme.colorScheme.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text('Editar canal', style: theme.textTheme.titleLarge),
-              ),
-              Chip(
-                label: Text('Slot ${widget.channel.index}'),
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          // Channel name
-          TextField(
-            controller: _nameCtrl,
-            decoration: InputDecoration(
-              labelText: 'Nome do canal',
-              border: const OutlineInputBorder(),
-              prefixIcon: const Icon(Icons.label_outline),
-              errorText: _nameError,
-            ),
-            maxLength: 31,
-            textCapitalization: TextCapitalization.words,
-          ),
-          const SizedBox(height: 8),
-
-          // Key info (read-only)
-          if (secret != null)
-            _KeyInfoCard(
-              label: 'Chave actual',
-              info: '',
-              secretHex: _toHex(secret),
-            ),
-
-          // QR share button
-          if (secret != null && widget.channel.name.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.qr_code),
-              label: const Text('Mostrar QR Code do canal'),
-              onPressed: () => _showQrCode(context),
-            ),
-          ],
-
-          const SizedBox(height: 20),
-
-          // Delete + Save row
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: theme.colorScheme.error,
-                    side: BorderSide(color: theme.colorScheme.error),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header
+            Row(
+              children: [
+                Icon(Icons.edit_outlined, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Editar canal',
+                    style: theme.textTheme.titleLarge,
                   ),
-                  onPressed: (_saving || _deleting) ? null : _confirmDelete,
-                  icon:
-                      _deleting
-                          ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: theme.colorScheme.error,
-                            ),
-                          )
-                          : const Icon(Icons.delete_outline),
-                  label: Text(_deleting ? 'A remover...' : 'Remover'),
                 ),
+                Chip(
+                  label: Text('Slot ${widget.channel.index}'),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Channel name
+            TextField(
+              controller: _nameCtrl,
+              decoration: InputDecoration(
+                labelText: 'Nome do canal',
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.label_outline),
+                errorText: _nameError,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: (_saving || _deleting) ? null : _save,
-                  icon:
-                      _saving
-                          ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                          : const Icon(Icons.save),
-                  label: Text(_saving ? 'A guardar...' : 'Guardar'),
-                ),
+              maxLength: 31,
+              textCapitalization: TextCapitalization.words,
+            ),
+            const SizedBox(height: 8),
+
+            // Key info (read-only)
+            if (secret != null)
+              _KeyInfoCard(
+                label: 'Chave actual',
+                info: '',
+                secretHex: _toHex(secret),
+              ),
+
+            // QR share button
+            if (secret != null && widget.channel.name.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.qr_code),
+                label: const Text('Mostrar QR Code do canal'),
+                onPressed: () => _showQrCode(context),
               ),
             ],
-          ),
-          const SizedBox(height: 8),
-        ],
+
+            const SizedBox(height: 20),
+
+            // Delete + Save row
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: theme.colorScheme.error,
+                      side: BorderSide(color: theme.colorScheme.error),
+                    ),
+                    onPressed: (_saving || _deleting) ? null : _confirmDelete,
+                    icon:
+                        _deleting
+                            ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: theme.colorScheme.error,
+                              ),
+                            )
+                            : const Icon(Icons.delete_outline),
+                    label: Text(_deleting ? 'A remover...' : 'Remover'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: (_saving || _deleting) ? null : _save,
+                    icon:
+                        _saving
+                            ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Icon(Icons.save),
+                    label: Text(_saving ? 'A guardar...' : 'Guardar'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }

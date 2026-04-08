@@ -510,9 +510,11 @@ String _sanitizeUtf16(String s) {
   return buf.toString();
 }
 
-/// Renders text with all `@[name]` mentions as pill chips anywhere in the message.
-/// Mentions matching [selfName] use [selfMentionColor] (or the theme tertiary);
-/// all other mentions use [otherMentionColor] (or the theme primary).
+/// Renders text with `@[name]` mentions and `#hashtag` channel links as pill chips.
+///
+/// - `@[name]` pills: tinted by [selfMentionColor]/[otherMentionColor].
+/// - `#hashtag` pills: tinted by the theme secondary color; tappable when
+///   [onHashtagTap] is provided.
 Widget _buildMentionText(
   String text,
   ThemeData theme,
@@ -520,9 +522,11 @@ Widget _buildMentionText(
   String? selfName,
   Color? selfMentionColor,
   Color? otherMentionColor,
+  void Function(String channelName)? onHashtagTap,
 }) {
   text = _sanitizeUtf16(text);
-  final pattern = RegExp(r'@\[([^\]]+)\]');
+  // Combined: @[mention] OR #hashtag (must start with a letter to avoid noise).
+  final pattern = RegExp(r'@\[([^\]]+)\]|#([A-Za-z][A-Za-z0-9_]*)');
   final matches = pattern.allMatches(text).toList();
   if (matches.isEmpty) return Text(text, style: style);
 
@@ -535,35 +539,65 @@ Widget _buildMentionText(
         TextSpan(text: text.substring(cursor, match.start), style: style),
       );
     }
-    final name = match.group(1)!;
-    final isSelf =
-        selfName != null &&
-        name.trim().toLowerCase() == selfName.trim().toLowerCase();
-    final pillColor =
-        isSelf
-            ? (selfMentionColor ?? theme.colorScheme.tertiary)
-            : (otherMentionColor ?? theme.colorScheme.primary);
-    final textColor = _pillTextColor(pillColor);
-    spans.add(
-      WidgetSpan(
-        alignment: PlaceholderAlignment.middle,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 1),
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          decoration: BoxDecoration(
-            color: pillColor,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            '@$name',
-            style: (theme.textTheme.labelSmall ?? const TextStyle()).copyWith(
-              color: textColor,
-              fontWeight: FontWeight.bold,
+
+    if (match.group(1) != null) {
+      // ── @[mention] pill ──────────────────────────────────────────────────
+      final name = match.group(1)!;
+      final isSelf =
+          selfName != null &&
+          name.trim().toLowerCase() == selfName.trim().toLowerCase();
+      final pillColor =
+          isSelf
+              ? (selfMentionColor ?? theme.colorScheme.tertiary)
+              : (otherMentionColor ?? theme.colorScheme.primary);
+      final textColor = _pillTextColor(pillColor);
+      spans.add(
+        WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 1),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: pillColor,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '@$name',
+              style: (theme.textTheme.labelSmall ?? const TextStyle()).copyWith(
+                color: textColor,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
+    } else if (match.group(2) != null) {
+      // ── #hashtag pill ────────────────────────────────────────────────────
+      final tag = match.group(2)!;
+      final pillColor = theme.colorScheme.secondary;
+      final textColor = _pillTextColor(pillColor);
+      spans.add(
+        WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: GestureDetector(
+            onTap: onHashtagTap != null ? () => onHashtagTap(tag) : null,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 1),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: pillColor,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '#$tag',
+                style: (theme.textTheme.labelSmall ?? const TextStyle())
+                    .copyWith(color: textColor, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     cursor = match.end;
   }
 
@@ -689,6 +723,153 @@ class _MessageBubble extends ConsumerWidget {
           ),
         ],
       ],
+    );
+  }
+
+  /// Handles a tap on a `#hashtag` channel link inside a message bubble.
+  ///
+  /// If [tag] matches an existing channel (case-insensitive), navigates to it.
+  /// Otherwise opens a bottom sheet to create-and-join the hashtag channel.
+  void _handleHashtagTap(BuildContext context, WidgetRef ref, String tag) {
+    final channelName = tag.startsWith('#') ? tag : '#$tag';
+    final channels = ref.read(channelsProvider);
+    final existing =
+        channels
+            .where((c) => c.name.toLowerCase() == channelName.toLowerCase())
+            .firstOrNull;
+    if (existing != null) {
+      context.push('/channels/${existing.index}');
+    } else {
+      _showHashtagCreateSheet(context, ref, channelName);
+    }
+  }
+
+  void _showHashtagCreateSheet(
+    BuildContext context,
+    WidgetRef ref,
+    String channelName, // already normalised with leading '#'
+  ) {
+    final theme = Theme.of(context);
+    final keyBytes = hashtagChannelKey(channelName);
+    final keyHex =
+        keyBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder:
+          (sheetCtx) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.tag, color: theme.colorScheme.secondary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          channelName,
+                          style: theme.textTheme.titleLarge,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Canal Hashtag — qualquer pessoa com o nome pode entrar.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withAlpha(160),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Chave: $keyHex',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontFamily: 'monospace',
+                      color: theme.colorScheme.onSurface.withAlpha(120),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    icon: const Icon(Icons.add_circle_outline),
+                    label: const Text('Criar e entrar no canal'),
+                    onPressed: () async {
+                      final service = ref.read(radioServiceProvider);
+                      if (service == null) return;
+
+                      final channels = ref.read(channelsProvider);
+
+                      // Re-check: may have been created while sheet was open.
+                      final alreadyExists = channels.any(
+                        (c) =>
+                            c.name.toLowerCase() == channelName.toLowerCase(),
+                      );
+                      if (alreadyExists) {
+                        final ch = channels.firstWhere(
+                          (c) =>
+                              c.name.toLowerCase() == channelName.toLowerCase(),
+                        );
+                        if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                        if (context.mounted) {
+                          context.push('/channels/${ch.index}');
+                        }
+                        return;
+                      }
+
+                      final maxChannels =
+                          ref.read(deviceInfoProvider)?.maxChannels ?? 8;
+                      // Only non-empty slots are truly "used" — the firmware
+                      // reports all slots back (including empty ones with a
+                      // blank name), so filtering is required to find a free slot.
+                      final usedIndices =
+                          channels
+                              .where((c) => !c.isEmpty)
+                              .map((c) => c.index)
+                              .toSet();
+                      final freeSlot =
+                          List.generate(
+                            maxChannels,
+                            (i) => i,
+                          ).where((i) => !usedIndices.contains(i)).firstOrNull;
+
+                      if (freeSlot == null) {
+                        if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Sem espaço disponível para novos canais.',
+                              ),
+                            ),
+                          );
+                        }
+                        return;
+                      }
+
+                      final secret = hashtagChannelKey(channelName);
+                      await service.setChannel(freeSlot, channelName, secret);
+                      await Future.delayed(const Duration(milliseconds: 200));
+                      await service.requestChannel(freeSlot);
+
+                      if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                      if (context.mounted) {
+                        context.push('/channels/$freeSlot');
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(sheetCtx),
+                    child: const Text('Cancelar'),
+                  ),
+                ],
+              ),
+            ),
+          ),
     );
   }
 
@@ -936,6 +1117,8 @@ class _MessageBubble extends ConsumerWidget {
                         selfName: selfName,
                         selfMentionColor: selfMentionColor,
                         otherMentionColor: otherMentionColor,
+                        onHashtagTap:
+                            (tag) => _handleHashtagTap(context, ref, tag),
                       ),
                       Builder(
                         builder: (_) {
@@ -1077,6 +1260,8 @@ class _MessageBubble extends ConsumerWidget {
                         selfName: selfName,
                         selfMentionColor: selfMentionColor,
                         otherMentionColor: otherMentionColor,
+                        onHashtagTap:
+                            (tag) => _handleHashtagTap(context, ref, tag),
                       ),
                       Builder(
                         builder: (_) {

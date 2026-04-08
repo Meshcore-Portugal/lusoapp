@@ -1,6 +1,16 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
+
+/// Derives the 16-byte hashtag channel key used by MeshCore firmware.
+/// Key = first 16 bytes of SHA-256("#name"), where [name] gets a '#' prefix
+/// if it does not already start with one.
+Uint8List hashtagChannelKey(String name) {
+  final withHash = name.startsWith('#') ? name : '#$name';
+  final digest = sha256.convert(utf8.encode(withHash));
+  return Uint8List.fromList(digest.bytes.sublist(0, 16));
+}
 
 /// Represents a MeshCore contact as received from the radio.
 class Contact extends Equatable {
