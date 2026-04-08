@@ -48,6 +48,8 @@ class CompanionDecoder {
         return _parseBattAndStorage(data);
       case respDeviceInfo:
         return _parseDeviceInfo(data);
+      case respPrivateKey:
+        return _parsePrivateKey(data);
       case respChannelInfo:
         return _parseChannelInfo(data);
       case respSignature:
@@ -537,6 +539,11 @@ class CompanionDecoder {
     return SignatureResponse(Uint8List.fromList(data.sublist(0, 64)));
   }
 
+  static PrivateKeyResponse? _parsePrivateKey(Uint8List data) {
+    if (data.length < 64) return null;
+    return PrivateKeyResponse(Uint8List.fromList(data.sublist(0, 64)));
+  }
+
   static CompanionResponse? _parseStats(Uint8List data) {
     if (data.isEmpty) return null;
     final subType = data[0];
@@ -778,6 +785,13 @@ class ControlDataPush extends CompanionResponse {
 class SignatureResponse extends CompanionResponse {
   const SignatureResponse(this.signature);
   final Uint8List signature;
+}
+
+class PrivateKeyResponse extends CompanionResponse {
+  const PrivateKeyResponse(this.privateKey);
+
+  /// Raw 64-byte private key received from the radio.
+  final Uint8List privateKey;
 }
 
 /// Core device statistics (CMD_GET_STATS + STATS_TYPE_CORE).

@@ -172,6 +172,14 @@ class RadioService {
     await _send(CompanionEncoder.reboot());
   }
 
+  Future<void> requestPrivateKeyExport() async {
+    await _send(CompanionEncoder.exportPrivateKey());
+  }
+
+  Future<void> importPrivateKey(Uint8List privateKey) async {
+    await _send(CompanionEncoder.importPrivateKey(privateKey));
+  }
+
   Future<void> login(Uint8List peerPublicKey, String password) async {
     await _send(CompanionEncoder.sendLogin(peerPublicKey, password));
   }

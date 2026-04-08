@@ -701,6 +701,54 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
 
     _setStep(5, 'Ligado!');
   }
+
+  // ---------------------------------------------------------------------------
+  // Private key backup / restore
+  // ---------------------------------------------------------------------------
+
+  /// Request the radio to export its 64-byte private key via the companion
+  /// protocol (requires firmware built with ENABLE_PRIVATE_KEY_EXPORT=1).
+  ///
+  /// Returns the key as a 128-char hex string on success, or null if the radio
+  /// timed out, replied with an error, or has the feature disabled.
+  Future<String?> exportPrivateKey() async {
+    final service = _ref.read(radioServiceProvider);
+    if (service == null) return null;
+    final resp = await _sendAndWait(
+      service,
+      () => service.requestPrivateKeyExport(),
+      (r) => r is PrivateKeyResponse || r is ErrorResponse,
+      timeout: const Duration(seconds: 5),
+    );
+    if (resp is PrivateKeyResponse) {
+      return resp.privateKey
+          .map((b) => b.toRadixString(16).padLeft(2, '0'))
+          .join();
+    }
+    return null;
+  }
+
+  /// Send a 64-byte private key to the radio (requires firmware built with
+  /// ENABLE_PRIVATE_KEY_IMPORT=1).
+  ///
+  /// [prvKeyHex] must be exactly 128 hex characters (64 bytes).
+  /// Returns true on success (radio replied OK), false otherwise.
+  Future<bool> importPrivateKey(String prvKeyHex) async {
+    final service = _ref.read(radioServiceProvider);
+    if (service == null) return false;
+    if (prvKeyHex.length != 128) return false;
+    final bytes = Uint8List(64);
+    for (var i = 0; i < 64; i++) {
+      bytes[i] = int.parse(prvKeyHex.substring(i * 2, i * 2 + 2), radix: 16);
+    }
+    final resp = await _sendAndWait(
+      service,
+      () => service.importPrivateKey(bytes),
+      (r) => r is OkResponse || r is ErrorResponse,
+      timeout: const Duration(seconds: 5),
+    );
+    return resp is OkResponse;
+  }
 }
 
 final connectionProvider =
