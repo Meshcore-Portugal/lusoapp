@@ -194,6 +194,41 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                       ),
                     ),
                   ),
+                  // Advert button — always visible
+                  PopupMenuButton<_AdvertType>(
+                    icon: const Icon(Icons.broadcast_on_personal),
+                    tooltip: 'Enviar Anúncio',
+                    onSelected: (type) {
+                      final svc = ref.read(radioServiceProvider);
+                      switch (type) {
+                        case _AdvertType.zeroHop:
+                          svc?.sendAdvert(flood: false);
+                        case _AdvertType.flood:
+                          svc?.sendAdvert(flood: true);
+                      }
+                    },
+                    itemBuilder:
+                        (_) => [
+                          const PopupMenuItem(
+                            value: _AdvertType.zeroHop,
+                            child: ListTile(
+                              leading: Icon(Icons.wifi_tethering),
+                              title: Text('Anúncio · Zero Hop'),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: _AdvertType.flood,
+                            child: ListTile(
+                              leading: Icon(Icons.broadcast_on_home),
+                              title: Text('Anúncio · Flood'),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                        ],
+                  ),
                   PopupMenuButton<ContactSort>(
                     icon: Icon(
                       Icons.sort,
@@ -229,13 +264,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
             Expanded(
               child:
                   filtered.isEmpty
-                      ? _EmptyState(
-                        filter: filter,
-                        onAdvert:
-                            () => ref
-                                .read(radioServiceProvider)
-                                ?.sendAdvert(flood: true),
-                      )
+                      ? _EmptyState(filter: filter)
                       : RefreshIndicator(
                         onRefresh:
                             () async =>
@@ -359,9 +388,8 @@ class ContactFilterBar extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.filter, required this.onAdvert});
+  const _EmptyState({required this.filter});
   final ContactFilter filter;
-  final VoidCallback onAdvert;
 
   @override
   Widget build(BuildContext context) {
@@ -396,17 +424,17 @@ class _EmptyState extends StatelessWidget {
             'Os contactos aparecem quando o radio os descobre',
             style: theme.textTheme.bodySmall,
           ),
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: onAdvert,
-            icon: const Icon(Icons.broadcast_on_home),
-            label: const Text('Enviar Anúncio'),
-          ),
         ],
       ),
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Advert type enum (used by the toolbar advert popup)
+// ---------------------------------------------------------------------------
+
+enum _AdvertType { zeroHop, flood }
 
 // ---------------------------------------------------------------------------
 // Contact tile
