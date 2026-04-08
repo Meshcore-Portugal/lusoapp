@@ -166,6 +166,62 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
                 '${channelMessages.length} mensagens',
                 style: theme.textTheme.bodySmall,
               ),
+              if (channelMessages.isNotEmpty)
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, size: 20),
+                  tooltip: 'Opções do canal',
+                  onSelected: (value) async {
+                    if (value == 'clear') {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder:
+                            (ctx) => AlertDialog(
+                              title: const Text('Limpar histórico'),
+                              content: const Text(
+                                'Apagar todas as mensagens deste canal? Esta ação não pode ser revertida.',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  child: const Text('Cancelar'),
+                                ),
+                                FilledButton(
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: theme.colorScheme.error,
+                                    foregroundColor: theme.colorScheme.onError,
+                                  ),
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  child: const Text('Apagar'),
+                                ),
+                              ],
+                            ),
+                      );
+                      if (confirm == true && context.mounted) {
+                        await ref
+                            .read(messagesProvider.notifier)
+                            .deleteChannelHistory(widget.channelIndex);
+                      }
+                    }
+                  },
+                  itemBuilder:
+                      (_) => [
+                        PopupMenuItem(
+                          value: 'clear',
+                          child: ListTile(
+                            leading: Icon(
+                              Icons.delete_sweep,
+                              color: theme.colorScheme.error,
+                            ),
+                            title: Text(
+                              'Limpar histórico',
+                              style: TextStyle(color: theme.colorScheme.error),
+                            ),
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                          ),
+                        ),
+                      ],
+                ),
             ],
           ),
         ),
@@ -650,74 +706,95 @@ class _MessageBubble extends ConsumerWidget {
     return parts.join(' • ');
   }
 
-  void _showMsgContextMenu(BuildContext context, ChatMessage msg) {
+  void _showMsgContextMenu(
+    BuildContext context,
+    ChatMessage msg,
+    WidgetRef ref,
+  ) {
     final theme = Theme.of(context);
     showModalBottomSheet<void>(
       context: context,
       builder:
           (_) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 8),
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.outlineVariant,
-                    borderRadius: BorderRadius.circular(2),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.outlineVariant,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                if (!msg.isOutgoing && onReply != null)
+                  const SizedBox(height: 8),
+                  if (!msg.isOutgoing && onReply != null)
+                    ListTile(
+                      leading: const Icon(Icons.reply),
+                      title: const Text('Responder'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        onReply!();
+                      },
+                    ),
                   ListTile(
-                    leading: const Icon(Icons.reply),
-                    title: const Text('Responder'),
+                    leading: const Icon(Icons.copy),
+                    title: const Text('Copiar texto'),
                     onTap: () {
+                      Clipboard.setData(ClipboardData(text: msg.text));
                       Navigator.pop(context);
-                      onReply!();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Texto copiado'),
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
                     },
                   ),
-                ListTile(
-                  leading: const Icon(Icons.copy),
-                  title: const Text('Copiar texto'),
-                  onTap: () {
-                    Clipboard.setData(ClipboardData(text: msg.text));
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Texto copiado'),
-                        duration: Duration(seconds: 1),
+                  if (msg.packetHashHex != null)
+                    ListTile(
+                      leading: const Icon(Icons.call_merge),
+                      title: const Text('Ver caminhos da mensagem'),
+                      subtitle: Text(
+                        msg.isOutgoing
+                            ? 'Ouvida ${msg.heardCount} ${msg.heardCount == 1 ? 'vez' : 'vezes'} por repetidores'
+                            : 'Recebida via repetidores',
+                        style: theme.textTheme.bodySmall,
                       ),
-                    );
-                  },
-                ),
-                if (msg.packetHashHex != null)
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showMessagePaths(context, msg);
+                      },
+                    ),
+                  if (msg.pathLen != null || msg.snr != null)
+                    ListTile(
+                      leading: const Icon(Icons.info_outline),
+                      title: const Text('Detalhes'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showMsgDetails(context, msg, theme);
+                      },
+                    ),
+                  const Divider(height: 8),
                   ListTile(
-                    leading: const Icon(Icons.call_merge),
-                    title: const Text('Ver caminhos da mensagem'),
-                    subtitle: Text(
-                      msg.isOutgoing
-                          ? 'Ouvida ${msg.heardCount} ${msg.heardCount == 1 ? 'vez' : 'vezes'} por repetidores'
-                          : 'Recebida via repetidores',
-                      style: theme.textTheme.bodySmall,
+                    leading: Icon(
+                      Icons.delete_outline,
+                      color: theme.colorScheme.error,
+                    ),
+                    title: Text(
+                      'Apagar mensagem',
+                      style: TextStyle(color: theme.colorScheme.error),
                     ),
                     onTap: () {
                       Navigator.pop(context);
-                      _showMessagePaths(context, msg);
+                      ref.read(messagesProvider.notifier).deleteMessage(msg);
                     },
                   ),
-                if (msg.pathLen != null || msg.snr != null)
-                  ListTile(
-                    leading: const Icon(Icons.info_outline),
-                    title: const Text('Detalhes'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _showMsgDetails(context, msg, theme);
-                    },
-                  ),
-                const SizedBox(height: 8),
-              ],
+                  const SizedBox(height: 8),
+                ],
+              ),
             ),
           ),
     );
@@ -823,7 +900,7 @@ class _MessageBubble extends ConsumerWidget {
 
     if (isMe) {
       return GestureDetector(
-        onLongPress: () => _showMsgContextMenu(context, message),
+        onLongPress: () => _showMsgContextMenu(context, message, ref),
         child: Padding(
           padding: const EdgeInsets.only(bottom: 2),
           child: Align(
@@ -1041,7 +1118,7 @@ class _MessageBubble extends ConsumerWidget {
     );
 
     final rowWithPress = GestureDetector(
-      onLongPress: () => _showMsgContextMenu(context, message),
+      onLongPress: () => _showMsgContextMenu(context, message, ref),
       child: row,
     );
     if (onReply != null) {

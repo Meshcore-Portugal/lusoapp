@@ -1104,6 +1104,34 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     return state.where((m) => m.channelIndex == channelIndex).toList();
   }
 
+  /// Delete a single message from state and re-persist its conversation.
+  void deleteMessage(ChatMessage msg) {
+    final targetId = _msgId(msg);
+    state = state.where((m) => _msgId(m) != targetId).toList();
+    if (msg.channelIndex != null) {
+      final forKey =
+          state.where((m) => m.channelIndex == msg.channelIndex).toList();
+      StorageService.instance.saveMessages('ch_${msg.channelIndex}', forKey);
+    } else if (msg.senderKey != null) {
+      final key = 'contact_${_hex6(msg.senderKey!)}';
+      final forKey =
+          state
+              .where(
+                (m) =>
+                    m.senderKey != null &&
+                    _prefixMatch6(m.senderKey!, msg.senderKey!),
+              )
+              .toList();
+      StorageService.instance.saveMessages(key, forKey);
+    }
+  }
+
+  /// Delete all messages for a channel from state and storage.
+  Future<void> deleteChannelHistory(int channelIndex) async {
+    state = state.where((m) => m.channelIndex != channelIndex).toList();
+    await StorageService.instance.clearMessages('ch_$channelIndex');
+  }
+
   bool _prefixMatch(Uint8List a, Uint8List b) {
     final len = a.length < b.length ? a.length : b.length;
     for (var i = 0; i < len; i++) {

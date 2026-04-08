@@ -61,7 +61,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   const SizedBox(height: 12),
                   ListTile(
-                    title: const Text('Nome do Nó'),
+                    title: const Text('Nome'),
                     subtitle: Text(selfInfo?.name ?? 'Não conectado'),
                     trailing: const Icon(Icons.edit),
                     onTap: () => _editName(context, ref),
@@ -403,7 +403,11 @@ class _AppearanceCard extends ConsumerWidget {
     final selfColor = ref.watch(selfMentionColorProvider);
     final otherColor = ref.watch(otherMentionColorProvider);
 
-    Widget colorRow(String label, Color color, Future<void> Function(Color) onPick) {
+    Widget colorRow(
+      String label,
+      Color color,
+      Future<void> Function(Color) onPick,
+    ) {
       final textColor =
           color.computeLuminance() > 0.45 ? Colors.black : Colors.white;
       return ListTile(
@@ -423,9 +427,7 @@ class _AppearanceCard extends ConsumerWidget {
             decoration: BoxDecoration(
               color: color,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: theme.colorScheme.outlineVariant,
-              ),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
             ),
             child: Center(
               child: Text(

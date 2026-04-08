@@ -85,6 +85,13 @@ class StorageService {
     }
   }
 
+  Future<void> clearMessages(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_messagesKey(key));
+    } catch (_) {}
+  }
+
   // ---------------------------------------------------------------------------
   // Contacts
   // ---------------------------------------------------------------------------
