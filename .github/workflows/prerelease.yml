@@ -1,0 +1,125 @@
+name: Build and Pre-Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prerelease-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build_android:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Run Android build script
+        run: bash scripts/build.android.sh
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-artifacts
+          path: |
+            build/dist/*.apk
+            build/dist/*.aab
+          if-no-files-found: error
+
+  build_web:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Run Web build script
+        run: bash scripts/build.web.sh
+
+      - name: Upload Web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-artifacts
+          path: build/dist/*-web.zip
+          if-no-files-found: error
+
+  build_ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Run iOS build script
+        run: bash scripts/build.ios.sh
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-artifacts
+          path: build/dist/*-ios.ipa
+          if-no-files-found: error
+
+  release:
+    needs:
+      - build_android
+      - build_web
+      - build_ios
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: android-artifacts
+          path: release-assets
+
+      - name: Download Web artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-artifacts
+          path: release-assets
+
+      - name: Download iOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-artifacts
+          path: release-assets
+
+      - name: Create pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: prerelease-${{ github.run_number }}-${{ github.sha }}
+          name: Pre-release ${{ github.run_number }}
+          prerelease: true
+          generate_release_notes: true
+          target_commitish: ${{ github.sha }}
+          files: |
+            release-assets/*.apk
+            release-assets/*.aab
+            release-assets/*-web.zip
+            release-assets/*-ios.ipa

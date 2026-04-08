@@ -1,6 +1,6 @@
-# MeshCore PT — Companion App for the Portuguese MeshCore Community
+# Companion App for the Portuguese MeshCore Community
 
-**MeshCore PT (MCAPPPT)** is a Flutter companion app for [MeshCore](https://meshcore.net) radios, built by and for the Portuguese amateur radio and mesh networking community.
+**MeshCore PT (lusoapp)** is a Flutter companion app for [MeshCore](https://meshcore.net) radios, built by and for the Portuguese amateur radio and mesh networking community.
 
 ## Features
 
