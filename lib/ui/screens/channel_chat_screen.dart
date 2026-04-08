@@ -652,10 +652,71 @@ class _MessageBubble extends ConsumerWidget {
     return (s.length >= 2 ? s.substring(0, 2) : s).toUpperCase();
   }
 
-  /// Builds the compact path line shown inside the bubble.
+  /// Try to match hop hash bytes against repeater/room contacts.
+  /// Returns the contact's displayName, or null if no match.
+  static String? _resolveHopName(Uint8List hopHash, List<Contact> contacts) {
+    final candidates = <Contact>[];
+    for (final c in contacts) {
+      if (!c.isRepeater && !c.isRoom) continue;
+      if (c.publicKey.length < hopHash.length) continue;
+      var match = true;
+      for (var i = 0; i < hopHash.length; i++) {
+        if (c.publicKey[i] != hopHash[i]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) candidates.add(c);
+    }
+    if (candidates.isEmpty) return null;
+    candidates.sort((a, b) {
+      final lmA = a.lastModified ?? 0;
+      final lmB = b.lastModified ?? 0;
+      if (lmA != lmB) return lmB.compareTo(lmA);
+      return b.lastAdvertTimestamp.compareTo(a.lastAdvertTimestamp);
+    });
+    return candidates.first.displayName;
+  }
+
+  /// Extract the name of the last relay hop (closest to our radio) in [path],
+  /// or null if this path is direct (no hops).
+  static String? _lastHopName(MessagePath path, List<Contact> contacts) {
+    final n = path.pathHashCount;
+    if (n == 0) return null;
+    final lastOff = (n - 1) * path.pathHashSize;
+    if (lastOff + path.pathHashSize > path.pathBytes.length) {
+      // Fallback: hex of first byte at offset
+      return lastOff < path.pathBytes.length
+          ? path.pathBytes[lastOff].toRadixString(16).padLeft(2, '0').toUpperCase()
+          : '?';
+    }
+    final name = _resolveHopName(
+      path.pathBytes.sublist(lastOff, lastOff + path.pathHashSize),
+      contacts,
+    );
+    if (name != null) return name;
+    // Fallback: hex prefix
+    return path.pathBytes[lastOff].toRadixString(16).padLeft(2, '0').toUpperCase();
+  }
+
+  /// Pick the most informative path to represent in the bubble chip:
+  /// prefer paths that have at least one relay hop.
+  static MessagePath? _primaryPath(List<MessagePath> paths) {
+    if (paths.isEmpty) return null;
+    for (final p in paths) {
+      if (p.pathHashCount > 0) return p;
+    }
+    return paths.first; // all direct
+  }
+
+  /// Compact path chip shown inside each message bubble.
   ///
-  /// Outgoing: ⟳ heardCount  ↪ hop1, hop2, …
-  /// Incoming: ↪ hopA, hopB, …  (from recorded path bytes; falls back to hop count)
+  /// Shows the last relay hop (closest to receiver) as a tappable pill.
+  /// A "+N" badge indicates additional paths. Tapping opens the full sheet.
+  ///
+  /// Outgoing:   ⟲2  [via RelayName +1]
+  /// Incoming:        [via RelayName +1]
+  /// Fallback (no 0x88 data): plain "N saltos" text, not tappable.
   static Widget _buildPathLine({
     required ThemeData theme,
     required Color subtleColor,
@@ -663,67 +724,117 @@ class _MessageBubble extends ConsumerWidget {
     required int heardCount,
     required int? pathLen,
     required List<MessagePath> paths,
+    required List<Contact> contacts,
+    VoidCallback? onTap,
   }) {
-    // Hop IDs from the first recorded path — available for BOTH in/outgoing.
-    final hopIds = <String>[];
-    if (paths.isNotEmpty) {
-      final p = paths.first;
-      for (var h = 0; h < p.pathHashCount; h++) {
-        final off = h * p.pathHashSize;
-        if (off < p.pathBytes.length) {
-          hopIds.add(
-            p.pathBytes[off].toRadixString(16).padLeft(2, '0').toUpperCase(),
-          );
-        }
-      }
-    }
-
-    // Fallback for incoming when no path bytes recorded yet (e.g. live message
-    // arrived but 0x88 frame hasn't been processed yet).
-    final incomingHopCount =
-        (hopIds.isEmpty && !isOutgoing && pathLen != null && pathLen != 0xFF)
-            ? (pathLen & 0x3F)
-            : 0;
-
-    final showHeard = isOutgoing && heardCount > 0;
-    final showHopIds = hopIds.isNotEmpty;
-    final showIncomingHops = !isOutgoing && incomingHopCount > 0;
-
-    if (!showHeard && !showHopIds && !showIncomingHops) {
-      return const SizedBox.shrink();
-    }
-
-    // Truncate long hop lists: first 2, …, last 1.
-    String hopStr = '';
-    if (showHopIds) {
-      hopStr =
-          hopIds.length <= 5
-              ? hopIds.join(', ')
-              : '${hopIds.take(2).join(', ')}, …, ${hopIds.last}';
-    } else if (showIncomingHops) {
-      hopStr = '$incomingHopCount salto${incomingHopCount == 1 ? '' : 's'}';
-    }
-
-    final ts = TextStyle(fontSize: 11, color: subtleColor);
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (showHeard) ...<Widget>[
+    // ── OUTGOING: no paths, just heard count ────────────────────────────────
+    if (isOutgoing && paths.isEmpty) {
+      if (heardCount == 0) return const SizedBox.shrink();
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
           Icon(Icons.repeat, size: 12, color: subtleColor),
-          const SizedBox(width: 2),
-          Text('$heardCount', style: ts),
-          if (hopStr.isNotEmpty) const SizedBox(width: 6),
-        ],
-        if (hopStr.isNotEmpty) ...<Widget>[
-          Icon(Icons.subdirectory_arrow_right, size: 12, color: subtleColor),
-          const SizedBox(width: 2),
-          Flexible(
-            child: Text(hopStr, style: ts, overflow: TextOverflow.ellipsis),
+          const SizedBox(width: 3),
+          Text(
+            '$heardCount',
+            style: TextStyle(fontSize: 11, color: subtleColor),
           ),
         ],
-      ],
+      );
+    }
+
+    // ── INCOMING: no 0x88 data yet — plain hop count fallback ───────────────
+    if (!isOutgoing && paths.isEmpty) {
+      if (pathLen == null || pathLen == 0xFF) return const SizedBox.shrink();
+      final hops = pathLen & 0x3F;
+      if (hops == 0) return const SizedBox.shrink();
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.subdirectory_arrow_right, size: 12, color: subtleColor),
+          const SizedBox(width: 3),
+          Text(
+            '$hops salto${hops == 1 ? '' : 's'}',
+            style: TextStyle(fontSize: 11, color: subtleColor),
+          ),
+        ],
+      );
+    }
+
+    // ── Build relay chip from recorded paths ─────────────────────────────────
+    final primary = _primaryPath(paths)!;
+    final lastName = _lastHopName(primary, contacts);
+    final extraPaths = paths.length - 1; // additional paths beyond the primary
+
+    // If primary is direct and all others too, nothing to show (for incoming)
+    // For outgoing keep showing the heard count even when direct
+    if (lastName == null && !isOutgoing) return const SizedBox.shrink();
+
+    final chipColor = subtleColor.withAlpha(22);
+    final borderColor = subtleColor.withAlpha(55);
+    final labelStyle = TextStyle(fontSize: 11, color: subtleColor);
+    final badgeStyle = TextStyle(
+      fontSize: 10,
+      color: subtleColor,
+      fontWeight: FontWeight.bold,
     );
+
+    Widget chip = GestureDetector(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 220),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: chipColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: borderColor, width: 0.5),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.router, size: 11, color: subtleColor),
+            const SizedBox(width: 4),
+            if (lastName != null)
+              Flexible(
+                child: Text(
+                  lastName,
+                  style: labelStyle,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              )
+            else
+              Text('Direto', style: labelStyle),
+            if (extraPaths > 0) ...[
+              const SizedBox(width: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: subtleColor.withAlpha(45),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text('+$extraPaths', style: badgeStyle),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+
+    // For outgoing, prefix with repeat count
+    if (isOutgoing && heardCount > 0) {
+      chip = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.repeat, size: 12, color: subtleColor),
+          const SizedBox(width: 3),
+          Text('$heardCount', style: labelStyle),
+          const SizedBox(width: 6),
+          Flexible(child: chip),
+        ],
+      );
+    }
+
+    return chip;
   }
 
   /// Handles a tap on a `#hashtag` channel link inside a message bubble.
@@ -1073,6 +1184,7 @@ class _MessageBubble extends ConsumerWidget {
         message.packetHashHex != null
             ? (allPaths[message.packetHashHex] ?? <MessagePath>[])
             : <MessagePath>[];
+    final contacts = ref.watch(contactsProvider);
     final time = DateTime.fromMillisecondsSinceEpoch(message.timestamp * 1000);
     final timeStr =
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
@@ -1130,6 +1242,10 @@ class _MessageBubble extends ConsumerWidget {
                             heardCount: message.heardCount,
                             pathLen: message.pathLen,
                             paths: paths,
+                            contacts: contacts,
+                            onTap: message.packetHashHex != null
+                                ? () => _showMessagePaths(context, message)
+                                : null,
                           );
                           if (line is SizedBox) return const SizedBox.shrink();
                           return Padding(
@@ -1164,18 +1280,7 @@ class _MessageBubble extends ConsumerWidget {
                     ],
                   ),
                 ),
-                // Heard-by-repeaters badge — only for channel messages
-                if (message.isChannel)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 1, right: 4, bottom: 2),
-                    child: _HeardBadge(
-                      count: message.heardCount,
-                      theme: theme,
-                      confirmed: message.confirmed,
-                    ),
-                  )
-                else
-                  const SizedBox(height: 2),
+                const SizedBox(height: 2),
               ],
             ),
           ),
@@ -1274,6 +1379,10 @@ class _MessageBubble extends ConsumerWidget {
                             heardCount: 0,
                             pathLen: message.pathLen,
                             paths: paths,
+                            contacts: contacts,
+                            onTap: message.packetHashHex != null
+                                ? () => _showMessagePaths(context, message)
+                                : null,
                           );
                           if (line is SizedBox) return const SizedBox.shrink();
                           return Padding(
@@ -1806,39 +1915,16 @@ class _MessagePathsSheet extends ConsumerWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        size: 16,
-                        color: theme.colorScheme.onPrimaryContainer,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          msg.isOutgoing
-                              ? 'O teu rádio ouviu esta mensagem pelos seguintes caminhos.'
-                              : 'O teu rádio recebeu esta mensagem pelos seguintes caminhos.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onPrimaryContainer,
-                          ),
-                        ),
-                      ),
-                    ],
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  msg.isOutgoing
+                      ? 'Cada caminho representa uma vez que o teu rádio ouviu a mensagem de volta.'
+                      : 'Toca num caminho para ver a rota completa.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
-              const SizedBox(height: 4),
               if (paths.isEmpty)
                 Expanded(
                   child: Center(
@@ -1856,16 +1942,47 @@ class _MessagePathsSheet extends ConsumerWidget {
                 )
               else
                 Expanded(
-                  child: ListView.separated(
+                  child: ListView.builder(
                     controller: scrollController,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    padding: const EdgeInsets.only(top: 4, bottom: 16),
                     itemCount: paths.length,
-                    separatorBuilder:
-                        (_, __) => const Divider(height: 1, indent: 16),
                     itemBuilder: (ctx, i) {
                       final path = paths[i];
                       final isDirect = path.pathHashCount == 0;
                       final hops = path.pathHashCount;
+
+                      // ── Last hop summary (shown in collapsed header) ───────
+                      final lastOff =
+                          hops > 0 ? (hops - 1) * path.pathHashSize : -1;
+                      final String? lastHopName =
+                          lastOff >= 0 &&
+                                  lastOff + path.pathHashSize <=
+                                      path.pathBytes.length
+                              ? _matchContact(
+                                  path.pathBytes.sublist(
+                                    lastOff,
+                                    lastOff + path.pathHashSize,
+                                  ),
+                                  contacts,
+                                )
+                              : null;
+                      final String lastHopHex =
+                          lastOff >= 0 && lastOff < path.pathBytes.length
+                              ? path.pathBytes[lastOff]
+                                  .toRadixString(16)
+                                  .padLeft(2, '0')
+                                  .toUpperCase()
+                              : '';
+                      final String summaryTitle =
+                          isDirect
+                              ? 'Direto'
+                              : (lastHopName ?? lastHopHex);
+                      final String snrStr =
+                          path.snr.toStringAsFixed(1);
+                      final String subtitleStr =
+                          isDirect
+                              ? 'SNR $snrStr dB · direto'
+                              : 'SNR $snrStr dB · $hops salto${hops == 1 ? '' : 's'}';
 
                       // ── Sender node ──────────────────────────────────────
                       final Widget senderLeading;
@@ -1928,7 +2045,8 @@ class _MessagePathsSheet extends ConsumerWidget {
                               child: Text(
                                 hexId,
                                 style: TextStyle(
-                                  color: theme.colorScheme.onSecondaryContainer,
+                                  color:
+                                      theme.colorScheme.onSecondaryContainer,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
                                 ),
@@ -1944,16 +2062,13 @@ class _MessagePathsSheet extends ConsumerWidget {
                         );
                       }
 
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
+                      // ── Full chain (shown when expanded) ──────────────────
+                      final fullChain = Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Sender
                             _buildChainRow(
                               theme: theme,
                               leading: senderLeading,
@@ -1962,13 +2077,11 @@ class _MessagePathsSheet extends ConsumerWidget {
                                   msg.isOutgoing
                                       ? 'Enviaste a mensagem'
                                       : 'Enviou a mensagem',
-                              subtitleColor: theme.colorScheme.onSurfaceVariant,
+                              subtitleColor:
+                                  theme.colorScheme.onSurfaceVariant,
                             ),
-                            // Relay hops (each with its own connector above)
                             ...hopWidgets,
-                            // Connector before receiver
                             _buildConnector(theme),
-                            // Receiver — always our radio
                             _buildChainRow(
                               theme: theme,
                               leading: CircleAvatar(
@@ -1988,10 +2101,55 @@ class _MessagePathsSheet extends ConsumerWidget {
                                   isDirect
                                       ? Colors.green.shade600
                                       : theme.colorScheme.onSurfaceVariant,
-                              trailing: _SnrBar(snr: path.snr, theme: theme),
+                              trailing:
+                                  _SnrBar(snr: path.snr, theme: theme),
                             ),
                           ],
                         ),
+                      );
+
+                      return ExpansionTile(
+                        tilePadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 2,
+                        ),
+                        leading:
+                            isDirect
+                                ? CircleAvatar(
+                                  backgroundColor: Colors.green.shade700,
+                                  child: const Icon(
+                                    Icons.sensors,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                )
+                                : CircleAvatar(
+                                  backgroundColor:
+                                      _avatarColor(summaryTitle),
+                                  child: Text(
+                                    _initials(summaryTitle),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                        title: Text(
+                          summaryTitle,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          subtitleStr,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDirect
+                                ? Colors.green.shade600
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        children: [fullChain],
                       );
                     },
                   ),
