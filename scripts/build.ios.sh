@@ -7,11 +7,43 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$PROJECT_DIR/build"
 DIST_DIR="$BUILD_DIR/dist"
 VERSION=$(grep 'version:' "$PROJECT_DIR/pubspec.yaml" | head -1 | awk '{print $2}' | tr -d "'\"")
+BUILD_MODE="release"
 
 cd "$PROJECT_DIR"
 
 log() { echo -e "\033[0;32m[BUILD-IOS]\033[0m $*"; }
 err() { echo -e "\033[0;31m[BUILD-IOS]\033[0m $*" >&2; }
+
+usage() {
+    cat <<EOF
+Usage: $(basename "$0") [--debug|--release]
+
+Build modes:
+    --debug    Build a debug iOS app bundle
+    --release  Build a release IPA (default)
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --debug)
+            BUILD_MODE="debug"
+            ;;
+        --release)
+            BUILD_MODE="release"
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            err "Unknown argument: $1"
+            usage
+            exit 1
+            ;;
+    esac
+    shift
+done
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
     err "iOS builds require macOS with Xcode."
@@ -33,7 +65,7 @@ if [ ! -d "$PROJECT_DIR/ios" ]; then
     exit 1
 fi
 
-log "lusoapp v$VERSION — iOS Release Build (no codesign)"
+log "lusoapp v$VERSION — iOS ${BUILD_MODE^} Build"
 log "===================================================="
 
 log "Getting dependencies..."
@@ -51,21 +83,44 @@ else
     exit 1
 fi
 
-log "Building iOS IPA (no codesign)..."
-flutter build ipa --release --no-codesign
+log "Running analysis..."
+flutter analyze --no-fatal-infos || true
+
+log "Running tests..."
+flutter test || { err "Tests failed"; exit 1; }
 
 mkdir -p "$DIST_DIR"
-IPA_PATH=$(find "$BUILD_DIR/ios/ipa" -maxdepth 1 -type f -name "*.ipa" | head -1 || true)
+if [ "$BUILD_MODE" = "release" ]; then
+    log "Building iOS IPA..."
+    flutter build ipa --release
 
-if [ -n "$IPA_PATH" ] && [ -f "$IPA_PATH" ]; then
-    OUT_IPA="$DIST_DIR/lusoapp-${VERSION}-ios.ipa"
-    cp "$IPA_PATH" "$OUT_IPA"
-    SIZE=$(du -h "$OUT_IPA" | cut -f1)
-    log "IPA: $OUT_IPA ($SIZE)"
+    IPA_PATH=$(find "$BUILD_DIR/ios/ipa" -maxdepth 1 -type f -name "*.ipa" | head -1 || true)
+
+    if [ -n "$IPA_PATH" ] && [ -f "$IPA_PATH" ]; then
+        OUT_IPA="$DIST_DIR/lusoapp-${VERSION}-ios-release.ipa"
+        cp "$IPA_PATH" "$OUT_IPA"
+        SIZE=$(du -h "$OUT_IPA" | cut -f1)
+        log "IPA: $OUT_IPA ($SIZE)"
+    else
+        err "IPA file not found in $BUILD_DIR/ios/ipa"
+        err "Build finished, but output path may differ."
+    fi
 else
-    err "IPA file not found in $BUILD_DIR/ios/ipa"
-    err "Build finished, but output path may differ."
+    log "Building iOS app bundle (debug)..."
+    flutter build ios --debug
+
+    APP_DIR="$BUILD_DIR/ios/iphoneos/Runner.app"
+    if [ -d "$APP_DIR" ]; then
+        OUT_APP="$DIST_DIR/lusoapp-${VERSION}-ios-debug.app.tar.gz"
+        tar -czf "$OUT_APP" -C "$BUILD_DIR/ios/iphoneos" Runner.app
+        SIZE=$(du -h "$OUT_APP" | cut -f1)
+        log "App bundle archive: $OUT_APP ($SIZE)"
+        log "Debug iOS builds produce an .app bundle, not an IPA."
+    else
+        err "App bundle not found: $APP_DIR"
+        exit 1
+    fi
 fi
 
 log "===================================================="
-log "iOS build complete: v$VERSION"
+log "iOS $BUILD_MODE build complete: v$VERSION"

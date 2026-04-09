@@ -76,6 +76,7 @@ case "$TARGET" in
     *)
         err "Unknown target: $TARGET"
         echo "Usage: $(basename "$0") [all|linux|android|ios|web|windows] [target args]"
+        echo "Example: $(basename "$0") linux --release"
         exit 1
         ;;
 esac
