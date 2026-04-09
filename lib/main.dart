@@ -98,7 +98,7 @@ class _McAppPtState extends ConsumerState<McAppPt> {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: 'MeshCore PT',
+      title: 'LusoAPP',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,

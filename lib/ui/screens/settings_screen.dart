@@ -194,7 +194,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   const SizedBox(height: 12),
                   const ListTile(
-                    title: Text('MeshCore PT'),
+                    title: Text('LusoAPP'),
                     subtitle: Text('Comunidade Portuguesa MeshCore'),
                   ),
                   ListTile(
