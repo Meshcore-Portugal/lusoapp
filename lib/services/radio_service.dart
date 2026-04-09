@@ -38,7 +38,7 @@ class RadioService {
   bool get isConnected => _transport.isConnected;
 
   /// Connect to the radio and start the companion session.
-  Future<bool> connect({String appName = 'MCAPPPT'}) async {
+  Future<bool> connect({String appName = 'lusoapp'}) async {
     final ok = await _transport.connect();
     if (!ok) return false;
 

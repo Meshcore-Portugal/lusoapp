@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mcapppt/protocol/kiss.dart';
+import 'package:lusoapp/protocol/kiss.dart';
 
 void main() {
   group('Kiss', () {
@@ -67,13 +67,7 @@ void main() {
   group('KissFrameAccumulator', () {
     test('extracts single complete frame', () {
       final acc = KissFrameAccumulator();
-      final data = Uint8List.fromList([
-        Kiss.fend,
-        0x00,
-        0x01,
-        0x02,
-        Kiss.fend,
-      ]);
+      final data = Uint8List.fromList([Kiss.fend, 0x00, 0x01, 0x02, Kiss.fend]);
 
       final frames = acc.feed(data);
       expect(frames.length, 1);
@@ -96,8 +90,14 @@ void main() {
     test('extracts multiple frames from one buffer', () {
       final acc = KissFrameAccumulator();
       final data = Uint8List.fromList([
-        Kiss.fend, 0x00, 0xAA, Kiss.fend,
-        Kiss.fend, 0x06, 0xBB, Kiss.fend,
+        Kiss.fend,
+        0x00,
+        0xAA,
+        Kiss.fend,
+        Kiss.fend,
+        0x06,
+        0xBB,
+        Kiss.fend,
       ]);
 
       final frames = acc.feed(data);

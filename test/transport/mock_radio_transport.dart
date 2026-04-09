@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:mcapppt/transport/radio_transport.dart';
+import 'package:lusoapp/transport/radio_transport.dart';
 
 /// A controllable [RadioTransport] test double.
 ///
@@ -14,8 +14,8 @@ class MockRadioTransport implements RadioTransport {
     this.connectResult = true,
     bool usesFraming = true,
     String displayName = 'Mock Transport',
-  })  : _usesFraming = usesFraming,
-        _displayName = displayName;
+  }) : _usesFraming = usesFraming,
+       _displayName = displayName;
 
   final bool connectResult;
   final bool _usesFraming;

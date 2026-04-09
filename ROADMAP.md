@@ -1,4 +1,4 @@
-# MCAPPPT — MeshCore Companion App Portugal
+# lusoapp — MeshCore Companion App Portugal
 
 ## Roadmap
 

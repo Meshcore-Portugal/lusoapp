@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mcapppt/protocol/protocol.dart';
-import 'package:mcapppt/services/radio_service.dart';
+import 'package:lusoapp/protocol/protocol.dart';
+import 'package:lusoapp/services/radio_service.dart';
 
 import 'mock_radio_transport.dart';
 
@@ -30,7 +30,11 @@ void main() {
 
       // APP_START should have header stripped: just [cmd][payload...]
       final appStart = transport.sentData[0];
-      expect(appStart[0], cmdAppStart, reason: 'first byte should be command, not direction');
+      expect(
+        appStart[0],
+        cmdAppStart,
+        reason: 'first byte should be command, not direction',
+      );
       // Should NOT start with dirAppToRadio
       expect(appStart[0], isNot(dirAppToRadio));
     });
@@ -110,10 +114,12 @@ void main() {
     });
 
     test('BattAndStorage updates state from raw BLE payload', () async {
-      transport.injectData(Uint8List.fromList([
-        respBattAndStorage,
-        0x68, 0x10, // 4200 LE (uint16)
-      ]));
+      transport.injectData(
+        Uint8List.fromList([
+          respBattAndStorage,
+          0x68, 0x10, // 4200 LE (uint16)
+        ]),
+      );
       await Future<void>.delayed(Duration.zero);
 
       expect(service.batteryMv, 4200);

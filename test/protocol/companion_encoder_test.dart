@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mcapppt/protocol/commands.dart';
-import 'package:mcapppt/protocol/companion_encoder.dart';
-import 'package:mcapppt/protocol/models.dart';
+import 'package:lusoapp/protocol/commands.dart';
+import 'package:lusoapp/protocol/companion_encoder.dart';
+import 'package:lusoapp/protocol/models.dart';
 
 /// Read uint32 little-endian from frame at offset.
 int readUint32LE(Uint8List data, int offset) {
@@ -170,7 +170,10 @@ void main() {
       expect(frame[4], 3);
       final nameBytes = frame.sublist(5, 37);
       final nameStr = utf8.decode(
-        nameBytes.sublist(0, nameBytes.contains(0) ? nameBytes.indexOf(0) : nameBytes.length),
+        nameBytes.sublist(
+          0,
+          nameBytes.contains(0) ? nameBytes.indexOf(0) : nameBytes.length,
+        ),
       );
       expect(nameStr, 'Emergency');
       expect(frame.sublist(37, 53), secret);
@@ -184,7 +187,16 @@ void main() {
     });
 
     test('sendMessage encodes attempt, timestamp, 6-byte prefix, text', () {
-      final prefix = Uint8List.fromList([0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0xF6, 0x07, 0x08]);
+      final prefix = Uint8List.fromList([
+        0xA1,
+        0xB2,
+        0xC3,
+        0xD4,
+        0xE5,
+        0xF6,
+        0x07,
+        0x08,
+      ]);
       final frame = CompanionEncoder.sendMessage(
         prefix,
         'Ola mundo',
@@ -214,20 +226,23 @@ void main() {
       expect(text, 'Hello channel');
     });
 
-    test('setRadioParams encodes freq and bw as uint32 LE, sf and cr as bytes', () {
-      const config = RadioConfig(
-        frequencyHz: 869618,
-        bandwidthHz: 62500,
-        spreadingFactor: 10,
-        codingRate: 5,
-        txPowerDbm: 14,
-      );
-      final frame = CompanionEncoder.setRadioParams(config);
-      expect(readUint32LE(frame, 4), 869618);
-      expect(readUint32LE(frame, 8), 62500);
-      expect(frame[12], 10);
-      expect(frame[13], 5);
-    });
+    test(
+      'setRadioParams encodes freq and bw as uint32 LE, sf and cr as bytes',
+      () {
+        const config = RadioConfig(
+          frequencyHz: 869618,
+          bandwidthHz: 62500,
+          spreadingFactor: 10,
+          codingRate: 5,
+          txPowerDbm: 14,
+        );
+        final frame = CompanionEncoder.setRadioParams(config);
+        expect(readUint32LE(frame, 4), 869618);
+        expect(readUint32LE(frame, 8), 62500);
+        expect(frame[12], 10);
+        expect(frame[13], 5);
+      },
+    );
 
     test('appStart includes 7 reserved bytes then UTF-8 name', () {
       final frame = CompanionEncoder.appStart('MCApp');
@@ -341,27 +356,29 @@ void main() {
   });
 
   group('CompanionEncoder - setTuningParams', () {
-    test('setTuningParams encodes rxdelay, airtime factor, and reserved bytes',
-        () {
-      final frame = CompanionEncoder.setTuningParams(
-        rxDelayBase: 1500, // raw uint32 (already *1000)
-        airtimeFactor: 2500, // raw uint32 (already *1000)
-      );
-      expect(frame[0], dirAppToRadio);
-      expect(frame[3], cmdSetTuningParams);
-      // rxDelayBase LE at offset 4
-      expect(frame[4], 0xDC); // 1500 & 0xFF
-      expect(frame[5], 0x05); // (1500 >> 8) & 0xFF
-      expect(frame[6], 0x00);
-      expect(frame[7], 0x00);
-      // airtimeFactor LE at offset 8
-      expect(frame[8], 0xC4); // 2500 & 0xFF
-      expect(frame[9], 0x09); // (2500 >> 8) & 0xFF
-      expect(frame[10], 0x00);
-      expect(frame[11], 0x00);
-      // 8 reserved zero bytes at offset 12
-      expect(frame.sublist(12, 20), List.filled(8, 0));
-    });
+    test(
+      'setTuningParams encodes rxdelay, airtime factor, and reserved bytes',
+      () {
+        final frame = CompanionEncoder.setTuningParams(
+          rxDelayBase: 1500, // raw uint32 (already *1000)
+          airtimeFactor: 2500, // raw uint32 (already *1000)
+        );
+        expect(frame[0], dirAppToRadio);
+        expect(frame[3], cmdSetTuningParams);
+        // rxDelayBase LE at offset 4
+        expect(frame[4], 0xDC); // 1500 & 0xFF
+        expect(frame[5], 0x05); // (1500 >> 8) & 0xFF
+        expect(frame[6], 0x00);
+        expect(frame[7], 0x00);
+        // airtimeFactor LE at offset 8
+        expect(frame[8], 0xC4); // 2500 & 0xFF
+        expect(frame[9], 0x09); // (2500 >> 8) & 0xFF
+        expect(frame[10], 0x00);
+        expect(frame[11], 0x00);
+        // 8 reserved zero bytes at offset 12
+        expect(frame.sublist(12, 20), List.filled(8, 0));
+      },
+    );
   });
 
   group('CompanionEncoder - sendStatusReq', () {

@@ -1,4 +1,4 @@
-# MCAPPPT — MeshCore Companion App build & run scripts
+# lusoapp — MeshCore Companion App build & run scripts
 # Usage: .\scripts\run.ps1 [command]
 #
 # Commands:
@@ -24,9 +24,9 @@ $ErrorActionPreference = "Stop"
 $ProjectDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Push-Location $ProjectDir
 
-function Log($msg)  { Write-Host "[MCAPPPT] $msg" -ForegroundColor Green }
-function Warn($msg) { Write-Host "[MCAPPPT] $msg" -ForegroundColor Yellow }
-function Err($msg)  { Write-Host "[MCAPPPT] $msg" -ForegroundColor Red }
+function Log($msg)  { Write-Host "[lusoapp] $msg" -ForegroundColor Green }
+function Warn($msg) { Write-Host "[lusoapp] $msg" -ForegroundColor Yellow }
+function Err($msg)  { Write-Host "[lusoapp] $msg" -ForegroundColor Red }
 
 function Test-Flutter {
     $flutterCmd = Get-Command flutter -ErrorAction SilentlyContinue
@@ -147,7 +147,7 @@ function Invoke-Setup {
     # Generate platform folders if missing
     if (-not (Test-Path "android") -or -not (Test-Path "windows")) {
         Log "Generating platform folders..."
-        flutter create --org pt.meshcore --project-name mcapppt --platforms android,ios,windows,linux .
+        flutter create --org pt.meshcore --project-name lusoapp --platforms android,ios,windows,linux .
     }
 
     Invoke-Get
@@ -161,7 +161,7 @@ function Invoke-Devices {
 
 function Show-Help {
     Write-Host ""
-    Write-Host "MCAPPPT - MeshCore Companion App (Portugal)" -ForegroundColor Cyan
+    Write-Host "lusoapp - MeshCore Companion App (Portugal)" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Usage: .\scripts\run.ps1 <command>" -ForegroundColor White
     Write-Host ""

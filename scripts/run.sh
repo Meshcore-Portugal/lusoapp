@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MCAPPPT — MeshCore Companion App build & run scripts
+# lusoapp — MeshCore Companion App build & run scripts
 # Usage: ./scripts/run.sh [command]
 #
 # Commands:
@@ -26,9 +26,9 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-log()  { echo -e "${GREEN}[MCAPPPT]${NC} $*"; }
-warn() { echo -e "${YELLOW}[MCAPPPT]${NC} $*"; }
-err()  { echo -e "${RED}[MCAPPPT]${NC} $*" >&2; }
+log()  { echo -e "${GREEN}[lusoapp]${NC} $*"; }
+warn() { echo -e "${YELLOW}[lusoapp]${NC} $*"; }
+err()  { echo -e "${RED}[lusoapp]${NC} $*" >&2; }
 
 check_flutter() {
     if ! command -v flutter &>/dev/null; then
@@ -111,7 +111,7 @@ cmd_setup() {
     # Generate platform folders if missing
     if [ ! -d "android" ] || [ ! -d "ios" ]; then
         log "Generating platform folders..."
-        flutter create --org pt.meshcore --project-name mcapppt --platforms android,ios,linux,windows .
+        flutter create --org pt.meshcore --project-name lusoapp --platforms android,ios,linux,windows .
     fi
     cmd_get
     log "Setup complete. Run: ./scripts/run.sh run"
@@ -139,7 +139,7 @@ case "$COMMAND" in
     doctor)     cmd_doctor ;;
     setup)      cmd_setup ;;
     *)
-        echo "MCAPPPT — MeshCore Companion App (Portugal)"
+        echo "lusoapp — MeshCore Companion App (Portugal)"
         echo ""
         echo "Usage: $0 <command>"
         echo ""

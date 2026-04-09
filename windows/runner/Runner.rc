@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "pt.meshcore" "\0"
-            VALUE "FileDescription", "mcapppt" "\0"
+            VALUE "FileDescription", "lusoapp" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "mcapppt" "\0"
+            VALUE "InternalName", "lusoapp" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 pt.meshcore. All rights reserved." "\0"
-            VALUE "OriginalFilename", "mcapppt.exe" "\0"
-            VALUE "ProductName", "mcapppt" "\0"
+            VALUE "OriginalFilename", "lusoapp.exe" "\0"
+            VALUE "ProductName", "lusoapp" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

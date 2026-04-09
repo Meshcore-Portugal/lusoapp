@@ -29,8 +29,8 @@
 
 ```bash
 # Clone the repository
-git clone <repo-url> mcapppt
-cd mcapppt
+git clone <repo-url> lusoapp
+cd lusoapp
 
 # Get dependencies
 flutter pub get

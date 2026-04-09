@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mcapppt/protocol/commands.dart';
-import 'package:mcapppt/protocol/companion_decoder.dart';
+import 'package:lusoapp/protocol/commands.dart';
+import 'package:lusoapp/protocol/companion_decoder.dart';
 
 /// Build a uint32 LE byte list.
 Uint8List uint32LE(int value) {
@@ -30,7 +30,9 @@ void main() {
     });
 
     test('decode EndContacts response', () {
-      final resp = CompanionDecoder.decode(Uint8List.fromList([respEndContacts]));
+      final resp = CompanionDecoder.decode(
+        Uint8List.fromList([respEndContacts]),
+      );
       expect(resp, isA<EndContactsResponse>());
     });
 
@@ -48,17 +50,23 @@ void main() {
 
   group('CompanionDecoder - push codes without data', () {
     test('decode SendConfirmedPush', () {
-      final resp = CompanionDecoder.decode(Uint8List.fromList([pushSendConfirmed]));
+      final resp = CompanionDecoder.decode(
+        Uint8List.fromList([pushSendConfirmed]),
+      );
       expect(resp, isA<SendConfirmedPush>());
     });
 
     test('decode MsgWaitingPush', () {
-      final resp = CompanionDecoder.decode(Uint8List.fromList([pushMsgWaiting]));
+      final resp = CompanionDecoder.decode(
+        Uint8List.fromList([pushMsgWaiting]),
+      );
       expect(resp, isA<MsgWaitingPush>());
     });
 
     test('decode LoginSuccessPush', () {
-      final resp = CompanionDecoder.decode(Uint8List.fromList([pushLoginSuccess]));
+      final resp = CompanionDecoder.decode(
+        Uint8List.fromList([pushLoginSuccess]),
+      );
       expect(resp, isA<LoginSuccessPush>());
     });
 
@@ -68,12 +76,16 @@ void main() {
     });
 
     test('decode ContactDeletedPush', () {
-      final resp = CompanionDecoder.decode(Uint8List.fromList([pushContactDeleted]));
+      final resp = CompanionDecoder.decode(
+        Uint8List.fromList([pushContactDeleted]),
+      );
       expect(resp, isA<ContactDeletedPush>());
     });
 
     test('decode ContactsFullPush', () {
-      final resp = CompanionDecoder.decode(Uint8List.fromList([pushContactsFull]));
+      final resp = CompanionDecoder.decode(
+        Uint8List.fromList([pushContactsFull]),
+      );
       expect(resp, isA<ContactsFullPush>());
     });
   });
@@ -83,7 +95,10 @@ void main() {
       final payload = Uint8List.fromList([pushPathUpdated, 0x01, 0x02, 0x03]);
       final resp = CompanionDecoder.decode(payload);
       expect(resp, isA<PathUpdatedPush>());
-      expect((resp as PathUpdatedPush).data, Uint8List.fromList([0x01, 0x02, 0x03]));
+      expect(
+        (resp as PathUpdatedPush).data,
+        Uint8List.fromList([0x01, 0x02, 0x03]),
+      );
     });
 
     test('decode TraceDataPush preserves data', () {
@@ -122,14 +137,19 @@ void main() {
 
   group('CompanionDecoder - CurrTime', () {
     test('decode CurrTime parses uint32 LE timestamp', () {
-      final payload = Uint8List.fromList([respCurrTime, ...uint32LE(1700000000)]);
+      final payload = Uint8List.fromList([
+        respCurrTime,
+        ...uint32LE(1700000000),
+      ]);
       final resp = CompanionDecoder.decode(payload);
       expect(resp, isA<CurrTimeResponse>());
       expect((resp as CurrTimeResponse).timestamp, 1700000000);
     });
 
     test('decode CurrTime with short data returns 0', () {
-      final resp = CompanionDecoder.decode(Uint8List.fromList([respCurrTime, 0x01]));
+      final resp = CompanionDecoder.decode(
+        Uint8List.fromList([respCurrTime, 0x01]),
+      );
       expect(resp, isA<CurrTimeResponse>());
       expect((resp as CurrTimeResponse).timestamp, 0);
     });
@@ -324,7 +344,10 @@ void main() {
       builder.addByte(txtPlain);
       builder.add(uint32LE(1700000000));
       builder.add(Uint8List.fromList(utf8.encode('Hello')));
-      final payload = Uint8List.fromList([respContactMsgRecv, ...builder.toBytes()]);
+      final payload = Uint8List.fromList([
+        respContactMsgRecv,
+        ...builder.toBytes(),
+      ]);
       final resp = CompanionDecoder.decode(payload);
       expect(resp, isA<PrivateMessageResponse>());
       final msg = (resp as PrivateMessageResponse).message;
@@ -332,28 +355,43 @@ void main() {
       expect(msg.timestamp, 1700000000);
       expect(msg.isOutgoing, false);
       expect(msg.pathLen, 3);
-      expect(msg.senderKey, Uint8List.fromList([0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0xF6]));
+      expect(
+        msg.senderKey,
+        Uint8List.fromList([0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0xF6]),
+      );
     });
 
-    test('decode private message V1 with signature (txtType==2) skips 4 bytes', () {
-      final builder = BytesBuilder();
-      builder.add(Uint8List(6));
-      builder.addByte(0);
-      builder.addByte(2);
-      builder.add(uint32LE(1700000000));
-      builder.add(Uint8List(4));
-      builder.add(Uint8List.fromList(utf8.encode('Signed msg')));
-      final payload = Uint8List.fromList([respContactMsgRecv, ...builder.toBytes()]);
-      final resp = CompanionDecoder.decode(payload) as PrivateMessageResponse;
-      expect(resp.message.text, 'Signed msg');
-    });
+    test(
+      'decode private message V1 with signature (txtType==2) skips 4 bytes',
+      () {
+        final builder = BytesBuilder();
+        builder.add(Uint8List(6));
+        builder.addByte(0);
+        builder.addByte(2);
+        builder.add(uint32LE(1700000000));
+        builder.add(Uint8List(4));
+        builder.add(Uint8List.fromList(utf8.encode('Signed msg')));
+        final payload = Uint8List.fromList([
+          respContactMsgRecv,
+          ...builder.toBytes(),
+        ]);
+        final resp = CompanionDecoder.decode(payload) as PrivateMessageResponse;
+        expect(resp.message.text, 'Signed msg');
+      },
+    );
 
-    test('decode private message V1 with short data returns empty fallback', () {
-      final payload = Uint8List.fromList([respContactMsgRecv, ...Uint8List(5)]);
-      final resp = CompanionDecoder.decode(payload) as PrivateMessageResponse;
-      expect(resp.message.text, isEmpty);
-      expect(resp.message.timestamp, 0);
-    });
+    test(
+      'decode private message V1 with short data returns empty fallback',
+      () {
+        final payload = Uint8List.fromList([
+          respContactMsgRecv,
+          ...Uint8List(5),
+        ]);
+        final resp = CompanionDecoder.decode(payload) as PrivateMessageResponse;
+        expect(resp.message.text, isEmpty);
+        expect(resp.message.timestamp, 0);
+      },
+    );
   });
 
   group('CompanionDecoder - PrivateMessage V3', () {
@@ -366,7 +404,10 @@ void main() {
       builder.addByte(txtPlain);
       builder.add(uint32LE(1700000000));
       builder.add(Uint8List.fromList(utf8.encode('V3 msg')));
-      final payload = Uint8List.fromList([respContactMsgRecvV3, ...builder.toBytes()]);
+      final payload = Uint8List.fromList([
+        respContactMsgRecvV3,
+        ...builder.toBytes(),
+      ]);
       final resp = CompanionDecoder.decode(payload) as PrivateMessageResponse;
       expect(resp.message.text, 'V3 msg');
       expect(resp.message.snr, 10.0);
@@ -383,7 +424,10 @@ void main() {
       builder.addByte(txtPlain);
       builder.add(uint32LE(1700000000));
       builder.add(Uint8List.fromList(utf8.encode('Weak signal')));
-      final payload = Uint8List.fromList([respContactMsgRecvV3, ...builder.toBytes()]);
+      final payload = Uint8List.fromList([
+        respContactMsgRecvV3,
+        ...builder.toBytes(),
+      ]);
       final resp = CompanionDecoder.decode(payload) as PrivateMessageResponse;
       expect(resp.message.snr, -4.0);
     });
@@ -398,17 +442,26 @@ void main() {
       builder.add(uint32LE(1700000000));
       builder.add(Uint8List(4));
       builder.add(Uint8List.fromList(utf8.encode('Signed V3')));
-      final payload = Uint8List.fromList([respContactMsgRecvV3, ...builder.toBytes()]);
+      final payload = Uint8List.fromList([
+        respContactMsgRecvV3,
+        ...builder.toBytes(),
+      ]);
       final resp = CompanionDecoder.decode(payload) as PrivateMessageResponse;
       expect(resp.message.text, 'Signed V3');
     });
 
-    test('decode V3 private message with short data returns empty fallback', () {
-      final payload = Uint8List.fromList([respContactMsgRecvV3, ...Uint8List(5)]);
-      final resp = CompanionDecoder.decode(payload) as PrivateMessageResponse;
-      expect(resp.message.text, isEmpty);
-      expect(resp.message.timestamp, 0);
-    });
+    test(
+      'decode V3 private message with short data returns empty fallback',
+      () {
+        final payload = Uint8List.fromList([
+          respContactMsgRecvV3,
+          ...Uint8List(5),
+        ]);
+        final resp = CompanionDecoder.decode(payload) as PrivateMessageResponse;
+        expect(resp.message.text, isEmpty);
+        expect(resp.message.timestamp, 0);
+      },
+    );
   });
 
   group('CompanionDecoder - ChannelMessage V1', () {
@@ -419,7 +472,10 @@ void main() {
       builder.addByte(txtPlain);
       builder.add(uint32LE(1700000000));
       builder.add(Uint8List.fromList(utf8.encode('Chan msg')));
-      final payload = Uint8List.fromList([respChannelMsgRecv, ...builder.toBytes()]);
+      final payload = Uint8List.fromList([
+        respChannelMsgRecv,
+        ...builder.toBytes(),
+      ]);
       final resp = CompanionDecoder.decode(payload) as ChannelMessageResponse;
       expect(resp.message.text, 'Chan msg');
       expect(resp.message.channelIndex, 2);
@@ -427,12 +483,18 @@ void main() {
       expect(resp.message.timestamp, 1700000000);
     });
 
-    test('decode channel message V1 with short data returns empty fallback', () {
-      final payload = Uint8List.fromList([respChannelMsgRecv, ...Uint8List(3)]);
-      final resp = CompanionDecoder.decode(payload) as ChannelMessageResponse;
-      expect(resp.message.text, isEmpty);
-      expect(resp.message.channelIndex, 0);
-    });
+    test(
+      'decode channel message V1 with short data returns empty fallback',
+      () {
+        final payload = Uint8List.fromList([
+          respChannelMsgRecv,
+          ...Uint8List(3),
+        ]);
+        final resp = CompanionDecoder.decode(payload) as ChannelMessageResponse;
+        expect(resp.message.text, isEmpty);
+        expect(resp.message.channelIndex, 0);
+      },
+    );
   });
 
   group('CompanionDecoder - ChannelMessage V3', () {
@@ -445,7 +507,10 @@ void main() {
       builder.addByte(txtPlain);
       builder.add(uint32LE(1700000000));
       builder.add(Uint8List.fromList(utf8.encode('V3 chan')));
-      final payload = Uint8List.fromList([respChannelMsgRecvV3, ...builder.toBytes()]);
+      final payload = Uint8List.fromList([
+        respChannelMsgRecvV3,
+        ...builder.toBytes(),
+      ]);
       final resp = CompanionDecoder.decode(payload) as ChannelMessageResponse;
       expect(resp.message.text, 'V3 chan');
       expect(resp.message.channelIndex, 3);
@@ -453,12 +518,18 @@ void main() {
       expect(resp.message.pathLen, 2);
     });
 
-    test('decode V3 channel message with short data returns empty fallback', () {
-      final payload = Uint8List.fromList([respChannelMsgRecvV3, ...Uint8List(5)]);
-      final resp = CompanionDecoder.decode(payload) as ChannelMessageResponse;
-      expect(resp.message.text, isEmpty);
-      expect(resp.message.channelIndex, 0);
-    });
+    test(
+      'decode V3 channel message with short data returns empty fallback',
+      () {
+        final payload = Uint8List.fromList([
+          respChannelMsgRecvV3,
+          ...Uint8List(5),
+        ]);
+        final resp = CompanionDecoder.decode(payload) as ChannelMessageResponse;
+        expect(resp.message.text, isEmpty);
+        expect(resp.message.channelIndex, 0);
+      },
+    );
   });
 
   group('CompanionDecoder - DeviceInfo', () {
@@ -480,7 +551,10 @@ void main() {
       final verBytes = utf8.encode('3.0.1');
       version.setRange(0, verBytes.length, verBytes);
       builder.add(version);
-      final payload = Uint8List.fromList([respDeviceInfo, ...builder.toBytes()]);
+      final payload = Uint8List.fromList([
+        respDeviceInfo,
+        ...builder.toBytes(),
+      ]);
       final resp = CompanionDecoder.decode(payload) as DeviceInfoResponse;
       expect(resp.info.firmwareVersion, 3);
       expect(resp.info.maxContacts, 100);
@@ -497,7 +571,10 @@ void main() {
       builder.addByte(1);
       builder.add(Uint8List.fromList(utf8.encode('OldRadio')));
       builder.addByte(0);
-      final payload = Uint8List.fromList([respDeviceInfo, ...builder.toBytes()]);
+      final payload = Uint8List.fromList([
+        respDeviceInfo,
+        ...builder.toBytes(),
+      ]);
       final resp = CompanionDecoder.decode(payload) as DeviceInfoResponse;
       expect(resp.info.firmwareVersion, 1);
       expect(resp.info.deviceName, 'OldRadio');
@@ -519,7 +596,10 @@ void main() {
       nameBuf.setRange(0, nameBytes.length, nameBytes);
       builder.add(nameBuf);
       builder.add(Uint8List.fromList(List.generate(16, (i) => i + 0xA0)));
-      final payload = Uint8List.fromList([respChannelInfo, ...builder.toBytes()]);
+      final payload = Uint8List.fromList([
+        respChannelInfo,
+        ...builder.toBytes(),
+      ]);
       final resp = CompanionDecoder.decode(payload) as ChannelInfoResponse;
       expect(resp.channel.index, 2);
       expect(resp.channel.name, 'Emergency');
@@ -534,7 +614,10 @@ void main() {
       final nameBytes = utf8.encode('General');
       nameBuf.setRange(0, nameBytes.length, nameBytes);
       builder.add(nameBuf);
-      final payload = Uint8List.fromList([respChannelInfo, ...builder.toBytes()]);
+      final payload = Uint8List.fromList([
+        respChannelInfo,
+        ...builder.toBytes(),
+      ]);
       final resp = CompanionDecoder.decode(payload) as ChannelInfoResponse;
       expect(resp.channel.name, 'General');
       expect(resp.channel.secret, isNull);
@@ -589,8 +672,12 @@ void main() {
 
     test('skips bytes with invalid direction marker', () {
       final buffer = Uint8List.fromList([
-        0x00, 0x00,
-        dirRadioToApp, 1, 0, respOk,
+        0x00,
+        0x00,
+        dirRadioToApp,
+        1,
+        0,
+        respOk,
       ]);
       final (frames, remaining) = CompanionDecoder.extractFrames(buffer);
       expect(frames.length, 1);
@@ -599,8 +686,13 @@ void main() {
 
     test('skips frame with payloadLen == 0', () {
       final buffer = Uint8List.fromList([
-        dirRadioToApp, 0, 0,
-        dirRadioToApp, 1, 0, respOk,
+        dirRadioToApp,
+        0,
+        0,
+        dirRadioToApp,
+        1,
+        0,
+        respOk,
       ]);
       final (frames, remaining) = CompanionDecoder.extractFrames(buffer);
       expect(frames.length, 1);
@@ -608,8 +700,13 @@ void main() {
 
     test('skips frame with payloadLen > maxPayload', () {
       final buffer = Uint8List.fromList([
-        dirRadioToApp, 0xFF, 0xFF,
-        dirRadioToApp, 1, 0, respOk,
+        dirRadioToApp,
+        0xFF,
+        0xFF,
+        dirRadioToApp,
+        1,
+        0,
+        respOk,
       ]);
       final (frames, remaining) = CompanionDecoder.extractFrames(buffer);
       expect(frames.length, 1);
@@ -635,7 +732,10 @@ void main() {
     });
 
     test('returns null for short signature data (< 64 bytes)', () {
-      final payload = Uint8List.fromList([respSignature, ...List.filled(32, 0)]);
+      final payload = Uint8List.fromList([
+        respSignature,
+        ...List.filled(32, 0),
+      ]);
 
       final result = CompanionDecoder.decode(payload);
 
@@ -663,11 +763,12 @@ void main() {
     test('statsTypeCore (0x00) parses battery, uptime, errors, queueLen', () {
       // batteryMv=4100 (0x1004 LE), uptimeSecs=3600 (0x100E0000 LE),
       // errors=0, queueLen=2
-      final d = ByteData(9)
-        ..setUint16(0, 4100, Endian.little)
-        ..setUint32(2, 3600, Endian.little)
-        ..setUint16(6, 0, Endian.little)
-        ..setUint8(8, 2);
+      final d =
+          ByteData(9)
+            ..setUint16(0, 4100, Endian.little)
+            ..setUint32(2, 3600, Endian.little)
+            ..setUint16(6, 0, Endian.little)
+            ..setUint8(8, 2);
       final payload = Uint8List.fromList([
         respStats,
         statsTypeCore, // 0x00
@@ -695,12 +796,13 @@ void main() {
     });
 
     test('statsTypeRadio (0x01) parses radio fields', () {
-      final d = ByteData(12)
-        ..setInt16(0, -90, Endian.little)   // noiseFloor
-        ..setInt8(2, -80)                   // lastRssi
-        ..setInt8(3, 20)                    // lastSnr raw (20/4 = 5.0 dB)
-        ..setUint32(4, 120, Endian.little)  // txAirSecs
-        ..setUint32(8, 300, Endian.little); // rxAirSecs
+      final d =
+          ByteData(12)
+            ..setInt16(0, -90, Endian.little) // noiseFloor
+            ..setInt8(2, -80) // lastRssi
+            ..setInt8(3, 20) // lastSnr raw (20/4 = 5.0 dB)
+            ..setUint32(4, 120, Endian.little) // txAirSecs
+            ..setUint32(8, 300, Endian.little); // rxAirSecs
       final payload = Uint8List.fromList([
         respStats,
         statsTypeRadio, // 0x01
@@ -720,12 +822,12 @@ void main() {
 
     test('statsTypePackets (0x02) parses packet counters', () {
       final d = ByteData(24);
-      d.setUint32(0, 10, Endian.little);  // recv
-      d.setUint32(4, 5, Endian.little);   // sent
-      d.setUint32(8, 3, Endian.little);   // floodTx
-      d.setUint32(12, 2, Endian.little);  // directTx
-      d.setUint32(16, 8, Endian.little);  // floodRx
-      d.setUint32(20, 2, Endian.little);  // directRx
+      d.setUint32(0, 10, Endian.little); // recv
+      d.setUint32(4, 5, Endian.little); // sent
+      d.setUint32(8, 3, Endian.little); // floodTx
+      d.setUint32(12, 2, Endian.little); // directTx
+      d.setUint32(16, 8, Endian.little); // floodRx
+      d.setUint32(20, 2, Endian.little); // directRx
       final payload = Uint8List.fromList([
         respStats,
         statsTypePackets, // 0x02
