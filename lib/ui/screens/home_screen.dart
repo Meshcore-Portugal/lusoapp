@@ -112,7 +112,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   : Icons.link_off,
               color:
                   connectionState == TransportState.connected
-                      ? AppTheme.primary
+                      ? Colors.green
                       : Colors.red,
             ),
             onPressed: () => _onConnectionIconTap(context, connectionState),
