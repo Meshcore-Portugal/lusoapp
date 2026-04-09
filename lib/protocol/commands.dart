@@ -136,3 +136,4 @@ const int maxPayload = 172;
 // ---------------------------------------------------------------------------
 
 const int txtPlain = 0x00;
+const int txtCliData = 0x01;

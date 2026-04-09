@@ -184,6 +184,15 @@ class RadioService {
     await _send(CompanionEncoder.sendLogin(peerPublicKey, password));
   }
 
+  /// Send a CLI admin command to a remote peer node.
+  /// Must be called after a successful [login] to that peer.
+  /// The response arrives as a [PrivateMessageResponse] on [responses].
+  Future<void> sendAdminCommand(Uint8List pubKey, String command) async {
+    final prefix =
+        pubKey.sublist(0, pubKey.length < 6 ? pubKey.length : 6);
+    await _send(CompanionEncoder.sendAdminCommand(prefix, command));
+  }
+
   Future<void> sendStatusRequest(Uint8List pubKey) async {
     final payload = BytesBuilder();
     payload.add(pubKey.sublist(0, pubKey.length < 32 ? pubKey.length : 32));

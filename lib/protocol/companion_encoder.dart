@@ -34,6 +34,24 @@ class CompanionEncoder {
     return _frame(cmdAppStart, payload.toBytes());
   }
 
+  /// SEND_MSG (CLI) — send a remote admin command to a peer node.
+  /// Uses TXT_TYPE_CLI_DATA (1) so the receiving firmware routes it to
+  /// handleCommand() instead of displaying it as chat text.
+  static Uint8List sendAdminCommand(
+    Uint8List recipientPrefix,
+    String command, {
+    int? timestamp,
+  }) {
+    final ts = timestamp ?? _nowEpoch();
+    final payload = BytesBuilder();
+    payload.addByte(txtCliData);
+    payload.addByte(0); // attempt
+    payload.add(_uint32LE(ts));
+    payload.add(recipientPrefix.sublist(0, 6));
+    payload.add(utf8.encode(command));
+    return _frame(cmdSendMsg, payload.toBytes());
+  }
+
   /// SEND_MSG — send a private text message.
   static Uint8List sendMessage(
     Uint8List recipientPrefix,

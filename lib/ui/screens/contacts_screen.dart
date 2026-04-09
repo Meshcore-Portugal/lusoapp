@@ -1180,6 +1180,9 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
   bool _obscure = true;
   bool _waiting = false;
   String? _loginError;
+  String? _lastResponse;
+  bool _pendingCommand = false;
+  String? _pendingLabel;
 
   String get _prefixHex =>
       widget.contact.publicKey
@@ -1265,6 +1268,98 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
     }
   }
 
+  Future<void> _sendAdminCommand(String command, String label) async {
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+
+    setState(() {
+      _pendingCommand = true;
+      _pendingLabel = label;
+      _lastResponse = null;
+    });
+
+    final prefix = Uint8List.fromList(
+      widget.contact.publicKey.take(6).toList(),
+    );
+
+    final completer = Completer<String>();
+    late StreamSubscription<CompanionResponse> sub;
+    sub = service.responses.listen((r) {
+      if (completer.isCompleted) return;
+      if (r is PrivateMessageResponse && r.message.senderKey != null) {
+        final key = r.message.senderKey!;
+        if (key.length >= 6 &&
+            key[0] == prefix[0] &&
+            key[1] == prefix[1] &&
+            key[2] == prefix[2] &&
+            key[3] == prefix[3] &&
+            key[4] == prefix[4] &&
+            key[5] == prefix[5]) {
+          completer.complete(r.message.text.trim());
+        }
+      }
+    });
+
+    await service.sendAdminCommand(widget.contact.publicKey, command);
+
+    final response = await completer.future
+        .timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => '(sem resposta do nó)',
+        )
+        .whenComplete(sub.cancel);
+
+    if (!mounted) return;
+    setState(() {
+      _pendingCommand = false;
+      _pendingLabel = null;
+      _lastResponse = response;
+    });
+
+    if (command == 'start ota' &&
+        response.toLowerCase().startsWith('ok - mac:')) {
+      _showOtaDialog(response);
+    }
+  }
+
+  void _showOtaDialog(String response) {
+    showDialog<void>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('OTA Iniciado'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.system_update_alt,
+                  size: 48,
+                  color: Colors.blue,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  response,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Ligue-se ao nó via BLE DFU (ex: nRF Connect) para actualizar o firmware.',
+                  style: TextStyle(fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1289,7 +1384,8 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottom),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1367,6 +1463,7 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
               label: Text(_waiting ? 'A ligar...' : 'Entrar'),
             ),
           ] else ...[
+            // ── Auth status row ──────────────────────────────────────
             Row(
               children: [
                 const Icon(Icons.check_circle, color: Colors.green, size: 18),
@@ -1380,19 +1477,115 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
                 ),
                 const Spacer(),
                 OutlinedButton.icon(
-                  onPressed: _requestStatus,
+                  onPressed: _pendingCommand ? null : _requestStatus,
                   icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Pedir estado'),
+                  label: const Text('Estado'),
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+
+            // ── Pending indicator ─────────────────────────────────────
+            if (_pendingCommand) ...[
+              Row(
+                children: [
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'A enviar: $_pendingLabel...',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            // ── Last CLI response ─────────────────────────────────────
+            if (_lastResponse != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.terminal,
+                      size: 14,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _lastResponse!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            // ── Remote actions ────────────────────────────────────────
+            const Divider(height: 20),
+            Text(
+              'Acções Remotas',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 4),
+            _AdminTile(
+              icon: Icons.broadcast_on_home,
+              title: 'Anúncio Flood',
+              subtitle: 'Força o nó a enviar um anúncio flood',
+              enabled: !_pendingCommand,
+              onTap: () => _sendAdminCommand('advert', 'Anúncio Flood'),
+            ),
+            _AdminTile(
+              icon: Icons.wifi_tethering,
+              title: 'Anúncio Zero-Hop',
+              subtitle: 'Anúncio só para vizinhos directos',
+              enabled: !_pendingCommand,
+              onTap: () =>
+                  _sendAdminCommand('advert.zerohop', 'Anúncio Zero-Hop'),
+            ),
+            _AdminTile(
+              icon: Icons.schedule,
+              title: 'Sincronizar Relógio',
+              subtitle: 'Envia o timestamp actual para o nó',
+              enabled: !_pendingCommand,
+              onTap: () => _sendAdminCommand('clock sync', 'Sync Clock'),
+            ),
+            _AdminTile(
+              icon: Icons.system_update_alt,
+              title: 'Iniciar OTA',
+              subtitle: 'Inicia actualização OTA — NRF DFU / ESP32',
+              enabled: !_pendingCommand,
+              onTap: () => _sendAdminCommand('start ota', 'OTA'),
+            ),
+
+            // ── Stats ─────────────────────────────────────────────────
             if (stats != null) ...[
-              const SizedBox(height: 12),
+              const Divider(height: 20),
               _StatsCard(stats: stats, theme: theme),
             ] else ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Text(
-                'Prima "Pedir estado" para obter as estatísticas do repetidor.',
+                'Prima "Estado" para obter as estatísticas do repetidor.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -1400,7 +1593,58 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
             ],
           ],
         ],
+        ),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Admin action tile
+// ---------------------------------------------------------------------------
+
+class _AdminTile extends StatelessWidget {
+  const _AdminTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        icon,
+        size: 22,
+        color: enabled
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurface.withAlpha(60),
+      ),
+      title: Text(
+        title,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          fontWeight: FontWeight.w500,
+          color: enabled ? null : theme.colorScheme.onSurface.withAlpha(80),
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      onTap: enabled ? onTap : null,
     );
   }
 }
