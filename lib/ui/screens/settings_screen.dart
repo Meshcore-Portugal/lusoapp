@@ -195,7 +195,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: 12),
                   const ListTile(
                     title: Text('LusoAPP'),
-                    subtitle: Text('Comunidade Portuguesa MeshCore'),
+                    subtitle: Text(
+                      'MeshCore Portugal\nCódigo fonte inicial doado por\nPaulo Pereira aka GZ7d0',
+                    ),
                   ),
                   ListTile(
                     title: const Text('Versão'),
@@ -970,13 +972,16 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
                   if (isConnected)
                     FilledButton.icon(
                       onPressed: _loading ? null : _exportFromRadio,
-                      icon: _loading
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.download, size: 18),
+                      icon:
+                          _loading
+                              ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Icon(Icons.download, size: 18),
                       label: const Text('Guardar do rádio'),
                     ),
                   OutlinedButton.icon(

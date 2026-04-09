@@ -837,14 +837,18 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
       next = [...state];
       next[idx] = Contact(
         publicKey: existing.publicKey,
-        type: type,
+        // Preserve the known type if the advert carries type=0 (unknown).
+        // Firmware pushAdvert (0x80) can omit the type for path-update adverts.
+        type: type != 0 ? type : existing.type,
         flags: existing.flags,
         pathLen: existing.pathLen,
         name: name.isNotEmpty ? name : existing.name,
         lastAdvertTimestamp: now,
         latitude: existing.latitude,
         longitude: existing.longitude,
-        lastModified: existing.lastModified,
+        // Update lastModified so _bestTs() reflects the live reception time.
+        // Without this, _bestTs prefers the old lastModified and "Visto" never changes.
+        lastModified: now,
         customName: existing.customName,
       );
     } else {
