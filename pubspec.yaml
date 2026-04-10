@@ -1,7 +1,7 @@
 name: mcapppt
 description: "LusoAPP - MeshCore Companion App - Comunidade Portuguesa"
 publish_to: "none"
-version: 0.3.9+4
+version: 0.4.0+2
 
 environment:
   sdk: ^3.7.0

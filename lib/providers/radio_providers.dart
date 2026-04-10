@@ -1714,8 +1714,7 @@ final radioStatsPacketsProvider = StateProvider<StatsPacketsResponse?>(
 /// The state maps `packetHashHex` → list of [MessagePath] records.
 class PacketHeardNotifier
     extends StateNotifier<Map<String, List<MessagePath>>> {
-  PacketHeardNotifier(this._ref) : super({});
-  final Ref _ref;
+  PacketHeardNotifier() : super({});
 
   /// Load persisted paths from storage (called on app start and after reset).
   Future<void> loadFromStorage() async {
@@ -1761,7 +1760,7 @@ class PacketHeardNotifier
 
 final packetHeardProvider =
     StateNotifierProvider<PacketHeardNotifier, Map<String, List<MessagePath>>>(
-      (ref) => PacketHeardNotifier(ref),
+      (ref) => PacketHeardNotifier(),
     );
 
 // ---------------------------------------------------------------------------

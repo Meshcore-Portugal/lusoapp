@@ -38,16 +38,46 @@ flutter test || { err "Tests failed"; exit 1; }
 # Build targets based on OS
 case "$(uname -s)" in
     Linux*)
-        log "Building Linux desktop..."
-        flutter build linux --release
-        
-        LINUX_OUT="$BUILD_DIR/linux/x64/release/bundle"
-        if [ -d "$LINUX_OUT" ]; then
-            ARCHIVE="$BUILD_DIR/mcapppt-${VERSION}-linux-x64.tar.gz"
-            tar -czf "$ARCHIVE" -C "$BUILD_DIR/linux/x64/release" bundle
-            log "Linux archive: $ARCHIVE"
-        fi
-        ;;
+        # Detect architecture
+        ARCH=$(uname -m)
+        case "$ARCH" in
+            x86_64|amd64)
+                log "Building Linux x86_64 desktop..."
+                flutter build linux --release
+                
+                LINUX_OUT="$BUILD_DIR/linux/x64/release/bundle"
+                if [ -d "$LINUX_OUT" ]; then
+                    ARCHIVE="$BUILD_DIR/mcapppt-${VERSION}-linux-x64.tar.gz"
+                    tar -czf "$ARCHIVE" -C "$BUILD_DIR/linux/x64/release" bundle
+                    log "Linux x86_64 archive: $ARCHIVE"
+                fi
+                ;;
+            aarch64|arm64)
+                log "Building Linux ARM64 (Raspberry Pi)..."
+                flutter build linux --release
+                
+                LINUX_OUT="$BUILD_DIR/linux/arm64/release/bundle"
+                if [ -d "$LINUX_OUT" ]; then
+                    ARCHIVE="$BUILD_DIR/mcapppt-${VERSION}-linux-arm64.tar.gz"
+                    tar -czf "$ARCHIVE" -C "$BUILD_DIR/linux/arm64/release" bundle
+                    log "Linux ARM64 archive: $ARCHIVE"
+                fi
+                ;;
+            armv7l)
+                log "Building Linux ARMv7 (32-bit Raspberry Pi)..."
+                flutter build linux --release
+                
+                LINUX_OUT="$BUILD_DIR/linux/arm/release/bundle"
+                if [ -d "$LINUX_OUT" ]; then
+                    ARCHIVE="$BUILD_DIR/mcapppt-${VERSION}-linux-armv7.tar.gz"
+                    tar -czf "$ARCHIVE" -C "$BUILD_DIR/linux/arm/release" bundle
+                    log "Linux ARMv7 archive: $ARCHIVE"
+                fi
+                ;;
+            *)
+                log "Unsupported Linux architecture: $ARCH"
+                ;;
+        esac
     Darwin*)
         log "Building macOS desktop..."
         flutter build macos --release

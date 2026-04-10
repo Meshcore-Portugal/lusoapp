@@ -28,8 +28,8 @@ const _morning = <_Slot>[
     'O que é o MeshCore, a origem e o futuro',
     highlight: true,
   ),
-  _Slot('10:30 – 10:45', 'Coffee Break / Conferência de Imprensa'),
-  _Slot('10:45 – 11:15', 'Comunicar a 100 km é fácil, e o Plano 3-3-3'),
+  _Slot('10:30 – 11:00', 'Coffee Break / Conferência de Imprensa'),
+  _Slot('11:00 – 11:30', 'Comunicar a 100 km é fácil, e o Plano 3-3-3'),
   _Slot('11:30 – 12:45', 'Mais de 300 Repetidores em Portugal'),
   _Slot('13:00 – 14:20', 'Almoço', highlight: true),
 ];
@@ -59,8 +59,22 @@ const _workshops = <String>[
 // Well-known 16-byte secret for the public event channel.
 // "techsummit2026" in UTF-8 (14 bytes) + 2 zero padding bytes.
 final _eventChannelSecret = Uint8List.fromList([
-  0x74, 0x65, 0x63, 0x68, 0x73, 0x75, 0x6d, 0x6d,
-  0x69, 0x74, 0x32, 0x30, 0x32, 0x36, 0x00, 0x00,
+  0x74,
+  0x65,
+  0x63,
+  0x68,
+  0x73,
+  0x75,
+  0x6d,
+  0x6d,
+  0x69,
+  0x74,
+  0x32,
+  0x30,
+  0x32,
+  0x36,
+  0x00,
+  0x00,
 ]);
 
 class EventProgramScreen extends ConsumerWidget {
@@ -78,12 +92,18 @@ class EventProgramScreen extends ConsumerWidget {
     );
     final usedIndices =
         channels.where((c) => c.name.isNotEmpty).map((c) => c.index).toSet();
-    final nextFreeIndex = List.generate(maxChannels, (i) => i)
-        .firstWhere((i) => !usedIndices.contains(i), orElse: () => -1);
+    final nextFreeIndex = List.generate(
+      maxChannels,
+      (i) => i,
+    ).firstWhere((i) => !usedIndices.contains(i), orElse: () => -1);
 
     Future<void> addEventChannel() async {
       if (service == null || nextFreeIndex < 0) return;
-      await service.setChannel(nextFreeIndex, '#techsummit2026', _eventChannelSecret);
+      await service.setChannel(
+        nextFreeIndex,
+        '#techsummit2026',
+        _eventChannelSecret,
+      );
       await Future.delayed(const Duration(milliseconds: 200));
       await service.requestChannel(nextFreeIndex);
     }
@@ -207,22 +227,22 @@ class _ChannelBannerState extends State<_ChannelBanner> {
             const SizedBox(width: 8),
             _loading
                 ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: _accentColor,
-                    ),
-                  )
-                : TextButton(
-                    style: TextButton.styleFrom(foregroundColor: _accentColor),
-                    onPressed: () async {
-                      setState(() => _loading = true);
-                      await widget.onAdd();
-                      if (mounted) setState(() => _loading = false);
-                    },
-                    child: const Text('Adicionar'),
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: _accentColor,
                   ),
+                )
+                : TextButton(
+                  style: TextButton.styleFrom(foregroundColor: _accentColor),
+                  onPressed: () async {
+                    setState(() => _loading = true);
+                    await widget.onAdd();
+                    if (mounted) setState(() => _loading = false);
+                  },
+                  child: const Text('Adicionar'),
+                ),
           ],
         ],
       ),

@@ -83,9 +83,44 @@ cmd_build_aab() {
 }
 
 cmd_build_linux() {
-    log "Building Linux desktop..."
-    flutter build linux --release
-    log "Binary: build/linux/x64/release/bundle/"
+    local arch="${1:-x64}"
+    local host_arch
+    host_arch="$(uname -m)"
+    case "$arch" in
+        x64|x86)
+            log "Building Linux x86_64 desktop..."
+            if [[ "$host_arch" != "x86_64" && "$host_arch" != "amd64" ]]; then
+                err "Host architecture is $host_arch; x64 build requires x86_64 Linux host."
+                exit 2
+            fi
+            flutter build linux --release
+            log "Binary: build/linux/x64/release/bundle/"
+            ;;
+        arm64|aarch64)
+            log "Building Linux ARM64 (Raspberry Pi)..."
+            if [[ "$host_arch" != "aarch64" && "$host_arch" != "arm64" ]]; then
+                err "Host architecture is $host_arch; ARM64 build requires an ARM64 Linux host."
+                err "Use Raspberry Pi OS 64-bit or an ARM64 Linux runner."
+                exit 2
+            fi
+            flutter build linux --release
+            log "Binary: build/linux/arm64/release/bundle/"
+            ;;
+        armv7|arm)
+            log "Building Linux ARMv7 (32-bit Raspberry Pi)..."
+            if [[ "$host_arch" != "armv7l" && "$host_arch" != "arm" ]]; then
+                err "Host architecture is $host_arch; ARMv7 build requires an ARMv7 Linux host."
+                exit 2
+            fi
+            flutter build linux --release
+            log "Binary: build/linux/arm/release/bundle/"
+            ;;
+        *)
+            err "Unknown architecture: $arch"
+            err "Use: x64, arm64, or armv7"
+            exit 1
+            ;;
+    esac
 }
 
 cmd_build_windows() {
@@ -129,7 +164,10 @@ case "$COMMAND" in
     build)      cmd_build_apk ;;
     build-apk)  cmd_build_apk ;;
     build-aab)  cmd_build_aab ;;
-    build-linux) cmd_build_linux ;;
+    build-linux) cmd_build_linux "$@" ;;
+    build-linux-x64) cmd_build_linux x64 ;;
+    build-linux-arm64) cmd_build_linux arm64 ;;
+    build-linux-armv7) cmd_build_linux armv7 ;;
     build-win)  cmd_build_windows ;;
     test)       cmd_test ;;
     clean)      cmd_clean ;;
@@ -151,7 +189,10 @@ case "$COMMAND" in
         echo "  build        Build release APK"
         echo "  build-apk    Build release APK"
         echo "  build-aab    Build release App Bundle (Google Play)"
-        echo "  build-linux  Build Linux desktop release"
+        echo "  build-linux [arch]   Build Linux desktop release (x64, arm64, armv7)"
+        echo "  build-linux-x64      Build Linux x86_64 release"
+        echo "  build-linux-arm64    Build Linux ARM64 (Raspberry Pi 4/5)"
+        echo "  build-linux-armv7    Build Linux ARMv7 (32-bit Raspberry Pi)"
         echo "  build-win    Build Windows desktop release"
         echo "  test         Run all tests"
         echo "  analyze      Run static analysis"
