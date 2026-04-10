@@ -95,38 +95,25 @@ function Invoke-RunWeb {
     flutter run -d web-server --web-port $port
 }
 
-function Invoke-BuildApk {
-    Log "Building release APK..."
-    flutter build apk --release
-    $apk = Join-Path $ProjectDir "build\app\outputs\flutter-apk\app-release.apk"
-    Log "APK: $apk"
-    if (Test-Path $apk) {
-        $size = (Get-Item $apk).Length / 1MB
-        Log ("Size: {0:N1} MB" -f $size)
+function Invoke-BuildScript {
+    param([hashtable]$BuildParams = @{})
+    $buildScript = Join-Path $ProjectDir "scripts\build.ps1"
+    if (-not (Test-Path $buildScript)) {
+        throw "Build script not found: $buildScript"
     }
-}
-
-function Invoke-BuildAab {
-    Log "Building release App Bundle..."
-    flutter build appbundle --release
-    Log "AAB: build\app\outputs\bundle\release\app-release.aab"
-}
-
-function Invoke-BuildWindows {
-    Log "Building Windows desktop..."
-    flutter build windows --release
-    $outDir = Join-Path $ProjectDir "build\windows\x64\runner\Release"
-    Log "Binary: $outDir"
-    if (Test-Path $outDir) {
-        $exe = Get-ChildItem $outDir -Filter "*.exe" | Select-Object -First 1
-        if ($exe) { Log "Executable: $($exe.Name)" }
+    $argText = ($BuildParams.GetEnumerator() | ForEach-Object {
+        if ($_.Value -is [bool]) {
+            if ($_.Value) { "-$($_.Key)" } else { "" }
+        } else {
+            "-$($_.Key) $($_.Value)"
+        }
+    } | Where-Object { $_ -ne "" }) -join ' '
+    Log "Delegating build to scripts\build.ps1 $argText"
+    & $buildScript @BuildParams
+    if ($LASTEXITCODE -ne 0) {
+        Err "build.ps1 failed with exit code $LASTEXITCODE"
+        exit $LASTEXITCODE
     }
-}
-
-function Invoke-BuildLinux {
-    Log "Building Linux desktop..."
-    flutter build linux --release
-    Log "Binary: build/linux/x64/release/bundle/"
 }
 
 function Invoke-Clean {
@@ -172,11 +159,14 @@ function Show-Help {
     Write-Host "  run profile    Run in profile mode"
     Write-Host "  web            Run web-server (avoids browser launch issues)"
     Write-Host "  web <port>     Run web-server on custom port (default 8080)"
-    Write-Host "  build          Build release APK"
-    Write-Host "  build-apk      Build release APK"
-    Write-Host "  build-aab      Build release App Bundle (Google Play)"
-    Write-Host "  build-win      Build Windows desktop release"
-    Write-Host "  build-linux    Build Linux desktop release"
+    Write-Host "  build          Build Android artifacts via scripts\build.ps1"
+    Write-Host "  build-apk      Build Android artifacts via scripts\build.ps1"
+    Write-Host "  build-aab      Build Android artifacts via scripts\build.ps1"
+    Write-Host "  build-win      Build Windows desktop via scripts\build.ps1"
+    Write-Host "  build-linux [arch]   Build Linux via scripts\build.ps1 (x64, arm64, armv7)"
+    Write-Host "  build-linux-x64      Build Linux x86_64 via scripts\build.ps1"
+    Write-Host "  build-linux-arm64    Build Linux ARM64 via WSL through scripts\build.ps1"
+    Write-Host "  build-linux-armv7    Build Linux ARMv7 via WSL through scripts\build.ps1"
     Write-Host "  test           Run all tests"
     Write-Host "  analyze        Run static analysis"
     Write-Host "  clean          Clean build artifacts"
@@ -201,24 +191,34 @@ Test-Flutter
 
 try {
     switch ($Command) {
-        "run"         { Invoke-Run }
-        "web"         { Invoke-RunWeb }
-        "build"       { Invoke-BuildApk }
-        "build-apk"  { Invoke-BuildApk }
-        "build-aab"  { Invoke-BuildAab }
-        "build-win"  { Invoke-BuildWindows }
-        "build-linux" { Invoke-BuildLinux }
-        "test"        { Invoke-Test }
-        "clean"       { Invoke-Clean }
-        "get"         { Invoke-Get }
-        "gen"         { Invoke-Gen }
-        "analyze"     { Invoke-Analyze }
-        "doctor"      { Invoke-Doctor }
-        "setup"       { Invoke-Setup }
-        "devices"     { Invoke-Devices }
-        "help"        { Show-Help }
-        default       { Show-Help }
+        "run"              { Invoke-Run }
+        "web"              { Invoke-RunWeb }
+        "build"             { Invoke-BuildScript @{ ApkOnly = $true } }
+        "build-apk"         { Invoke-BuildScript @{ ApkOnly = $true } }
+        "build-aab"         { Invoke-BuildScript @{ ApkOnly = $true } }
+        "build-win"         { Invoke-BuildScript @{ WindowsOnly = $true; SkipTests = $true } }
+        "build-linux"       {
+            $arch = if ($Args.Count -gt 0) { $Args[0] } else { "x64" }
+            Invoke-BuildScript @{ LinuxArch = $arch }
+        }
+        "build-linux-x64"   { Invoke-BuildScript @{ LinuxArch = "x64" } }
+        "build-linux-arm64" { Invoke-BuildScript @{ LinuxArch = "arm64" } }
+        "build-linux-armv7" { Invoke-BuildScript @{ LinuxArch = "armv7" } }
+        "test"             { Invoke-Test }
+        "clean"            { Invoke-Clean }
+        "get"              { Invoke-Get }
+        "gen"              { Invoke-Gen }
+        "analyze"          { Invoke-Analyze }
+        "doctor"           { Invoke-Doctor }
+        "setup"            { Invoke-Setup }
+        "devices"          { Invoke-Devices }
+        "help"             { Show-Help }
+        default            { Show-Help }
     }
+}
+catch {
+    Err $_.Exception.Message
+    exit 1
 }
 finally {
     Pop-Location
