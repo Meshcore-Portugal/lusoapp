@@ -1,6 +1,16 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
+
+/// Derives the 16-byte hashtag channel key used by MeshCore firmware.
+/// Key = first 16 bytes of SHA-256("#name"), where [name] gets a '#' prefix
+/// if it does not already start with one.
+Uint8List hashtagChannelKey(String name) {
+  final withHash = name.startsWith('#') ? name : '#$name';
+  final digest = sha256.convert(utf8.encode(withHash));
+  return Uint8List.fromList(digest.bytes.sublist(0, 16));
+}
 
 /// Represents a MeshCore contact as received from the radio.
 class Contact extends Equatable {
@@ -174,6 +184,7 @@ class ChatMessage extends Equatable {
     this.heardCount = 0,
     this.sentRouteFlag,
     this.packetHashHex,
+    this.isCliResponse = false,
   });
 
   final String text;
@@ -195,6 +206,10 @@ class ChatMessage extends Equatable {
   /// Used to track how many repeaters re-broadcast this message.
   final String? packetHashHex;
 
+  /// True when this message carries TXT_TYPE_CLI_DATA (0x01) — i.e. it is a
+  /// CLI command response, not a user-visible chat message.
+  final bool isCliResponse;
+
   bool get isChannel => channelIndex != null;
   bool get isPrivate => channelIndex == null;
 
@@ -211,6 +226,7 @@ class ChatMessage extends Equatable {
     int? heardCount,
     int? sentRouteFlag,
     String? packetHashHex,
+    bool? isCliResponse,
   }) {
     return ChatMessage(
       text: text ?? this.text,
@@ -225,6 +241,7 @@ class ChatMessage extends Equatable {
       heardCount: heardCount ?? this.heardCount,
       sentRouteFlag: sentRouteFlag ?? this.sentRouteFlag,
       packetHashHex: packetHashHex ?? this.packetHashHex,
+      isCliResponse: isCliResponse ?? this.isCliResponse,
     );
   }
 

@@ -13,6 +13,7 @@ import 'screens/radio_settings_screen.dart';
 import 'screens/contacts_screen.dart';
 import 'screens/room_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/event_program_screen.dart';
 import 'screens/telemetry_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -53,6 +54,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/apps/telemetry',
             builder: (context, state) => const TelemetryScreen(),
+          ),
+          GoRoute(
+            path: '/apps/event',
+            builder: (context, state) => const EventProgramScreen(),
           ),
           GoRoute(
             path: '/chat/:keyHex',

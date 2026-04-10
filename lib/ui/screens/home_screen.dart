@@ -80,7 +80,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       size: 24,
                     ),
                     const SizedBox(width: 8),
-                    Text(selfInfo?.name ?? 'MeshCore PT'),
+                    Text(selfInfo?.name ?? 'LusoAPP'),
                   ],
                 ),
         actions: [
@@ -112,7 +112,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   : Icons.link_off,
               color:
                   connectionState == TransportState.connected
-                      ? AppTheme.primary
+                      ? Colors.green
                       : Colors.red,
             ),
             onPressed: () => _onConnectionIconTap(context, connectionState),

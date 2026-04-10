@@ -40,6 +40,8 @@ const int cmdReboot = 0x13;
 const int cmdGetBattAndStorage = 0x14;
 const int cmdSetTuningParams = 0x15;
 const int cmdDeviceQuery = 0x16;
+const int cmdExportPrivateKey = 0x17;
+const int cmdImportPrivateKey = 0x18;
 const int cmdSendLogin = 0x1A;
 const int cmdSendStatusReq = 0x1B;
 const int cmdGetByKey = 0x1E;
@@ -84,6 +86,7 @@ const int respCurrTime = 0x09;
 const int respNoMoreMessages = 0x0A;
 const int respBattAndStorage = 0x0C;
 const int respDeviceInfo = 0x0D;
+const int respPrivateKey = 0x0E;
 const int respContactMsgRecvV3 = 0x10;
 const int respChannelMsgRecvV3 = 0x11;
 const int respChannelInfo = 0x12;
@@ -133,3 +136,4 @@ const int maxPayload = 172;
 // ---------------------------------------------------------------------------
 
 const int txtPlain = 0x00;
+const int txtCliData = 0x01;

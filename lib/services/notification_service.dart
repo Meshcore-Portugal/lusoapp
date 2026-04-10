@@ -27,12 +27,9 @@ class NotificationService {
   static const _plan333ChannelDesc =
       'Lembretes das janelas de escuta do Plano 3-3-3';
 
-  // Notification IDs 1000-1007: daily window alerts; 1008: Saturday training.
-  static const _plan333BaseId = 1000;
-  static const _plan333TrainingId = 1008;
-
-  // Window hours and corresponding notify times (3 min before each window).
-  static const _windowHours = [0, 3, 6, 9, 12, 15, 18, 21];
+  // Notification IDs for Saturday Mesh 3-3-3 reminders.
+  static const _plan333Remind10Id = 1008; // 10 min before (20:50)
+  static const _plan333Remind5Id  = 1009; //  5 min before (20:55)
   // Lisbon timezone — correct for the Portuguese Plano 3-3-3.
   static const _lisbon = 'Europe/Lisbon';
 
@@ -252,50 +249,37 @@ class NotificationService {
       macOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
     );
 
-    for (int i = 0; i < _windowHours.length; i++) {
-      final h = _windowHours[i];
-      // Notify 3 minutes before the window hour.
-      final notifyHour = h == 0 ? 23 : h - 1;
-      const notifyMinute = 57;
-      final windowLabel =
-          '${h.toString().padLeft(2, '0')}:00';
-
-      final now = tz.TZDateTime.now(location);
-      var target = tz.TZDateTime(
-          location, now.year, now.month, now.day, notifyHour, notifyMinute);
-      if (target.isBefore(now)) {
-        target = target.add(const Duration(days: 1));
-      }
-
-      await _plugin.zonedSchedule(
-        _plan333BaseId + i,
-        'Plano 3-3-3 — Janela $windowLabel em 3 min',
-        'Ligue o CB Canal 3 AM (26.985 MHz) ou PMR 446 Canal 3',
-        target,
-        details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.time,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-      );
-    }
-
-    // Weekly Saturday training reminder at 20:55 (5 min before 21:00 window).
     final now = tz.TZDateTime.now(location);
-    var satTarget =
-        tz.TZDateTime(location, now.year, now.month, now.day, 20, 55);
-    if (satTarget.isBefore(now)) {
-      satTarget = satTarget.add(const Duration(days: 1));
-    }
-    while (satTarget.weekday != DateTime.saturday) {
-      satTarget = satTarget.add(const Duration(days: 1));
+
+    // Helper: next Saturday at a given hour:minute.
+    tz.TZDateTime nextSaturday(int hour, int minute) {
+      var t = tz.TZDateTime(location, now.year, now.month, now.day, hour, minute);
+      if (t.isBefore(now)) t = t.add(const Duration(days: 1));
+      while (t.weekday != DateTime.saturday) {
+        t = t.add(const Duration(days: 1));
+      }
+      return t;
     }
 
+    // 10 min before Mesh 3-3-3 (20:50 Saturday)
     await _plugin.zonedSchedule(
-      _plan333TrainingId,
-      'Treino Plano 3-3-3 — Hoje às 21:00',
-      'Treino semanal de sábado. Ligue o CB Canal 3 ou PMR 446 Canal 3.',
-      satTarget,
+      _plan333Remind10Id,
+      'Mesh 3-3-3 — em 10 minutos!',
+      'O evento semanal de sábado começa às 21:00.',
+      nextSaturday(20, 50),
+      details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+
+    // 5 min before Mesh 3-3-3 (20:55 Saturday)
+    await _plugin.zonedSchedule(
+      _plan333Remind5Id,
+      'Mesh 3-3-3 — em 5 minutos!',
+      'Prepare o rádio para o evento semanal às 21:00.',
+      nextSaturday(20, 55),
       details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
@@ -307,9 +291,8 @@ class NotificationService {
   /// Cancel all Plan 3-3-3 scheduled notifications.
   Future<void> cancelPlan333Alerts() async {
     if (!_initialized || kIsWeb) return;
-    for (int i = 0; i <= 8; i++) {
-      await _plugin.cancel(_plan333BaseId + i);
-    }
+    await _plugin.cancel(_plan333Remind10Id);
+    await _plugin.cancel(_plan333Remind5Id);
   }
 
   // ---------------------------------------------------------------------------

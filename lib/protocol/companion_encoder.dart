@@ -34,6 +34,24 @@ class CompanionEncoder {
     return _frame(cmdAppStart, payload.toBytes());
   }
 
+  /// SEND_MSG (CLI) — send a remote admin command to a peer node.
+  /// Uses TXT_TYPE_CLI_DATA (1) so the receiving firmware routes it to
+  /// handleCommand() instead of displaying it as chat text.
+  static Uint8List sendAdminCommand(
+    Uint8List recipientPrefix,
+    String command, {
+    int? timestamp,
+  }) {
+    final ts = timestamp ?? _nowEpoch();
+    final payload = BytesBuilder();
+    payload.addByte(txtCliData);
+    payload.addByte(0); // attempt
+    payload.add(_uint32LE(ts));
+    payload.add(recipientPrefix.sublist(0, 6));
+    payload.add(utf8.encode(command));
+    return _frame(cmdSendMsg, payload.toBytes());
+  }
+
   /// SEND_MSG — send a private text message.
   static Uint8List sendMessage(
     Uint8List recipientPrefix,
@@ -289,6 +307,23 @@ class CompanionEncoder {
 
   /// SIGN_FINISH — finalize signing and get RESP_CODE_SIGNATURE back.
   static Uint8List signFinish() => _frame(cmdSignFinish);
+
+  /// EXPORT_PRIVATE_KEY — request the radio to return its 64-byte private key.
+  /// Requires the firmware to be compiled with ENABLE_PRIVATE_KEY_EXPORT=1.
+  /// Radio replies with RESP_CODE_PRIVATE_KEY (0x0E) containing 64 raw bytes,
+  /// or RESP_CODE_ERR if the feature is disabled.
+  static Uint8List exportPrivateKey() => _frame(cmdExportPrivateKey);
+
+  /// IMPORT_PRIVATE_KEY — write a 64-byte private key to the radio.
+  /// Requires the firmware to be compiled with ENABLE_PRIVATE_KEY_IMPORT=1.
+  /// [privateKey] must be exactly 64 bytes.
+  /// Radio replies with RESP_CODE_OK on success, or RESP_CODE_ERR on failure.
+  static Uint8List importPrivateKey(Uint8List privateKey) {
+    if (privateKey.length != 64) {
+      throw ArgumentError('Private key must be exactly 64 bytes');
+    }
+    return _frame(cmdImportPrivateKey, privateKey);
+  }
 
   /// SEND_TELEMETRY_REQ — request telemetry from a node.
   /// Spec: {code, reserved(3), pub_key(32)}

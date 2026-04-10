@@ -85,6 +85,13 @@ class StorageService {
     }
   }
 
+  Future<void> clearMessages(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_messagesKey(key));
+    } catch (_) {}
+  }
+
   // ---------------------------------------------------------------------------
   // Contacts
   // ---------------------------------------------------------------------------
@@ -211,6 +218,28 @@ class StorageService {
   }
 
   // ---------------------------------------------------------------------------
+  // QSL log
+  // ---------------------------------------------------------------------------
+
+  static const _keyQslLog = 'plan333_qsl_log';
+
+  Future<void> saveQslLog(String json) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyQslLog, json);
+    } catch (_) {}
+  }
+
+  Future<String?> loadQslLog() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_keyQslLog);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Favorites (app-side, not stored on radio)
   // ---------------------------------------------------------------------------
 
@@ -272,6 +301,40 @@ class StorageService {
     } catch (_) {
       return {};
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private key backup  (keyed by first 6 hex chars of radio public key)
+  // ---------------------------------------------------------------------------
+
+  static String _prvKeyBackupStorageKey(String pubKeyHex6) =>
+      'prv_key_bkp_$pubKeyHex6';
+
+  /// Persist [prvKeyHex] (128-char hex = 64 raw bytes) for the radio identified
+  /// by [pubKeyHex6] (first 6 hex bytes of the public key).
+  Future<void> savePrivateKeyBackup(String pubKeyHex6, String prvKeyHex) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prvKeyBackupStorageKey(pubKeyHex6), prvKeyHex);
+    } catch (_) {}
+  }
+
+  /// Returns the stored 128-char hex private key for [pubKeyHex6], or null.
+  Future<String?> loadPrivateKeyBackup(String pubKeyHex6) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_prvKeyBackupStorageKey(pubKeyHex6));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Remove the private key backup for [pubKeyHex6].
+  Future<void> clearPrivateKeyBackup(String pubKeyHex6) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prvKeyBackupStorageKey(pubKeyHex6));
+    } catch (_) {}
   }
 }
 
