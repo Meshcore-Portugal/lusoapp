@@ -3,7 +3,7 @@ name: Build and Pre-Release
 on:
   push:
     branches:
-      - main
+      - dev
 
 permissions:
   contents: write
@@ -86,7 +86,7 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "VERSION=${version}" >> "$GITHUB_ENV"
 
-      - name: Upload to Play Store (Internal App Sharing)
+      - name: Upload to Play Store (Internal Test)
         id: play_upload
         uses: r0adkll/upload-google-play@v1
         with:
@@ -182,13 +182,6 @@ jobs:
           name: LusoApp v${{ needs.build_android.outputs.version }}
           prerelease: true
           generate_release_notes: true
-          body: |
-            ## Closed testing
-            [Join on Android](https://play.google.com/store/apps/details?id=pt.meshcore.lusoapp)
-            [Join on the web](https://play.google.com/apps/testing/pt.meshcore.lusoapp)
-
-            ## Internal Testing
-            [Join on the web](https://play.google.com/apps/internaltest/4700724690535660686)
           target_commitish: ${{ github.sha }}
           files: |
             release-assets/*.apk

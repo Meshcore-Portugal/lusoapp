@@ -292,7 +292,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   TileLayer(
                     urlTemplate:
                         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'pt.meshcore.mcapppt',
+                    userAgentPackageName: 'pt.meshcore.lusoapp',
                     tileProvider: _tileProvider,
                     // On web the browser sets its own User-Agent header;
                     // a custom one would be blocked by CORS pre-flight.
