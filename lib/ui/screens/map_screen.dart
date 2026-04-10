@@ -188,15 +188,29 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   Future<void> _shareMap() async {
+    if (_sharing) return;
     setState(() => _sharing = true);
     try {
+      // Ensure the latest map frame (tiles + polyline + hop markers) is painted
+      // before capturing the RepaintBoundary.
+      await WidgetsBinding.instance.endOfFrame;
       final boundary =
           _mapRepaintKey.currentContext?.findRenderObject()
               as RenderRepaintBoundary?;
-      if (boundary == null) return;
-      final image = await boundary.toImage(pixelRatio: 1.5);
+      if (boundary == null) {
+        _showSnack('Nao foi possivel capturar o mapa');
+        return;
+      }
+
+      if (!mounted) return;
+      final dpr = MediaQuery.of(context).devicePixelRatio;
+      final pixelRatio = dpr.clamp(1.5, 3.0);
+      final image = await boundary.toImage(pixelRatio: pixelRatio);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return;
+      if (byteData == null) {
+        _showSnack('Falha ao gerar imagem do mapa');
+        return;
+      }
       final pngBytes = byteData.buffer.asUint8List();
 
       // Write to a real file on disk — apps like Telegram require an actual
@@ -210,6 +224,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       await SharePlus.instance.share(
         ShareParams(files: [XFile(file.path)], subject: 'Mapa MeshCore'),
       );
+    } catch (_) {
+      _showSnack('Erro ao partilhar o mapa');
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
@@ -347,22 +363,22 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   if (traceResult != null)
                     MarkerLayer(
                       markers: [
-                        for (int _hi = 0; _hi < traceResult.hops.length; _hi++)
-                          if (traceResult.hops[_hi].hasGps)
+                        for (int hi = 0; hi < traceResult.hops.length; hi++)
+                          if (traceResult.hops[hi].hasGps)
                             Marker(
                               point: LatLng(
-                                traceResult.hops[_hi].latitude!,
-                                traceResult.hops[_hi].longitude!,
+                                traceResult.hops[hi].latitude!,
+                                traceResult.hops[hi].longitude!,
                               ),
-                              width: 130,
-                              height: 100,
+                              width: 140,
+                              height: 130,
                               alignment: Alignment.center,
                               child: _buildHopMarker(
-                                traceResult.hops[_hi],
+                                traceResult.hops[hi],
                                 theme,
                                 distanceM: _distanceToHop(
                                   traceResult.hops,
-                                  _hi,
+                                  hi,
                                   selfPos,
                                 ),
                               ),
@@ -389,26 +405,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   ),
                 ],
               ),
-
-              // ---- Trace result card ----
-              if (traceResult != null)
-                Positioned(
-                  top: 16,
-                  left: 16,
-                  right: 72,
-                  child: _TraceResultCard(
-                    result: traceResult,
-                    selfPos: selfPos,
-                    onClear:
-                        () =>
-                            ref.read(traceResultProvider.notifier).state = null,
-                    onFit: () {
-                      final pts = _tracePoints(traceResult, selfPos);
-                      if (pts.length > 1) _fitAll(pts);
-                    },
-                    theme: theme,
-                  ),
-                ),
 
               // ---- No GPS hint ----
               if (!hasAny)
@@ -440,6 +436,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ], // ← close inner Stack.children
           ), // ← close inner Stack
         ), // ← close RepaintBoundary
+        // ---- Trace result card (outside RepaintBoundary) ----
+        // Keep this outside the captured map so shared images contain only the map.
+        if (traceResult != null)
+          Positioned(
+            top: 16,
+            left: 16,
+            right: 72,
+            child: _TraceResultCard(
+              result: traceResult,
+              selfPos: selfPos,
+              onClear:
+                  () => ref.read(traceResultProvider.notifier).state = null,
+              onFit: () {
+                final pts = _tracePoints(traceResult, selfPos);
+                if (pts.length > 1) _fitAll(pts);
+              },
+              theme: theme,
+            ),
+          ),
+
         // ---- FABs (outside RepaintBoundary — not captured in screenshots) ----
         Positioned(
           right: 16,
@@ -577,6 +593,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               fontSize: 9,
               fontWeight: FontWeight.bold,
             ),
+            maxLines: 1,
+            softWrap: false,
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -1038,7 +1056,7 @@ String _formatDist(double m) {
   return '${m.round()} m';
 }
 
-class _TraceResultCard extends StatelessWidget {
+class _TraceResultCard extends StatefulWidget {
   const _TraceResultCard({
     required this.result,
     required this.onClear,
@@ -1054,11 +1072,25 @@ class _TraceResultCard extends StatelessWidget {
   final LatLng? selfPos;
 
   @override
+  State<_TraceResultCard> createState() => _TraceResultCardState();
+}
+
+class _TraceResultCardState extends State<_TraceResultCard> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final ts =
-        '${result.timestamp.hour.toString().padLeft(2, '0')}:'
-        '${result.timestamp.minute.toString().padLeft(2, '0')}:'
-        '${result.timestamp.second.toString().padLeft(2, '0')}';
+        '${widget.result.timestamp.hour.toString().padLeft(2, '0')}:'
+        '${widget.result.timestamp.minute.toString().padLeft(2, '0')}:'
+        '${widget.result.timestamp.second.toString().padLeft(2, '0')}';
+
+    const collapsedVisibleHops = 4;
+    final totalHops = widget.result.hops.length;
+    final canCollapse = totalHops > collapsedVisibleHops;
+    final visibleHops =
+        (_expanded || !canCollapse) ? totalHops : collapsedVisibleHops;
+    final hiddenCount = totalHops - visibleHops;
 
     return Card(
       elevation: 4,
@@ -1071,57 +1103,61 @@ class _TraceResultCard extends StatelessWidget {
             // Header row
             Row(
               children: [
-                Icon(Icons.route, size: 16, color: theme.colorScheme.primary),
+                Icon(
+                  Icons.route,
+                  size: 16,
+                  color: widget.theme.colorScheme.primary,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'Path · $ts · ${result.hopCount} hop${result.hopCount != 1 ? 's' : ''}',
-                    style: theme.textTheme.labelMedium?.copyWith(
+                    'Path · $ts · ${widget.result.hopCount} hop${widget.result.hopCount != 1 ? 's' : ''}',
+                    style: widget.theme.textTheme.labelMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
+                      color: widget.theme.colorScheme.primary,
                     ),
                   ),
                 ),
                 InkWell(
-                  onTap: onFit,
+                  onTap: widget.onFit,
                   child: Padding(
                     padding: const EdgeInsets.all(4),
                     child: Icon(
                       Icons.fit_screen,
                       size: 16,
-                      color: theme.colorScheme.onSurfaceVariant,
+                      color: widget.theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
                 InkWell(
-                  onTap: onClear,
+                  onTap: widget.onClear,
                   child: Padding(
                     padding: const EdgeInsets.all(4),
                     child: Icon(
                       Icons.close,
                       size: 16,
-                      color: theme.colorScheme.onSurfaceVariant,
+                      color: widget.theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
               ],
             ),
             // Hop list
-            if (result.hops.isNotEmpty) ...[
+            if (widget.result.hops.isNotEmpty) ...[
               const SizedBox(height: 4),
-              for (int i = 0; i < result.hops.length; i++)
+              for (int i = 0; i < visibleHops; i++)
                 Builder(
                   builder: (ctx) {
-                    final hop = result.hops[i];
+                    final hop = widget.result.hops[i];
                     // Distance from the previous GPS point (or selfPos) to this hop.
                     double? distM;
                     if (hop.hasGps) {
                       LatLng? prevPt;
                       if (i == 0) {
-                        prevPt = selfPos;
+                        prevPt = widget.selfPos;
                       } else {
                         for (int k = i - 1; k >= 0; k--) {
-                          final prev = result.hops[k];
+                          final prev = widget.result.hops[k];
                           if (prev.hasGps) {
                             prevPt = LatLng(prev.latitude!, prev.longitude!);
                             break;
@@ -1139,10 +1175,33 @@ class _TraceResultCard extends StatelessWidget {
                     return _HopRow(
                       index: i + 1,
                       hop: hop,
-                      theme: theme,
+                      theme: widget.theme,
                       distanceM: distM,
                     );
                   },
+                ),
+              if (canCollapse)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => setState(() => _expanded = !_expanded),
+                    icon: Icon(
+                      _expanded ? Icons.expand_less : Icons.expand_more,
+                      size: 16,
+                    ),
+                    label: Text(
+                      _expanded
+                          ? 'Minimizar lista'
+                          : 'Mostrar +$hiddenCount hop${hiddenCount == 1 ? '' : 's'}',
+                    ),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 0,
+                        vertical: 2,
+                      ),
+                    ),
+                  ),
                 ),
             ],
             // Final SNR
@@ -1157,8 +1216,8 @@ class _TraceResultCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    'Final: ${result.finalSnrDb.toStringAsFixed(1)} dB',
-                    style: theme.textTheme.labelSmall?.copyWith(
+                    'Final: ${widget.result.finalSnrDb.toStringAsFixed(1)} dB',
+                    style: widget.theme.textTheme.labelSmall?.copyWith(
                       color: Colors.green.shade600,
                       fontWeight: FontWeight.w600,
                     ),
