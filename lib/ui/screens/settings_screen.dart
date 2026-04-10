@@ -196,7 +196,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const ListTile(
                     title: Text('LusoAPP'),
                     subtitle: Text(
-                      'MeshCore Portugal\nCódigo fonte inicial doado por\nPaulo Pereira aka GZ7d0',
+                      'MeshCore Portugal\nCódigo fonte inicial criado por\nPaulo Pereira aka GZ7d0',
                     ),
                   ),
                   ListTile(

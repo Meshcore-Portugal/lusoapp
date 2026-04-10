@@ -37,7 +37,28 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
       await ref
           .read(messagesProvider.notifier)
           .ensureLoadedForChannel(widget.channelIndex);
-      if (mounted) _scrollToBottom();
+      if (mounted) _scrollToBottom(animate: false, attempts: 4);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant ChannelChatScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.channelIndex == widget.channelIndex) return;
+
+    _replyingTo = null;
+    _textController.clear();
+    _atBottom = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      ref
+          .read(unreadCountsProvider.notifier)
+          .markChannelRead(widget.channelIndex);
+      await ref
+          .read(messagesProvider.notifier)
+          .ensureLoadedForChannel(widget.channelIndex);
+      if (mounted) _scrollToBottom(animate: false, attempts: 4);
     });
   }
 
@@ -91,14 +112,27 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
     _scrollToBottom();
   }
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool animate = true, int attempts = 1}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final target = _scrollController.position.maxScrollExtent;
+      if (animate) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          target,
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
+      } else {
+        _scrollController.jumpTo(target);
+      }
+
+      if (attempts > 1) {
+        final retryDelay = animate ? 240 : 80;
+        Future<void>.delayed(Duration(milliseconds: retryDelay), () {
+          if (mounted) {
+            _scrollToBottom(animate: false, attempts: attempts - 1);
+          }
+        });
       }
     });
   }
@@ -274,7 +308,8 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
                   right: 12,
                   child: FloatingActionButton.small(
                     heroTag: 'scroll_bottom_ch${widget.channelIndex}',
-                    onPressed: _scrollToBottom,
+                    onPressed:
+                        () => _scrollToBottom(animate: true, attempts: 5),
                     child: const Icon(Icons.keyboard_double_arrow_down),
                   ),
                 ),
@@ -687,7 +722,10 @@ class _MessageBubble extends ConsumerWidget {
     if (lastOff + path.pathHashSize > path.pathBytes.length) {
       // Fallback: hex of first byte at offset
       return lastOff < path.pathBytes.length
-          ? path.pathBytes[lastOff].toRadixString(16).padLeft(2, '0').toUpperCase()
+          ? path.pathBytes[lastOff]
+              .toRadixString(16)
+              .padLeft(2, '0')
+              .toUpperCase()
           : '?';
     }
     final name = _resolveHopName(
@@ -696,7 +734,10 @@ class _MessageBubble extends ConsumerWidget {
     );
     if (name != null) return name;
     // Fallback: hex prefix
-    return path.pathBytes[lastOff].toRadixString(16).padLeft(2, '0').toUpperCase();
+    return path.pathBytes[lastOff]
+        .toRadixString(16)
+        .padLeft(2, '0')
+        .toUpperCase();
   }
 
   /// Pick the most informative path to represent in the bubble chip:
@@ -1243,9 +1284,10 @@ class _MessageBubble extends ConsumerWidget {
                             pathLen: message.pathLen,
                             paths: paths,
                             contacts: contacts,
-                            onTap: message.packetHashHex != null
-                                ? () => _showMessagePaths(context, message)
-                                : null,
+                            onTap:
+                                message.packetHashHex != null
+                                    ? () => _showMessagePaths(context, message)
+                                    : null,
                           );
                           if (line is SizedBox) return const SizedBox.shrink();
                           return Padding(
@@ -1380,9 +1422,10 @@ class _MessageBubble extends ConsumerWidget {
                             pathLen: message.pathLen,
                             paths: paths,
                             contacts: contacts,
-                            onTap: message.packetHashHex != null
-                                ? () => _showMessagePaths(context, message)
-                                : null,
+                            onTap:
+                                message.packetHashHex != null
+                                    ? () => _showMessagePaths(context, message)
+                                    : null,
                           );
                           if (line is SizedBox) return const SizedBox.shrink();
                           return Padding(
@@ -1959,12 +2002,12 @@ class _MessagePathsSheet extends ConsumerWidget {
                                   lastOff + path.pathHashSize <=
                                       path.pathBytes.length
                               ? _matchContact(
-                                  path.pathBytes.sublist(
-                                    lastOff,
-                                    lastOff + path.pathHashSize,
-                                  ),
-                                  contacts,
-                                )
+                                path.pathBytes.sublist(
+                                  lastOff,
+                                  lastOff + path.pathHashSize,
+                                ),
+                                contacts,
+                              )
                               : null;
                       final String lastHopHex =
                           lastOff >= 0 && lastOff < path.pathBytes.length
@@ -1974,11 +2017,8 @@ class _MessagePathsSheet extends ConsumerWidget {
                                   .toUpperCase()
                               : '';
                       final String summaryTitle =
-                          isDirect
-                              ? 'Direto'
-                              : (lastHopName ?? lastHopHex);
-                      final String snrStr =
-                          path.snr.toStringAsFixed(1);
+                          isDirect ? 'Direto' : (lastHopName ?? lastHopHex);
+                      final String snrStr = path.snr.toStringAsFixed(1);
                       final String subtitleStr =
                           isDirect
                               ? 'SNR $snrStr dB · direto'
@@ -2045,8 +2085,7 @@ class _MessagePathsSheet extends ConsumerWidget {
                               child: Text(
                                 hexId,
                                 style: TextStyle(
-                                  color:
-                                      theme.colorScheme.onSecondaryContainer,
+                                  color: theme.colorScheme.onSecondaryContainer,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
                                 ),
@@ -2077,8 +2116,7 @@ class _MessagePathsSheet extends ConsumerWidget {
                                   msg.isOutgoing
                                       ? 'Enviaste a mensagem'
                                       : 'Enviou a mensagem',
-                              subtitleColor:
-                                  theme.colorScheme.onSurfaceVariant,
+                              subtitleColor: theme.colorScheme.onSurfaceVariant,
                             ),
                             ...hopWidgets,
                             _buildConnector(theme),
@@ -2101,8 +2139,7 @@ class _MessagePathsSheet extends ConsumerWidget {
                                   isDirect
                                       ? Colors.green.shade600
                                       : theme.colorScheme.onSurfaceVariant,
-                              trailing:
-                                  _SnrBar(snr: path.snr, theme: theme),
+                              trailing: _SnrBar(snr: path.snr, theme: theme),
                             ),
                           ],
                         ),
@@ -2124,8 +2161,7 @@ class _MessagePathsSheet extends ConsumerWidget {
                                   ),
                                 )
                                 : CircleAvatar(
-                                  backgroundColor:
-                                      _avatarColor(summaryTitle),
+                                  backgroundColor: _avatarColor(summaryTitle),
                                   child: Text(
                                     _initials(summaryTitle),
                                     style: const TextStyle(
@@ -2144,9 +2180,10 @@ class _MessagePathsSheet extends ConsumerWidget {
                           subtitleStr,
                           style: TextStyle(
                             fontSize: 12,
-                            color: isDirect
-                                ? Colors.green.shade600
-                                : theme.colorScheme.onSurfaceVariant,
+                            color:
+                                isDirect
+                                    ? Colors.green.shade600
+                                    : theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                         children: [fullChain],
