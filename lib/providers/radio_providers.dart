@@ -258,15 +258,23 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _pushWidget();
         case PrivateMessageResponse(:final message):
           _ref.read(messagesProvider.notifier).addMessage(message);
-          if (!message.isOutgoing) {
+          if (!message.isOutgoing && !message.isCliResponse) {
             _ref.read(networkStatsProvider.notifier).incrementRx();
           }
-          if (message.senderKey != null) {
+          // Update last-heard timestamp on the matching contact for any
+          // incoming private message (chat or CLI response).
+          if (!message.isOutgoing && message.senderKey != null) {
             _ref
-                .read(unreadCountsProvider.notifier)
-                .incrementContact(_hex6(message.senderKey!));
+                .read(contactsProvider.notifier)
+                .touchLastHeard(message.senderKey!);
           }
-          if (!message.isOutgoing) {
+          // Unread badge + notification only for real chat messages.
+          if (!message.isOutgoing && !message.isCliResponse) {
+            if (message.senderKey != null) {
+              _ref
+                  .read(unreadCountsProvider.notifier)
+                  .incrementContact(_hex6(message.senderKey!));
+            }
             final senderHex6 =
                 message.senderKey != null ? _hex6(message.senderKey!) : null;
             final contacts = _ref.read(contactsProvider);
@@ -315,17 +323,36 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
             }
           }
           _ref.read(messagesProvider.notifier).addMessage(finalMessage);
-          // Auto-detect QSL messages on the plan333 channel.
+          // Auto-log incoming CQ Plano 333 messages on the #plano333 channel
+          // as stations heard — these become QSL confirmations to send later.
           if (!finalMessage.isOutgoing && finalMessage.channelIndex != null) {
-            final plan333Idx =
-                _ref.read(plan333ConfigProvider).meshChannelIndex;
-            if (finalMessage.channelIndex == plan333Idx) {
-              final qsl = Plan333Service.tryParseQsl(
+            final channels = _ref.read(channelsProvider);
+            final plan333Ch =
+                channels
+                    .where((c) => c.name.trim().toLowerCase() == '#plano333')
+                    .firstOrNull;
+            if (plan333Ch != null &&
+                finalMessage.channelIndex == plan333Ch.index) {
+              final cq = Plan333Service.tryParseCq(
                 finalMessage.text,
                 pathLen: finalMessage.pathLen,
               );
-              if (qsl != null) {
-                _ref.read(qslLogProvider.notifier).add(qsl);
+              if (cq != null) {
+                // Skip own CQ (echo from the radio).
+                final myStation =
+                    _ref.read(plan333ConfigProvider).stationName.trim();
+                if (myStation.isEmpty ||
+                    cq.stationName.toLowerCase() != myStation.toLowerCase()) {
+                  // Deduplicate — same station sends up to 3 CQs per event.
+                  final log = _ref.read(qslLogProvider);
+                  if (!log.any(
+                    (r) =>
+                        r.stationName.toLowerCase() ==
+                        cq.stationName.toLowerCase(),
+                  )) {
+                    _ref.read(qslLogProvider.notifier).add(cq);
+                  }
+                }
               }
             }
           }
@@ -503,6 +530,16 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
       pathHashCount: pkt.pathHashCount,
       pathHashSize: pkt.pathHashSize,
     );
+
+    // For advert packets, update last-heard on the matching contact.
+    // The radio doesn't push 0x80 for already-known contacts, so the 0x88
+    // log frame is the only signal we get.
+    // Advert payload starts with 32-byte public key — first 6 bytes = prefix.
+    if (pkt.payloadType == payloadTypeAdvert && pkt.payload.length >= 6) {
+      _ref
+          .read(contactsProvider.notifier)
+          .touchLastHeard(Uint8List.fromList(pkt.payload.sublist(0, 6)));
+    }
 
     // Only GRP_TXT packets can match outgoing channel messages.
     if (pkt.payloadType != payloadTypeGrpTxt) return;
@@ -842,6 +879,40 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
   }
 
   /// Called when an AdvertPush is received over the mesh.
+  /// Update lastModified on a contact matched by key prefix (6 bytes).
+  /// Called when any incoming private message (chat or CLI) is received.
+  void touchLastHeard(Uint8List senderKey) {
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final idx = state.indexWhere(
+      (c) =>
+          c.publicKey.length >= 6 &&
+          senderKey.length >= 6 &&
+          c.publicKey[0] == senderKey[0] &&
+          c.publicKey[1] == senderKey[1] &&
+          c.publicKey[2] == senderKey[2] &&
+          c.publicKey[3] == senderKey[3] &&
+          c.publicKey[4] == senderKey[4] &&
+          c.publicKey[5] == senderKey[5],
+    );
+    if (idx < 0) return;
+    final existing = state[idx];
+    final next = [...state];
+    next[idx] = Contact(
+      publicKey: existing.publicKey,
+      type: existing.type,
+      flags: existing.flags,
+      pathLen: existing.pathLen,
+      name: existing.name,
+      lastAdvertTimestamp: existing.lastAdvertTimestamp,
+      latitude: existing.latitude,
+      longitude: existing.longitude,
+      lastModified: now,
+      customName: existing.customName,
+    );
+    state = next;
+    StorageService.instance.saveContacts(next);
+  }
+
   /// Adds a new contact if unseen, or refreshes the name/type/timestamp if already known.
   void upsertFromAdvert(Uint8List publicKey, int type, String name) {
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;

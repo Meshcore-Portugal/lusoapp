@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -77,6 +78,7 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
     final autoState = ref.watch(plan333AutoSendProvider);
     final connState = ref.watch(connectionProvider);
     final cbEnabled = ref.watch(plan333EnabledProvider);
+    final qslLogCount = ref.watch(qslLogProvider).length;
 
     final meshActive = Plan333Service.isMeshEventActive(_now);
     final qslActive = Plan333Service.isMeshQslActive(_now);
@@ -97,6 +99,7 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
             nextMesh: nextMesh,
             config: config,
             autoState: autoState,
+            qslLogCount: qslLogCount,
             radioConnected: radioConnected,
             onSendCq:
                 () => ref.read(plan333AutoSendProvider.notifier).sendManualCq(),
@@ -156,6 +159,7 @@ class _MeshStatusCard extends StatelessWidget {
     required this.nextMesh,
     required this.config,
     required this.autoState,
+    required this.qslLogCount,
     required this.radioConnected,
     required this.onSendCq,
   });
@@ -166,6 +170,7 @@ class _MeshStatusCard extends StatelessWidget {
   final DateTime nextMesh;
   final Plan333Config config;
   final Plan333AutoSendState autoState;
+  final int qslLogCount;
   final bool radioConnected;
   final VoidCallback onSendCq;
 
@@ -275,6 +280,45 @@ class _MeshStatusCard extends StatelessWidget {
                     ),
                 ],
               ),
+
+              // QSL auto-send status (visible during QSL phase)
+              if (qslActive && config.autoSendCq) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Text(
+                      'QSL enviados:',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${autoState.qslSentCount}/$qslLogCount',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF40C4FF),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (autoState.lastQslTime != null) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        '(último: ${_fmtTime(autoState.lastQslTime!)})',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    if (qslLogCount == 0)
+                      Text(
+                        '  sem QSLs no log',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 12),
 
               // Send button
@@ -521,9 +565,9 @@ class _ConfigCard extends StatelessWidget {
             // Auto-send toggle
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Envio automático de CQ'),
+              title: const Text('Envio automático de CQ e QSL'),
               subtitle: const Text(
-                'Envia até 3 CQs automaticamente durante o evento',
+                'CQ: até 3 mensagens (21:00–22:00)  •  QSL: confirma cada estação recebida (21:30–22:00)',
               ),
               value: config.autoSendCq,
               onChanged: onAutoSendChanged,
@@ -546,7 +590,6 @@ class _ConfigCard extends StatelessWidget {
       ),
     );
   }
-
 }
 
 // ============================================================================
@@ -602,24 +645,24 @@ class _FormatsCard extends StatelessWidget {
                   'QSL, [Nome estação recebida], [N] hops, [local]\n'
                   'Ex: QSL, Daytona, 5 hops, Tomar',
             ),
-            const Divider(height: 20),
+            // const Divider(height: 20),
 
-            // Meshtastic note (secondary)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: theme.colorScheme.outlineVariant),
-              ),
-              child: Text(
-                'Meshtastic: presença 21:00–21:30, QSL 21:30–22:00. '
-                'Relatório em Telegram.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
+            // MeshCore instructions
+            // Container(
+            //   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            //   decoration: BoxDecoration(
+            //     color: theme.colorScheme.surfaceContainerHighest,
+            //     borderRadius: BorderRadius.circular(8),
+            //     border: Border.all(color: theme.colorScheme.outlineVariant),
+            //   ),
+            //   child: Text(
+            //     'MeshCore: canal #plano333 · presença 21:00–21:30 · '
+            //     'QSL 21:30–22:00 · relatório em meshcore.pt/pt/projects/plano333',
+            //     style: theme.textTheme.bodySmall?.copyWith(
+            //       color: theme.colorScheme.onSurfaceVariant,
+            //     ),
+            //   ),
+            // ),
           ],
         ),
       ),
@@ -1054,35 +1097,62 @@ class _QslCard extends ConsumerWidget {
               children: [
                 const Icon(Icons.verified_outlined, color: AppTheme.primary),
                 const SizedBox(width: 8),
-                Text(
-                  'QSL Recebidos',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Text(
+                    'Estações Ouvidas',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                const Spacer(),
-                if (log.isNotEmpty) ...[
-                  // Share button
-                  IconButton(
-                    icon: const Icon(Icons.share_outlined),
-                    tooltip: 'Partilhar log',
-                    onPressed: () => _share(log, config),
-                  ),
-                  // Clear button
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: 'Limpar log',
-                    onPressed: () => _confirmClear(context, ref),
-                  ),
-                ],
-                // Add button
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  tooltip: 'Adicionar QSL',
-                  color: AppTheme.primary,
-                  onPressed: () => _showAddDialog(context, ref),
                 ),
               ],
+            ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                spacing: 2,
+                runSpacing: 2,
+                children: [
+                  if (log.isNotEmpty) ...[
+                    // Share button
+                    IconButton(
+                      icon: const Icon(Icons.share_outlined),
+                      tooltip: 'Partilhar log',
+                      onPressed: () => _share(log, config),
+                    ),
+                    // Clear button
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      tooltip: 'Limpar log',
+                      onPressed: () => _confirmClear(context, ref),
+                    ),
+                  ],
+                  // Debug inject button (debug builds only)
+                  if (kDebugMode)
+                    IconButton(
+                      icon: const Icon(Icons.bug_report_outlined),
+                      tooltip: 'Injectar CQ de teste',
+                      onPressed: () {
+                        final r = Plan333Service.tryParseCq(
+                          'CQ Plano 333, Daytona, Tomar, Nabão',
+                          pathLen: 3,
+                        );
+                        if (r != null) {
+                          ref.read(qslLogProvider.notifier).add(r);
+                        }
+                      },
+                    ),
+                  // Add button
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline),
+                    tooltip: 'Adicionar QSL',
+                    color: AppTheme.primary,
+                    onPressed: () => _showAddDialog(context, ref),
+                  ),
+                ],
+              ),
             ),
 
             // ── Empty state ───────────────────────────────────────────────
@@ -1090,7 +1160,7 @@ class _QslCard extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Text(
-                  'Nenhum QSL registado. Toca em + para adicionar.',
+                  'Nenhuma estação ouvida ainda. Os CQs recebidos no canal aparecem aqui automaticamente.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -1103,8 +1173,7 @@ class _QslCard extends ConsumerWidget {
               for (var i = 0; i < log.length; i++) ...[
                 _QslRow(
                   record: log[i],
-                  onDelete: () =>
-                      ref.read(qslLogProvider.notifier).remove(i),
+                  onDelete: () => ref.read(qslLogProvider.notifier).remove(i),
                   theme: theme,
                 ),
                 if (i < log.length - 1) const Divider(height: 12),
@@ -1119,32 +1188,34 @@ class _QslCard extends ConsumerWidget {
   void _showAddDialog(BuildContext context, WidgetRef ref) {
     showDialog<void>(
       context: context,
-      builder: (_) => _AddQslDialog(
-        onSave: (r) => ref.read(qslLogProvider.notifier).add(r),
-      ),
+      builder:
+          (_) => _AddQslDialog(
+            onSave: (r) => ref.read(qslLogProvider.notifier).add(r),
+          ),
     );
   }
 
   void _confirmClear(BuildContext context, WidgetRef ref) {
     showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Limpar QSL?'),
-        content: const Text('Todos os QSL registados serão apagados.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Limpar QSL?'),
+            content: const Text('Todos os QSL registados serão apagados.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar'),
+              ),
+              TextButton(
+                onPressed: () {
+                  ref.read(qslLogProvider.notifier).clearAll();
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Limpar'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () {
-              ref.read(qslLogProvider.notifier).clearAll();
-              Navigator.pop(ctx);
-            },
-            child: const Text('Limpar'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1152,10 +1223,8 @@ class _QslCard extends ConsumerWidget {
     final now = DateTime.now();
     final dateStr =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final station =
-        config.stationName.isNotEmpty ? config.stationName : '?';
-    final location =
-        config.city.isNotEmpty ? config.city : '';
+    final station = config.stationName.isNotEmpty ? config.stationName : '?';
+    final location = config.city.isNotEmpty ? config.city : '';
 
     final lines = StringBuffer();
     lines.writeln('=== Mesh 3-3-3 — $dateStr ===');
@@ -1164,7 +1233,7 @@ class _QslCard extends ConsumerWidget {
     } else {
       lines.writeln('Estação: $station');
     }
-    lines.writeln('QSL recebidos (${log.length}):');
+    lines.writeln('Estações ouvidas / QSL (${log.length}):');
     for (var i = 0; i < log.length; i++) {
       final r = log[i];
       final loc = r.location.isNotEmpty ? ' | ${r.location}' : '';
@@ -1198,7 +1267,11 @@ class _QslRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF00E676)),
+        const Icon(
+          Icons.check_circle_outline,
+          size: 16,
+          color: Color(0xFF00E676),
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: Column(
@@ -1308,9 +1381,7 @@ class _AddQslDialogState extends State<_AddQslDialog> {
             const SizedBox(height: 12),
             TextField(
               controller: _notesCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Notas (opcional)',
-              ),
+              decoration: const InputDecoration(labelText: 'Notas (opcional)'),
             ),
           ],
         ),
@@ -1410,7 +1481,6 @@ class _PhaseChip extends StatelessWidget {
     );
   }
 }
-
 
 class _PhraseRow extends StatelessWidget {
   const _PhraseRow({

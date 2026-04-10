@@ -270,6 +270,7 @@ class CompanionDecoder {
         senderKey: senderKey,
         snr: snr,
         pathLen: pathLen,
+        isCliResponse: txtType == 1,
       ),
     );
   }
@@ -310,6 +311,7 @@ class CompanionDecoder {
         isOutgoing: false,
         senderKey: senderKey,
         pathLen: pathLen,
+        isCliResponse: txtType == 1,
       ),
     );
   }
