@@ -956,6 +956,7 @@ class _AddContactSheetState extends State<_AddContactSheet> {
   String? _pubKeyError;
   String? _nameError;
   bool _saving = false;
+  int _contactType = 0x01; // 0x01=chat, 0x02=repeater, 0x03=room
 
   @override
   void dispose() {
@@ -1035,7 +1036,7 @@ class _AddContactSheetState extends State<_AddContactSheet> {
     final pubKey = _parsePublicKey(_pubKeyCtrl.text.trim())!;
     final contact = Contact(
       publicKey: pubKey,
-      type: 1, // chat
+      type: _contactType,
       flags: 0,
       pathLen: 0,
       name: _nameCtrl.text.trim(),
@@ -1141,7 +1142,30 @@ class _AddContactSheetState extends State<_AddContactSheet> {
             maxLength: 31,
             textCapitalization: TextCapitalization.words,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+
+          // Type selector
+          Row(
+            children: [
+              for (final entry in const [
+                (0x01, 'Chat', Icons.chat_bubble_outline),
+                (0x02, 'Repetidor', Icons.router_outlined),
+                (0x03, 'Sala', Icons.meeting_room_outlined),
+              ])
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: _TypeChip(
+                      label: entry.$2,
+                      icon: entry.$3,
+                      selected: _contactType == entry.$1,
+                      onTap: () => setState(() => _contactType = entry.$1),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
 
           FilledButton.icon(
             onPressed: _saving ? null : _addManual,
@@ -1156,6 +1180,55 @@ class _AddContactSheetState extends State<_AddContactSheet> {
             label: Text(_saving ? 'A adicionar...' : 'Adicionar contacto'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TypeChip extends StatelessWidget {
+  const _TypeChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = selected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withAlpha(80);
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        decoration: BoxDecoration(
+          color: selected ? theme.colorScheme.primary.withAlpha(30) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

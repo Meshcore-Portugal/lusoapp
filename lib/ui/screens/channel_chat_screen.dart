@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
@@ -1785,6 +1786,19 @@ class _MessagePathsSheet extends ConsumerWidget {
   const _MessagePathsSheet({required this.msg});
   final ChatMessage msg;
 
+  static const Distance _distance = Distance();
+
+  static bool _hasValidGps(double? lat, double? lon) =>
+      lat != null && lon != null && !(lat == 0.0 && lon == 0.0);
+
+  static LatLng? _gpsPoint(double? lat, double? lon) =>
+      _hasValidGps(lat, lon) ? LatLng(lat!, lon!) : null;
+
+  static String _formatDistance(double meters) {
+    if (meters >= 1000) return '${(meters / 1000).toStringAsFixed(1)} km';
+    return '${meters.round()} m';
+  }
+
   /// Extract the sender name from a channel message (same logic as the bubble).
   static String _senderName(ChatMessage msg) {
     if (msg.senderName != null && msg.senderName!.isNotEmpty) {
@@ -1795,21 +1809,20 @@ class _MessagePathsSheet extends ConsumerWidget {
     return 'Desconhecido';
   }
 
-  /// Try to match a hop hash (first [hashSize] bytes of a pubkey) against
-  /// the contacts list.  Returns the contact's displayName only when exactly
-  /// one non-client contact matches — if multiple contacts share the same
-  /// Try to match a hop hash against the contacts list.
+  /// Returns the best-matching relay [Contact] for [hopHash], or null.
   ///
   /// Only repeaters (type=2) and rooms (type=3) are considered — these are
   /// the only MeshCore node types that forward packets.  Clients (type=1)
   /// and sensors (type=4) never relay and are explicitly excluded.
   ///
   /// With PATH_HASH_SIZE=1 (firmware default) two relay contacts can share
-  /// the same first byte.  We return the first match found.  False-positives
-  /// from client nodes are prevented by the type filter above; name
-  /// collisions between two relay contacts are unavoidable without larger
-  /// hashes and are an accepted limitation of the 1-byte firmware config.
-  static String? _matchContact(Uint8List hopHash, List<Contact> contacts) {
+  /// the same first byte.  We return the best match.  False-positives from
+  /// client nodes are prevented by the type filter; name collisions between
+  /// two relay contacts are an accepted limitation of 1-byte hashes.
+  static Contact? _findMatchingContact(
+    Uint8List hopHash,
+    List<Contact> contacts,
+  ) {
     final candidates = <Contact>[];
     for (final c in contacts) {
       // Only relay-capable types: repeater (2) and room (3).
@@ -1835,7 +1848,45 @@ class _MessagePathsSheet extends ConsumerWidget {
       }
       return a.displayName.compareTo(b.displayName);
     });
-    return candidates.first.displayName;
+    return candidates.first;
+  }
+
+  static String? _matchContact(Uint8List hopHash, List<Contact> contacts) =>
+      _findMatchingContact(hopHash, contacts)?.displayName;
+
+  /// Converts a [MessagePath] into a [TraceResult] for map overlay.
+  /// Each hop hash is resolved to a contact to obtain GPS coordinates and name.
+  static TraceResult _buildTraceResult(
+    MessagePath path,
+    List<Contact> contacts,
+  ) {
+    final hops = <TraceHop>[];
+    for (var h = 0; h < path.pathHashCount; h++) {
+      final offset = h * path.pathHashSize;
+      if (offset + path.pathHashSize > path.pathBytes.length) break;
+      final hopHash = path.pathBytes.sublist(
+        offset,
+        offset + path.pathHashSize,
+      );
+      final contact = _findMatchingContact(hopHash, contacts);
+      final hexId =
+          hopHash.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      hops.add(
+        TraceHop(
+          hashHex: hexId,
+          snrDb: path.snr,
+          name: contact?.displayName,
+          latitude: contact?.latitude,
+          longitude: contact?.longitude,
+        ),
+      );
+    }
+    return TraceResult(
+      tag: 0,
+      hops: hops,
+      finalSnrDb: path.snr,
+      timestamp: DateTime.now(),
+    );
   }
 
   static const _avatarPalette = [
@@ -1930,6 +1981,8 @@ class _MessagePathsSheet extends ConsumerWidget {
             : <MessagePath>[];
     final contacts = ref.watch(contactsProvider);
     final senderName = _senderName(msg);
+    final selfInfo = ref.watch(selfInfoProvider);
+    final selfPoint = _gpsPoint(selfInfo?.latitude, selfInfo?.longitude);
 
     final heardTimes = paths.length;
 
@@ -2054,6 +2107,7 @@ class _MessagePathsSheet extends ConsumerWidget {
 
                       // ── Intermediate relay hops ───────────────────────────
                       final hopWidgets = <Widget>[];
+                      LatLng? previousPoint = msg.isOutgoing ? selfPoint : null;
                       for (var h = 0; h < hops; h++) {
                         final offset = h * path.pathHashSize;
                         final hexId =
@@ -2062,10 +2116,10 @@ class _MessagePathsSheet extends ConsumerWidget {
                                     .toRadixString(16)
                                     .padLeft(2, '0')
                                 : '?';
-                        final String? hopName;
+                        final Contact? hopContact;
                         if (offset + path.pathHashSize <=
                             path.pathBytes.length) {
-                          hopName = _matchContact(
+                          hopContact = _findMatchingContact(
                             path.pathBytes.sublist(
                               offset,
                               offset + path.pathHashSize,
@@ -2073,8 +2127,30 @@ class _MessagePathsSheet extends ConsumerWidget {
                             contacts,
                           );
                         } else {
-                          hopName = null;
+                          hopContact = null;
                         }
+                        final hopName = hopContact?.displayName;
+                        final hopPoint = _gpsPoint(
+                          hopContact?.latitude,
+                          hopContact?.longitude,
+                        );
+                        final distanceLabel =
+                            (previousPoint != null && hopPoint != null)
+                                ? _formatDistance(
+                                  _distance.as(
+                                    LengthUnit.Meter,
+                                    previousPoint,
+                                    hopPoint,
+                                  ),
+                                )
+                                : null;
+                        if (hopPoint != null) previousPoint = hopPoint;
+
+                        final hopSubtitle =
+                            distanceLabel != null
+                                ? 'Salto ${h + 1} · $distanceLabel · Repetiu'
+                                : 'Salto ${h + 1} · Repetiu';
+
                         hopWidgets.add(_buildConnector(theme));
                         hopWidgets.add(
                           _buildChainRow(
@@ -2092,7 +2168,7 @@ class _MessagePathsSheet extends ConsumerWidget {
                               ),
                             ),
                             title: hopName ?? 'Nó desconhecido',
-                            subtitle: 'Salto ${h + 1} · Repetiu',
+                            subtitle: hopSubtitle,
                             subtitleColor:
                                 hopName != null
                                     ? Colors.orange.shade700
@@ -2100,6 +2176,26 @@ class _MessagePathsSheet extends ConsumerWidget {
                           ),
                         );
                       }
+
+                      final receiverDistanceLabel =
+                          (!isDirect &&
+                                  previousPoint != null &&
+                                  selfPoint != null)
+                              ? _formatDistance(
+                                _distance.as(
+                                  LengthUnit.Meter,
+                                  previousPoint,
+                                  selfPoint,
+                                ),
+                              )
+                              : null;
+
+                      final receiverSubtitle =
+                          isDirect
+                              ? 'Ouvido diretamente'
+                              : receiverDistanceLabel != null
+                              ? 'Recebeu a mensagem · $receiverDistanceLabel'
+                              : 'Recebeu a mensagem';
 
                       // ── Full chain (shown when expanded) ──────────────────
                       final fullChain = Padding(
@@ -2131,15 +2227,26 @@ class _MessagePathsSheet extends ConsumerWidget {
                                 ),
                               ),
                               title: 'O teu rádio',
-                              subtitle:
-                                  isDirect
-                                      ? 'Ouvido diretamente'
-                                      : 'Recebeu a mensagem',
+                              subtitle: receiverSubtitle,
                               subtitleColor:
                                   isDirect
                                       ? Colors.green.shade600
                                       : theme.colorScheme.onSurfaceVariant,
                               trailing: _SnrBar(snr: path.snr, theme: theme),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.map_outlined, size: 18),
+                                label: const Text('Ver no mapa'),
+                                onPressed: () {
+                                  ref.read(traceResultProvider.notifier).state =
+                                      _buildTraceResult(path, contacts);
+                                  Navigator.of(context).pop();
+                                  context.go('/map');
+                                },
+                              ),
                             ),
                           ],
                         ),

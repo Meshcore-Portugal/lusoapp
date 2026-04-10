@@ -1,14 +1,19 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../protocol/models.dart';
 import '../../providers/radio_providers.dart';
@@ -24,6 +29,9 @@ class MapScreen extends ConsumerStatefulWidget {
 
 class _MapScreenState extends ConsumerState<MapScreen> {
   final _mapController = MapController();
+  final _mapRepaintKey = GlobalKey();
+  bool _sharing = false;
+
   late final TileProvider _tileProvider =
       kIsWeb
           ? NetworkTileProvider()
@@ -179,6 +187,50 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
+  Future<void> _shareMap() async {
+    if (_sharing) return;
+    setState(() => _sharing = true);
+    try {
+      // Ensure the latest map frame (tiles + polyline + hop markers) is painted
+      // before capturing the RepaintBoundary.
+      await WidgetsBinding.instance.endOfFrame;
+      final boundary =
+          _mapRepaintKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null) {
+        _showSnack('Nao foi possivel capturar o mapa');
+        return;
+      }
+
+      if (!mounted) return;
+      final dpr = MediaQuery.of(context).devicePixelRatio;
+      final pixelRatio = dpr.clamp(1.5, 3.0);
+      final image = await boundary.toImage(pixelRatio: pixelRatio);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) {
+        _showSnack('Falha ao gerar imagem do mapa');
+        return;
+      }
+      final pngBytes = byteData.buffer.asUint8List();
+
+      // Write to a real file on disk — apps like Telegram require an actual
+      // file path and freeze/fail when given in-memory XFile.fromData bytes.
+      final tempDir = await getTemporaryDirectory();
+      final file = File(
+        '${tempDir.path}/meshcore_map_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+      await file.writeAsBytes(pngBytes, flush: true);
+
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path)], subject: 'Mapa MeshCore'),
+      );
+    } catch (_) {
+      _showSnack('Erro ao partilhar o mapa');
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Build
   // ---------------------------------------------------------------------------
@@ -216,118 +268,176 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     return Stack(
       children: [
-        // ---- Main map ----
-        FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
-            initialCenter: initialCenter,
-            initialZoom: hasAny ? _detailZoom : _defaultZoom,
-            interactionOptions: const InteractionOptions(
-              flags:
-                  InteractiveFlag.drag |
-                  InteractiveFlag.pinchZoom |
-                  InteractiveFlag.doubleTapZoom |
-                  InteractiveFlag.scrollWheelZoom,
-            ),
-            onMapReady: _onMapReady,
-          ),
-          children: [
-            TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'pt.meshcore.lusoapp',
-              tileProvider: _tileProvider,
-              // On web the browser sets its own User-Agent header;
-              // a custom one would be blocked by CORS pre-flight.
-            ),
-            const RichAttributionWidget(
-              showFlutterMapAttribution: false,
-              attributions: [
-                TextSourceAttribution('MeshCore Portugal'),
-                TextSourceAttribution('© OpenStreetMap contributors'),
-              ],
-            ),
-            // ---- Trace path polyline ----
-            if (traceResult != null)
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: _tracePoints(traceResult, selfPos),
-                    color: theme.colorScheme.primary,
-                    strokeWidth: 3,
-                    borderColor: theme.colorScheme.primaryContainer,
-                    borderStrokeWidth: 1,
+        // ---- Capturable area (map + overlays, no FABs) ----
+        RepaintBoundary(
+          key: _mapRepaintKey,
+          child: Stack(
+            children: [
+              // ---- Main map ----
+              FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: initialCenter,
+                  initialZoom: hasAny ? _detailZoom : _defaultZoom,
+                  interactionOptions: const InteractionOptions(
+                    flags:
+                        InteractiveFlag.drag |
+                        InteractiveFlag.pinchZoom |
+                        InteractiveFlag.doubleTapZoom |
+                        InteractiveFlag.scrollWheelZoom,
                   ),
-                ],
-              ),
-            // ---- Trace hop markers ----
-            if (traceResult != null)
-              MarkerLayer(
-                markers: [
-                  for (final hop in traceResult.hops)
-                    if (hop.hasGps)
-                      Marker(
-                        point: LatLng(hop.latitude!, hop.longitude!),
-                        width: 90,
-                        height: 48,
-                        alignment: Alignment.bottomCenter,
-                        child: _buildHopMarker(hop, theme),
-                      ),
-                ],
-              ),
-            MarkerLayer(
-              markers: [
-                for (final cluster in _computeClusters(gpsContacts))
-                  if (cluster.isSingle)
-                    Marker(
-                      point: cluster.center,
-                      width: 44,
-                      height: 44,
-                      child: GestureDetector(
-                        onTap: () => _showContactSheet(cluster.members.first),
-                        child: _buildContactMarker(
-                          cluster.members.first,
-                          theme,
+                  onMapReady: _onMapReady,
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'pt.meshcore.mcapppt',
+                    tileProvider: _tileProvider,
+                    // On web the browser sets its own User-Agent header;
+                    // a custom one would be blocked by CORS pre-flight.
+                  ),
+                  const RichAttributionWidget(
+                    showFlutterMapAttribution: false,
+                    attributions: [
+                      TextSourceAttribution('MeshCore Portugal'),
+                      TextSourceAttribution('© OpenStreetMap contributors'),
+                    ],
+                  ),
+                  // ---- Trace path polyline ----
+                  if (traceResult != null)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: _tracePoints(traceResult, selfPos),
+                          color: theme.colorScheme.primary,
+                          strokeWidth: 3,
+                          borderColor: theme.colorScheme.primaryContainer,
+                          borderStrokeWidth: 1,
+                        ),
+                      ],
+                    ),
+                  // ---- Contact + self markers (below hop labels) ----
+                  // When a trace is active, hide contact/cluster markers so only
+                  // the hop markers are shown alongside the polyline.
+                  MarkerLayer(
+                    markers: [
+                      if (traceResult == null)
+                        for (final cluster in _computeClusters(gpsContacts))
+                          if (cluster.isSingle)
+                            Marker(
+                              point: cluster.center,
+                              width: 44,
+                              height: 44,
+                              child: GestureDetector(
+                                onTap:
+                                    () => _showContactSheet(
+                                      cluster.members.first,
+                                    ),
+                                child: _buildContactMarker(
+                                  cluster.members.first,
+                                  theme,
+                                ),
+                              ),
+                            )
+                          else
+                            Marker(
+                              point: cluster.center,
+                              width: 52,
+                              height: 52,
+                              child: GestureDetector(
+                                onTap: () => _onClusterTap(cluster),
+                                child: _buildClusterMarker(cluster, theme),
+                              ),
+                            ),
+                      if (selfPos != null)
+                        Marker(
+                          point: selfPos,
+                          width: 44,
+                          height: 44,
+                          child: _buildSelfMarker(theme),
+                        ),
+                    ],
+                  ),
+                  // ---- Trace hop markers (rendered last = on top of contacts) ----
+                  if (traceResult != null)
+                    MarkerLayer(
+                      markers: [
+                        for (int hi = 0; hi < traceResult.hops.length; hi++)
+                          if (traceResult.hops[hi].hasGps)
+                            Marker(
+                              point: LatLng(
+                                traceResult.hops[hi].latitude!,
+                                traceResult.hops[hi].longitude!,
+                              ),
+                              width: 140,
+                              height: 130,
+                              alignment: Alignment.center,
+                              child: _buildHopMarker(
+                                traceResult.hops[hi],
+                                theme,
+                                distanceM: _distanceToHop(
+                                  traceResult.hops,
+                                  hi,
+                                  selfPos,
+                                ),
+                              ),
+                            ),
+                      ],
+                    ),
+                  SafeArea(
+                    child: Align(
+                      alignment: Alignment.bottomLeft,
+                      child: ColoredBox(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 3,
+                          ),
+                          child: Text(
+                            'MeshCore Portugal | © OpenStreetMap contributors',
+                            style: TextStyle(fontSize: 10, color: Colors.white),
+                          ),
                         ),
                       ),
-                    )
-                  else
-                    Marker(
-                      point: cluster.center,
-                      width: 52,
-                      height: 52,
-                      child: GestureDetector(
-                        onTap: () => _onClusterTap(cluster),
-                        child: _buildClusterMarker(cluster, theme),
-                      ),
                     ),
-                if (selfPos != null)
-                  Marker(
-                    point: selfPos,
-                    width: 44,
-                    height: 44,
-                    child: _buildSelfMarker(theme),
                   ),
-              ],
-            ),
-            SafeArea(
-              child: Align(
-                alignment: Alignment.bottomLeft,
-                child: ColoredBox(
-                  color: Colors.black.withValues(alpha: 0.55),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                    child: Text(
-                      'MeshCore Portugal | © OpenStreetMap contributors',
-                      style: TextStyle(fontSize: 10, color: Colors.white),
+                ],
+              ),
+
+              // ---- No GPS hint ----
+              if (!hasAny)
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  right: 16,
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.location_off, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Sem dados GPS. Toca em "Localizar" ou aguarda contactos com coordenadas.',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          ],
-        ),
-
-        // ---- Trace result card ----
+            ], // ← close inner Stack.children
+          ), // ← close inner Stack
+        ), // ← close RepaintBoundary
+        // ---- Trace result card (outside RepaintBoundary) ----
+        // Keep this outside the captured map so shared images contain only the map.
         if (traceResult != null)
           Positioned(
             top: 16,
@@ -335,6 +445,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             right: 72,
             child: _TraceResultCard(
               result: traceResult,
+              selfPos: selfPos,
               onClear:
                   () => ref.read(traceResultProvider.notifier).state = null,
               onFit: () {
@@ -345,35 +456,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ),
           ),
 
-        // ---- No GPS hint ----
-        if (!hasAny)
-          Positioned(
-            top: 16,
-            left: 16,
-            right: 16,
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.location_off, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Sem dados GPS. Toca em "Localizar" ou aguarda contactos com coordenadas.',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-        // ---- FABs ----
+        // ---- FABs (outside RepaintBoundary — not captured in screenshots) ----
         Positioned(
           right: 16,
           bottom: 24,
@@ -381,6 +464,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              FloatingActionButton.small(
+                heroTag: 'map_share',
+                onPressed: _sharing ? null : _shareMap,
+                tooltip: 'Partilhar mapa',
+                child:
+                    _sharing
+                        ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Icon(Icons.share),
+              ),
+              const SizedBox(height: 8),
               if (hasAny) ...[
                 FloatingActionButton.small(
                   heroTag: 'map_fit_all',
@@ -442,13 +539,46 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     return pts;
   }
 
-  Widget _buildHopMarker(TraceHop hop, ThemeData theme) {
+  /// Distance from the previous GPS point to hop [index], in meters.
+  /// The previous point is either [selfPos] (for the first hop) or the
+  /// nearest previous hop that has GPS.
+  double? _distanceToHop(List<TraceHop> hops, int index, LatLng? selfPos) {
+    final hop = hops[index];
+    if (!hop.hasGps) return null;
+
+    LatLng? prevPt;
+    if (index == 0) {
+      prevPt = selfPos;
+    } else {
+      for (int k = index - 1; k >= 0; k--) {
+        final prev = hops[k];
+        if (!prev.hasGps) continue;
+        prevPt = LatLng(prev.latitude!, prev.longitude!);
+        break;
+      }
+    }
+
+    if (prevPt == null) return null;
+    return const Distance().as(
+      LengthUnit.Meter,
+      prevPt,
+      LatLng(hop.latitude!, hop.longitude!),
+    );
+  }
+
+  Widget _buildHopMarker(TraceHop hop, ThemeData theme, {double? distanceM}) {
     final snr = hop.snrDb.toStringAsFixed(1);
+    final distLabel = distanceM != null ? '  ${_formatDist(distanceM)}' : '';
+    // Layout (top → bottom):
+    //   label (~18px) + dist (~14px) + connector (8px) + icon (36px) + spacer (40px) ≈ 116px.
+    // Spacer height balances the content above the icon so the icon CENTER
+    // is at the Column midpoint = Marker(alignment: Alignment.center) = LatLng.
     return Column(
       mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Label pill floats above the geographic point / contact icon
+        // Name + SNR pill
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           decoration: BoxDecoration(
@@ -463,21 +593,50 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               fontSize: 9,
               fontWeight: FontWeight.bold,
             ),
+            maxLines: 1,
+            softWrap: false,
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        // Connector line from label to dot
-        Container(width: 2, height: 10, color: theme.colorScheme.primary),
-        // Dot — anchor point aligned to the geographic coordinate
+        // Distance pill (only when GPS available from previous point)
+        if (distanceM != null)
+          Container(
+            margin: const EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              distLabel.trim(),
+              style: const TextStyle(color: Colors.white, fontSize: 8),
+            ),
+          ),
+        // Connector line from label to icon
+        Container(width: 2, height: 8, color: theme.colorScheme.primary),
+        // Repeater icon circle — CENTER is at the LatLng geographic point
         Container(
-          width: 8,
-          height: 8,
+          width: 36,
+          height: 36,
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary,
+            color: Colors.orange.shade700,
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 1.5),
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x60000000),
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: const Center(
+            child: Icon(Icons.cell_tower, color: Colors.white, size: 20),
           ),
         ),
+        // Balancing spacer = label + dist-pill + connector height above icon
+        // so the icon center lands at the widget midpoint = LatLng anchor.
+        const SizedBox(height: 40),
       ],
     );
   }
@@ -891,25 +1050,47 @@ class _ClusterListSheet extends StatelessWidget {
 // Trace result overlay card
 // ---------------------------------------------------------------------------
 
-class _TraceResultCard extends StatelessWidget {
+/// Formats a distance in metres as a human-readable string.
+String _formatDist(double m) {
+  if (m >= 1000) return '${(m / 1000).toStringAsFixed(1)} km';
+  return '${m.round()} m';
+}
+
+class _TraceResultCard extends StatefulWidget {
   const _TraceResultCard({
     required this.result,
     required this.onClear,
     required this.onFit,
     required this.theme,
+    this.selfPos,
   });
 
   final TraceResult result;
   final VoidCallback onClear;
   final VoidCallback onFit;
   final ThemeData theme;
+  final LatLng? selfPos;
+
+  @override
+  State<_TraceResultCard> createState() => _TraceResultCardState();
+}
+
+class _TraceResultCardState extends State<_TraceResultCard> {
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
     final ts =
-        '${result.timestamp.hour.toString().padLeft(2, '0')}:'
-        '${result.timestamp.minute.toString().padLeft(2, '0')}:'
-        '${result.timestamp.second.toString().padLeft(2, '0')}';
+        '${widget.result.timestamp.hour.toString().padLeft(2, '0')}:'
+        '${widget.result.timestamp.minute.toString().padLeft(2, '0')}:'
+        '${widget.result.timestamp.second.toString().padLeft(2, '0')}';
+
+    const collapsedVisibleHops = 4;
+    final totalHops = widget.result.hops.length;
+    final canCollapse = totalHops > collapsedVisibleHops;
+    final visibleHops =
+        (_expanded || !canCollapse) ? totalHops : collapsedVisibleHops;
+    final hiddenCount = totalHops - visibleHops;
 
     return Card(
       elevation: 4,
@@ -922,46 +1103,106 @@ class _TraceResultCard extends StatelessWidget {
             // Header row
             Row(
               children: [
-                Icon(Icons.route, size: 16, color: theme.colorScheme.primary),
+                Icon(
+                  Icons.route,
+                  size: 16,
+                  color: widget.theme.colorScheme.primary,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'Trace · $ts · ${result.hopCount} hop${result.hopCount != 1 ? 's' : ''}',
-                    style: theme.textTheme.labelMedium?.copyWith(
+                    'Path · $ts · ${widget.result.hopCount} hop${widget.result.hopCount != 1 ? 's' : ''}',
+                    style: widget.theme.textTheme.labelMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
+                      color: widget.theme.colorScheme.primary,
                     ),
                   ),
                 ),
                 InkWell(
-                  onTap: onFit,
+                  onTap: widget.onFit,
                   child: Padding(
                     padding: const EdgeInsets.all(4),
                     child: Icon(
                       Icons.fit_screen,
                       size: 16,
-                      color: theme.colorScheme.onSurfaceVariant,
+                      color: widget.theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
                 InkWell(
-                  onTap: onClear,
+                  onTap: widget.onClear,
                   child: Padding(
                     padding: const EdgeInsets.all(4),
                     child: Icon(
                       Icons.close,
                       size: 16,
-                      color: theme.colorScheme.onSurfaceVariant,
+                      color: widget.theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
               ],
             ),
             // Hop list
-            if (result.hops.isNotEmpty) ...[
+            if (widget.result.hops.isNotEmpty) ...[
               const SizedBox(height: 4),
-              for (int i = 0; i < result.hops.length; i++)
-                _HopRow(index: i + 1, hop: result.hops[i], theme: theme),
+              for (int i = 0; i < visibleHops; i++)
+                Builder(
+                  builder: (ctx) {
+                    final hop = widget.result.hops[i];
+                    // Distance from the previous GPS point (or selfPos) to this hop.
+                    double? distM;
+                    if (hop.hasGps) {
+                      LatLng? prevPt;
+                      if (i == 0) {
+                        prevPt = widget.selfPos;
+                      } else {
+                        for (int k = i - 1; k >= 0; k--) {
+                          final prev = widget.result.hops[k];
+                          if (prev.hasGps) {
+                            prevPt = LatLng(prev.latitude!, prev.longitude!);
+                            break;
+                          }
+                        }
+                      }
+                      if (prevPt != null) {
+                        distM = const Distance().as(
+                          LengthUnit.Meter,
+                          prevPt,
+                          LatLng(hop.latitude!, hop.longitude!),
+                        );
+                      }
+                    }
+                    return _HopRow(
+                      index: i + 1,
+                      hop: hop,
+                      theme: widget.theme,
+                      distanceM: distM,
+                    );
+                  },
+                ),
+              if (canCollapse)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => setState(() => _expanded = !_expanded),
+                    icon: Icon(
+                      _expanded ? Icons.expand_less : Icons.expand_more,
+                      size: 16,
+                    ),
+                    label: Text(
+                      _expanded
+                          ? 'Minimizar lista'
+                          : 'Mostrar +$hiddenCount hop${hiddenCount == 1 ? '' : 's'}',
+                    ),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 0,
+                        vertical: 2,
+                      ),
+                    ),
+                  ),
+                ),
             ],
             // Final SNR
             Padding(
@@ -975,8 +1216,8 @@ class _TraceResultCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    'Final: ${result.finalSnrDb.toStringAsFixed(1)} dB',
-                    style: theme.textTheme.labelSmall?.copyWith(
+                    'Final: ${widget.result.finalSnrDb.toStringAsFixed(1)} dB',
+                    style: widget.theme.textTheme.labelSmall?.copyWith(
                       color: Colors.green.shade600,
                       fontWeight: FontWeight.w600,
                     ),
@@ -992,11 +1233,17 @@ class _TraceResultCard extends StatelessWidget {
 }
 
 class _HopRow extends StatelessWidget {
-  const _HopRow({required this.index, required this.hop, required this.theme});
+  const _HopRow({
+    required this.index,
+    required this.hop,
+    required this.theme,
+    this.distanceM,
+  });
 
   final int index;
   final TraceHop hop;
   final ThemeData theme;
+  final double? distanceM;
 
   @override
   Widget build(BuildContext context) {
@@ -1031,6 +1278,15 @@ class _HopRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (distanceM != null) ...[
+            Text(
+              _formatDist(distanceM!),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
           Text(
             '${hop.snrDb.toStringAsFixed(1)} dB',
             style: theme.textTheme.labelSmall?.copyWith(

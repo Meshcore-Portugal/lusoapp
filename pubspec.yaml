@@ -1,7 +1,7 @@
 name: lusoapp
 description: "MeshCore Companion App - MeshCore Portugal"
 publish_to: "none"
-version: 0.3.9+4
+version: 0.4.0+2
 
 environment:
   sdk: ^3.7.0
