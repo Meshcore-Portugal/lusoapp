@@ -1575,7 +1575,33 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
               title: 'Iniciar OTA',
               subtitle: 'Inicia actualização OTA — NRF DFU / ESP32',
               enabled: !_pendingCommand,
-              onTap: () => _sendAdminCommand('start ota', 'OTA'),
+              onTap: () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Confirmar OTA'),
+                    content: const Text(
+                      'O rádio vai entrar em modo de actualização OTA e ficará '
+                      'temporariamente inacessível.\n\n'
+                      'Tens a certeza?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancelar'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                        ),
+                        child: const Text('Iniciar OTA'),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok == true) await _sendAdminCommand('start ota', 'OTA');
+              },
             ),
 
             // ── Stats ─────────────────────────────────────────────────

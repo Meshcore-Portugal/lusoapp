@@ -218,6 +218,28 @@ class StorageService {
   }
 
   // ---------------------------------------------------------------------------
+  // QSL log
+  // ---------------------------------------------------------------------------
+
+  static const _keyQslLog = 'plan333_qsl_log';
+
+  Future<void> saveQslLog(String json) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyQslLog, json);
+    } catch (_) {}
+  }
+
+  Future<String?> loadQslLog() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_keyQslLog);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Favorites (app-side, not stored on radio)
   // ---------------------------------------------------------------------------
 

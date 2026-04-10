@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
-import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 import '../../services/plan333_service.dart';
 import '../../transport/radio_transport.dart';
@@ -77,16 +77,10 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
     final autoState = ref.watch(plan333AutoSendProvider);
     final connState = ref.watch(connectionProvider);
     final cbEnabled = ref.watch(plan333EnabledProvider);
-    final channels = ref.watch(channelsProvider);
 
     final meshActive = Plan333Service.isMeshEventActive(_now);
     final qslActive = Plan333Service.isMeshQslActive(_now);
     final nextMesh = Plan333Service.nextMeshEvent(_now);
-    final cbActive = Plan333Service.isWindowActive(_now);
-    final nextCb = Plan333Service.nextWindowTime(_now);
-    final cbRemaining = nextCb.difference(_now);
-    final cbProgress = Plan333Service.windowProgress(_now);
-    final satTraining = Plan333Service.nextSaturdayTraining(_now);
 
     final radioConnected = connState == TransportState.connected;
 
@@ -112,17 +106,12 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
           // ── 2. Configuração ──────────────────────────────────────────────
           _ConfigCard(
             config: config,
-            channels: channels,
             nameCtrl: _nameCtrl,
             cityCtrl: _cityCtrl,
             localityCtrl: _localityCtrl,
             dirty: _configDirty,
             onDirty: () => setState(() => _configDirty = true),
             onSave: _saveConfig,
-            onChannelChanged: (idx) async {
-              final updated = config.copyWith(meshChannelIndex: idx);
-              await ref.read(plan333ConfigProvider.notifier).update(updated);
-            },
             onAutoSendChanged: (v) async {
               final updated = config.copyWith(autoSendCq: v);
               await ref.read(plan333ConfigProvider.notifier).update(updated);
@@ -138,15 +127,8 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
           const _MeshCoreChannelCard(),
           const SizedBox(height: 16),
 
-          // ── 4. CB / PMR (secondary) ──────────────────────────────────────
-          _CbPmrCard(
-            cbActive: cbActive,
-            nextCb: nextCb,
-            remaining: cbRemaining,
-            progress: cbProgress,
-            satTraining: satTraining,
-            now: _now,
-          ),
+          // ── 4. QSL log ───────────────────────────────────────────────────
+          const _QslCard(),
           const SizedBox(height: 16),
 
           // ── 5. Notifications ─────────────────────────────────────────────
@@ -445,32 +427,27 @@ class _SendButton extends StatelessWidget {
 class _ConfigCard extends StatelessWidget {
   const _ConfigCard({
     required this.config,
-    required this.channels,
     required this.nameCtrl,
     required this.cityCtrl,
     required this.localityCtrl,
     required this.dirty,
     required this.onDirty,
     required this.onSave,
-    required this.onChannelChanged,
     required this.onAutoSendChanged,
   });
 
   final Plan333Config config;
-  final List<ChannelInfo> channels;
   final TextEditingController nameCtrl;
   final TextEditingController cityCtrl;
   final TextEditingController localityCtrl;
   final bool dirty;
   final VoidCallback onDirty;
   final VoidCallback onSave;
-  final void Function(int) onChannelChanged;
   final void Function(bool) onAutoSendChanged;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final activeChannels = channels.where((c) => !c.isEmpty).toList();
 
     return Card(
       child: Padding(
@@ -541,35 +518,6 @@ class _ConfigCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
 
-            // Channel dropdown
-            DropdownButtonFormField<int>(
-              initialValue: _resolveChannel(
-                activeChannels,
-                config.meshChannelIndex,
-              ),
-              decoration: const InputDecoration(labelText: 'Canal MeshCore'),
-              items:
-                  activeChannels.isEmpty
-                      ? [
-                        const DropdownMenuItem(
-                          value: 0,
-                          child: Text('Canal 0 (rádio não ligado)'),
-                        ),
-                      ]
-                      : activeChannels.map((ch) {
-                        final label =
-                            ch.name.isNotEmpty ? ch.name : 'Canal ${ch.index}';
-                        return DropdownMenuItem(
-                          value: ch.index,
-                          child: Text(label),
-                        );
-                      }).toList(),
-              onChanged: (v) {
-                if (v != null) onChannelChanged(v);
-              },
-            ),
-            const SizedBox(height: 4),
-
             // Auto-send toggle
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -599,11 +547,6 @@ class _ConfigCard extends StatelessWidget {
     );
   }
 
-  int _resolveChannel(List<ChannelInfo> active, int preferred) {
-    if (active.isEmpty) return 0;
-    if (active.any((c) => c.index == preferred)) return preferred;
-    return active.first.index;
-  }
 }
 
 // ============================================================================
@@ -1032,126 +975,6 @@ class _ChannelConfigRow extends StatelessWidget {
 }
 
 // ============================================================================
-// CB / PMR section (secondary, compact)
-// ============================================================================
-
-class _CbPmrCard extends StatelessWidget {
-  const _CbPmrCard({
-    required this.cbActive,
-    required this.nextCb,
-    required this.remaining,
-    required this.progress,
-    required this.satTraining,
-    required this.now,
-  });
-
-  final bool cbActive;
-  final DateTime nextCb;
-  final Duration remaining;
-  final double progress;
-  final DateTime satTraining;
-  final DateTime now;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = cbActive ? const Color(0xFFFFAB40) : AppTheme.primary;
-    final nextLabel =
-        '${nextCb.hour.toString().padLeft(2, '0')}:${nextCb.minute.toString().padLeft(2, '0')}';
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Compact header
-            Row(
-              children: [
-                Icon(Icons.radio, color: color, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'CB / PMR 446',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
-                const Spacer(),
-                if (cbActive)
-                  _Pill(label: '● À ESCUTA AGORA', color: color)
-                else
-                  Text(
-                    'Próx. $nextLabel  •  em ${_fmt(remaining)}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-              ],
-            ),
-
-            if (!cbActive) ...[
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 4,
-                  backgroundColor: theme.colorScheme.outlineVariant,
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 10),
-
-            // Frequencies — inline, compact
-            const Wrap(
-              spacing: 16,
-              runSpacing: 4,
-              children: [
-                _FreqChip(label: 'CB Canal 3 AM', freq: '26.985 MHz'),
-                _FreqChip(label: 'PMR 446 Canal 3', freq: '446.031 MHz'),
-              ],
-            ),
-
-            const SizedBox(height: 8),
-
-            // Times chips
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children:
-                  Plan333Service.windowHours.map((h) {
-                    final label = '${h.toString().padLeft(2, '0')}:00';
-                    final isNext = nextCb.hour == h && nextCb.day == now.day;
-                    return _TimeChip(label: label, highlight: isNext);
-                  }).toList(),
-            ),
-
-            const SizedBox(height: 6),
-            Text(
-              '±3 min  •  Treino: Sábados 21:00  •  Sem tom (PMR)',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _fmt(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes % 60;
-    final s = d.inSeconds % 60;
-    if (h > 0) return '${h}h ${m.toString().padLeft(2, '0')}m';
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
-}
-
-// ============================================================================
 // Notifications card
 // ============================================================================
 
@@ -1177,7 +1000,7 @@ class _NotificationsCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Alertas CB/PMR',
+                  'Alertas Mesh 3-3-3',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -1186,16 +1009,16 @@ class _NotificationsCard extends StatelessWidget {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Lembretes de janela CB/PMR'),
+              title: const Text('Lembrete do evento de sábado'),
               subtitle: const Text(
-                'Notificação 3 min antes de cada janela (8×/dia)',
+                'Alertas 10 e 5 min antes do Mesh 3-3-3 (Sábados 21:00)',
               ),
               value: enabled,
               onChanged: onChanged,
             ),
             if (enabled)
               Text(
-                'Inclui lembrete do treino de sábado às 20:55.',
+                'Alertas ativos às 20:50 e 20:55.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -1204,6 +1027,320 @@ class _NotificationsCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ============================================================================
+// QSL log card
+// ============================================================================
+
+class _QslCard extends ConsumerWidget {
+  const _QslCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final log = ref.watch(qslLogProvider);
+    final config = ref.watch(plan333ConfigProvider);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header row ───────────────────────────────────────────────
+            Row(
+              children: [
+                const Icon(Icons.verified_outlined, color: AppTheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'QSL Recebidos',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                if (log.isNotEmpty) ...[
+                  // Share button
+                  IconButton(
+                    icon: const Icon(Icons.share_outlined),
+                    tooltip: 'Partilhar log',
+                    onPressed: () => _share(log, config),
+                  ),
+                  // Clear button
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Limpar log',
+                    onPressed: () => _confirmClear(context, ref),
+                  ),
+                ],
+                // Add button
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline),
+                  tooltip: 'Adicionar QSL',
+                  color: AppTheme.primary,
+                  onPressed: () => _showAddDialog(context, ref),
+                ),
+              ],
+            ),
+
+            // ── Empty state ───────────────────────────────────────────────
+            if (log.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  'Nenhum QSL registado. Toca em + para adicionar.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+
+            // ── Log entries ───────────────────────────────────────────────
+            if (log.isNotEmpty) ...[
+              const Divider(height: 16),
+              for (var i = 0; i < log.length; i++) ...[
+                _QslRow(
+                  record: log[i],
+                  onDelete: () =>
+                      ref.read(qslLogProvider.notifier).remove(i),
+                  theme: theme,
+                ),
+                if (i < log.length - 1) const Divider(height: 12),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddDialog(BuildContext context, WidgetRef ref) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => _AddQslDialog(
+        onSave: (r) => ref.read(qslLogProvider.notifier).add(r),
+      ),
+    );
+  }
+
+  void _confirmClear(BuildContext context, WidgetRef ref) {
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Limpar QSL?'),
+        content: const Text('Todos os QSL registados serão apagados.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              ref.read(qslLogProvider.notifier).clearAll();
+              Navigator.pop(ctx);
+            },
+            child: const Text('Limpar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _share(List<QslRecord> log, Plan333Config config) {
+    final now = DateTime.now();
+    final dateStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final station =
+        config.stationName.isNotEmpty ? config.stationName : '?';
+    final location =
+        config.city.isNotEmpty ? config.city : '';
+
+    final lines = StringBuffer();
+    lines.writeln('=== Mesh 3-3-3 — $dateStr ===');
+    if (location.isNotEmpty) {
+      lines.writeln('Estação: $station | $location');
+    } else {
+      lines.writeln('Estação: $station');
+    }
+    lines.writeln('QSL recebidos (${log.length}):');
+    for (var i = 0; i < log.length; i++) {
+      final r = log[i];
+      final loc = r.location.isNotEmpty ? ' | ${r.location}' : '';
+      final notes = r.notes.isNotEmpty ? ' (${r.notes})' : '';
+      lines.writeln('${i + 1}. ${r.stationName} | ${r.hopsLabel}$loc$notes');
+    }
+    lines.writeln('73! de $station');
+    lines.write('#MeshCore #Plano333');
+
+    SharePlus.instance.share(ShareParams(text: lines.toString()));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Single QSL row
+// ---------------------------------------------------------------------------
+
+class _QslRow extends StatelessWidget {
+  const _QslRow({
+    required this.record,
+    required this.onDelete,
+    required this.theme,
+  });
+
+  final QslRecord record;
+  final VoidCallback onDelete;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF00E676)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                record.stationName,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                [
+                  record.hopsLabel,
+                  if (record.location.isNotEmpty) record.location,
+                  if (record.notes.isNotEmpty) record.notes,
+                ].join('  ·  '),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        InkWell(
+          onTap: onDelete,
+          borderRadius: BorderRadius.circular(12),
+          child: const Padding(
+            padding: EdgeInsets.all(4),
+            child: Icon(Icons.close, size: 16),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Add QSL dialog
+// ---------------------------------------------------------------------------
+
+class _AddQslDialog extends StatefulWidget {
+  const _AddQslDialog({required this.onSave});
+  final void Function(QslRecord) onSave;
+
+  @override
+  State<_AddQslDialog> createState() => _AddQslDialogState();
+}
+
+class _AddQslDialogState extends State<_AddQslDialog> {
+  final _stationCtrl = TextEditingController();
+  final _locationCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
+  int _hops = 0; // 0 = Direct
+
+  @override
+  void dispose() {
+    _stationCtrl.dispose();
+    _locationCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Adicionar QSL'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _stationCtrl,
+              autofocus: true,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: 'Estação *',
+                hintText: 'ex: Daytona',
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Hops picker
+            Row(
+              children: [
+                const Text('Hops: '),
+                const SizedBox(width: 8),
+                DropdownButton<int>(
+                  value: _hops,
+                  items: [
+                    const DropdownMenuItem(value: 0, child: Text('Direto')),
+                    for (var h = 1; h <= 10; h++)
+                      DropdownMenuItem(value: h, child: Text('$h')),
+                  ],
+                  onChanged: (v) => setState(() => _hops = v ?? 0),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _locationCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Localização',
+                hintText: 'ex: Tomar',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _notesCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Notas (opcional)',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: _stationCtrl.text.trim().isEmpty ? null : _save,
+          child: const Text('Guardar'),
+        ),
+      ],
+    );
+  }
+
+  void _save() {
+    final station = _stationCtrl.text.trim();
+    if (station.isEmpty) return;
+    widget.onSave(
+      QslRecord(
+        stationName: station,
+        hops: _hops,
+        location: _locationCtrl.text.trim(),
+        timestamp: DateTime.now(),
+        notes: _notesCtrl.text.trim(),
+      ),
+    );
+    Navigator.pop(context);
   }
 }
 
@@ -1274,64 +1411,6 @@ class _PhaseChip extends StatelessWidget {
   }
 }
 
-class _FreqChip extends StatelessWidget {
-  const _FreqChip({required this.label, required this.freq});
-  final String label;
-  final String freq;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          freq,
-          style: theme.textTheme.bodySmall?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: AppTheme.primary,
-            fontFamily: 'monospace',
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TimeChip extends StatelessWidget {
-  const _TimeChip({required this.label, required this.highlight});
-  final String label;
-  final bool highlight;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Chip(
-      label: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: highlight ? FontWeight.bold : FontWeight.normal,
-          color: highlight ? AppTheme.primary : theme.colorScheme.onSurface,
-        ),
-      ),
-      padding: EdgeInsets.zero,
-      labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      side: BorderSide(
-        color: highlight ? AppTheme.primary : theme.colorScheme.outline,
-      ),
-      backgroundColor: highlight ? AppTheme.primary.withAlpha(30) : null,
-    );
-  }
-}
 
 class _PhraseRow extends StatelessWidget {
   const _PhraseRow({

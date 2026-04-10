@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../protocol/cayenne_lpp.dart';
 import '../protocol/protocol.dart';
 import '../services/notification_service.dart';
+import '../services/plan333_service.dart';
 import '../services/radio_service.dart';
 import '../services/storage_service.dart';
 import '../services/widget_service.dart';
@@ -314,6 +315,20 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
             }
           }
           _ref.read(messagesProvider.notifier).addMessage(finalMessage);
+          // Auto-detect QSL messages on the plan333 channel.
+          if (!finalMessage.isOutgoing && finalMessage.channelIndex != null) {
+            final plan333Idx =
+                _ref.read(plan333ConfigProvider).meshChannelIndex;
+            if (finalMessage.channelIndex == plan333Idx) {
+              final qsl = Plan333Service.tryParseQsl(
+                finalMessage.text,
+                pathLen: finalMessage.pathLen,
+              );
+              if (qsl != null) {
+                _ref.read(qslLogProvider.notifier).add(qsl);
+              }
+            }
+          }
           if (!finalMessage.isOutgoing) {
             _ref.read(networkStatsProvider.notifier).incrementRx();
             if (message.channelIndex != null) {
