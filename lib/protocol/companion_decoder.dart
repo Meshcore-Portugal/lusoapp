@@ -48,6 +48,8 @@ class CompanionDecoder {
         return _parseBattAndStorage(data);
       case respDeviceInfo:
         return _parseDeviceInfo(data);
+      case respPrivateKey:
+        return _parsePrivateKey(data);
       case respChannelInfo:
         return _parseChannelInfo(data);
       case respSignature:
@@ -57,7 +59,7 @@ class CompanionDecoder {
       // Unsolicited push codes
       case pushAdvert:
       case pushNewAdvert:
-        return _parseAdvertPush(data);
+        return _parseAdvertPush(data, isNew: code == pushNewAdvert);
       case pushPathUpdated:
         return PathUpdatedPush(data);
       case pushSendConfirmed:
@@ -268,6 +270,7 @@ class CompanionDecoder {
         senderKey: senderKey,
         snr: snr,
         pathLen: pathLen,
+        isCliResponse: txtType == 1,
       ),
     );
   }
@@ -308,6 +311,7 @@ class CompanionDecoder {
         isOutgoing: false,
         senderKey: senderKey,
         pathLen: pathLen,
+        isCliResponse: txtType == 1,
       ),
     );
   }
@@ -472,13 +476,19 @@ class CompanionDecoder {
     );
   }
 
-  static AdvertPush? _parseAdvertPush(Uint8List data) {
-    if (data.length < 33) return null;
+  static AdvertPush? _parseAdvertPush(Uint8List data, {required bool isNew}) {
+    if (data.length < 32) return null;
     final pubKey = Uint8List.fromList(data.sublist(0, 32));
+
+    // Both pushAdvert (0x80) and pushNewAdvert (0x8A) use the same layout:
+    // pubkey[0..31] type[32] name[33..end] (null-terminated or end-of-data)
+    if (data.length < 33) {
+      return AdvertPush(pubKey, 0, '', isNew: isNew);
+    }
     final type = data[32];
-    final nameEnd = _findNullTerminator(data, 33, data.length.clamp(33, 65));
+    final nameEnd = _findNullTerminator(data, 33, data.length);
     final name = utf8.decode(data.sublist(33, nameEnd), allowMalformed: true);
-    return AdvertPush(pubKey, type, name.trim());
+    return AdvertPush(pubKey, type, name.trim(), isNew: isNew);
   }
 
   static BinaryResponsePush? _parseBinaryResponse(Uint8List data) {
@@ -531,11 +541,48 @@ class CompanionDecoder {
     return SignatureResponse(Uint8List.fromList(data.sublist(0, 64)));
   }
 
-  static StatsResponse? _parseStats(Uint8List data) {
+  static PrivateKeyResponse? _parsePrivateKey(Uint8List data) {
+    if (data.length < 64) return null;
+    return PrivateKeyResponse(Uint8List.fromList(data.sublist(0, 64)));
+  }
+
+  static CompanionResponse? _parseStats(Uint8List data) {
     if (data.isEmpty) return null;
     final subType = data[0];
-    final statsData = data.length > 1 ? data.sublist(1) : Uint8List(0);
-    return StatsResponse(subType, statsData);
+    final d = data.length > 1 ? data.sublist(1) : Uint8List(0);
+    switch (subType) {
+      case statsTypeCore:
+        if (d.length < 9) return null;
+        return StatsCoreResponse(
+          batteryMv: _readUint16LE(d, 0),
+          uptimeSecs: _readUint32LE(d, 2),
+          errors: _readUint16LE(d, 6),
+          queueLen: d[8],
+        );
+      case statsTypeRadio:
+        if (d.length < 12) return null;
+        final bd = ByteData.sublistView(d);
+        return StatsRadioResponse(
+          noiseFloor: bd.getInt16(0, Endian.little),
+          lastRssi: bd.getInt8(2),
+          lastSnrDb: bd.getInt8(3) / 4.0,
+          txAirSecs: _readUint32LE(d, 4),
+          rxAirSecs: _readUint32LE(d, 8),
+        );
+      case statsTypePackets:
+        if (d.length < 24) return null;
+        return StatsPacketsResponse(
+          recv: _readUint32LE(d, 0),
+          sent: _readUint32LE(d, 4),
+          floodTx: _readUint32LE(d, 8),
+          directTx: _readUint32LE(d, 12),
+          floodRx: _readUint32LE(d, 16),
+          directRx: _readUint32LE(d, 20),
+          recvErrors: d.length >= 28 ? _readUint32LE(d, 24) : null,
+        );
+      default:
+        return null;
+    }
   }
 
   // --- Utility ---
@@ -651,10 +698,15 @@ class ChannelInfoResponse extends CompanionResponse {
 // --- Push responses ---
 
 class AdvertPush extends CompanionResponse {
-  const AdvertPush(this.publicKey, this.type, this.name);
+  const AdvertPush(this.publicKey, this.type, this.name, {this.isNew = false});
   final Uint8List publicKey;
   final int type;
   final String name;
+
+  /// True when push code was pushNewAdvert (0x8A). The radio may NOT have saved
+  /// this contact to its own table (manual-contact mode). The app must reply
+  /// with CMD_ADD_UPDATE_CONTACT to ensure the contact is stored on the radio.
+  final bool isNew;
 }
 
 class PathUpdatedPush extends CompanionResponse {
@@ -737,10 +789,82 @@ class SignatureResponse extends CompanionResponse {
   final Uint8List signature;
 }
 
-class StatsResponse extends CompanionResponse {
-  const StatsResponse(this.subType, this.data);
-  final int subType;
-  final Uint8List data;
+class PrivateKeyResponse extends CompanionResponse {
+  const PrivateKeyResponse(this.privateKey);
+
+  /// Raw 64-byte private key received from the radio.
+  final Uint8List privateKey;
+}
+
+/// Core device statistics (CMD_GET_STATS + STATS_TYPE_CORE).
+class StatsCoreResponse extends CompanionResponse {
+  const StatsCoreResponse({
+    required this.batteryMv,
+    required this.uptimeSecs,
+    required this.errors,
+    required this.queueLen,
+  });
+
+  /// Battery voltage in millivolts.
+  final int batteryMv;
+
+  /// Device uptime in seconds since last boot.
+  final int uptimeSecs;
+
+  /// Error flags bitmask.
+  final int errors;
+
+  /// Outbound packet queue length.
+  final int queueLen;
+}
+
+/// Radio statistics (CMD_GET_STATS + STATS_TYPE_RADIO).
+class StatsRadioResponse extends CompanionResponse {
+  const StatsRadioResponse({
+    required this.noiseFloor,
+    required this.lastRssi,
+    required this.lastSnrDb,
+    required this.txAirSecs,
+    required this.rxAirSecs,
+  });
+
+  /// Radio noise floor in dBm.
+  final int noiseFloor;
+
+  /// Last received signal strength in dBm.
+  final int lastRssi;
+
+  /// Last SNR in dB (already divided by 4, 0.25 dB precision).
+  final double lastSnrDb;
+
+  /// Cumulative transmit airtime in seconds.
+  final int txAirSecs;
+
+  /// Cumulative receive airtime in seconds.
+  final int rxAirSecs;
+}
+
+/// Packet counters (CMD_GET_STATS + STATS_TYPE_PACKETS).
+class StatsPacketsResponse extends CompanionResponse {
+  const StatsPacketsResponse({
+    required this.recv,
+    required this.sent,
+    required this.floodTx,
+    required this.directTx,
+    required this.floodRx,
+    required this.directRx,
+    this.recvErrors,
+  });
+
+  final int recv;
+  final int sent;
+  final int floodTx;
+  final int directTx;
+  final int floodRx;
+  final int directRx;
+
+  /// Receive/CRC errors (RadioLib); present only in 30-byte frame.
+  final int? recvErrors;
 }
 
 class UnknownResponse extends CompanionResponse {

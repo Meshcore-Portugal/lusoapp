@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart' show Color;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../protocol/cayenne_lpp.dart';
 import '../protocol/protocol.dart';
 import '../services/notification_service.dart';
+import '../services/plan333_service.dart';
 import '../services/radio_service.dart';
 import '../services/storage_service.dart';
 import '../services/widget_service.dart';
@@ -50,6 +52,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   final Ref _ref;
 
   StreamSubscription<void>? _connectionLostSub;
+  StreamSubscription<CompanionResponse>? _responseSub;
   Timer? _batteryPollTimer;
 
   void _setStep(int step, String label) {
@@ -152,6 +155,9 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     _batteryPollTimer = null;
     await _connectionLostSub?.cancel();
     _connectionLostSub = null;
+    await _responseSub?.cancel();
+    _responseSub = null;
+    _ref.read(packetHeardProvider.notifier).reset();
     final service = _ref.read(radioServiceProvider);
     if (service != null) {
       await service.dispose();
@@ -185,12 +191,26 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     );
   }
 
-  /// Poll battery every 30 s while connected.
+  /// Poll battery every 5 min while connected.
+  /// Also silently re-requests any channel slots that are still empty —
+  /// a zero-cost safety net for slots that were missed at startup.
   void _startBatteryPolling(RadioService service) {
     _batteryPollTimer?.cancel();
     _batteryPollTimer = Timer.periodic(const Duration(seconds: 300), (_) {
-      if (state == TransportState.connected) {
-        service.requestBattAndStorage().catchError((_) {});
+      if (state != TransportState.connected) return;
+      service.requestBattAndStorage().catchError((_) {});
+      unawaited(service.requestStats(statsTypeCore).catchError((_) {}));
+      unawaited(service.requestStats(statsTypeRadio).catchError((_) {}));
+      unawaited(service.requestStats(statsTypePackets).catchError((_) {}));
+
+      // Re-request any channel slots that were never populated.
+      final maxCh = service.deviceInfo?.maxChannels ?? 8;
+      final currentChannels = _ref.read(channelsProvider);
+      final receivedIndices = currentChannels.map((c) => c.index).toSet();
+      for (var i = 0; i < maxCh; i++) {
+        if (!receivedIndices.contains(i)) {
+          service.requestChannel(i).catchError((_) {});
+        }
       }
     });
   }
@@ -216,11 +236,18 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   }
 
   void _setupListeners(RadioService service) {
-    service.responses.listen((response) {
+    _responseSub?.cancel();
+    _responseSub = service.responses.listen((response) {
       switch (response) {
         case ContactResponse():
-          _ref.read(contactsProvider.notifier).refresh(service.contacts);
+          // Do NOT refresh here — service.contacts is still partial (the radio
+          // sends contacts one-by-one after clearing its list on ContactsStart).
+          // Refreshing on each individual response would drop all locally-cached
+          // contacts and make the provider count drop to 1, 2, 3... during sync,
+          // breaking the connect-screen "+N new" badge.  Wait for EndContacts.
+          break;
         case EndContactsResponse():
+          // Full list has arrived — replace provider state with final radio list.
           _ref.read(contactsProvider.notifier).refresh(service.contacts);
           _pushWidget();
         case ContactDeletedPush():
@@ -231,15 +258,23 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _pushWidget();
         case PrivateMessageResponse(:final message):
           _ref.read(messagesProvider.notifier).addMessage(message);
-          if (!message.isOutgoing) {
+          if (!message.isOutgoing && !message.isCliResponse) {
             _ref.read(networkStatsProvider.notifier).incrementRx();
           }
-          if (message.senderKey != null) {
+          // Update last-heard timestamp on the matching contact for any
+          // incoming private message (chat or CLI response).
+          if (!message.isOutgoing && message.senderKey != null) {
             _ref
-                .read(unreadCountsProvider.notifier)
-                .incrementContact(_hex6(message.senderKey!));
+                .read(contactsProvider.notifier)
+                .touchLastHeard(message.senderKey!);
           }
-          if (!message.isOutgoing) {
+          // Unread badge + notification only for real chat messages.
+          if (!message.isOutgoing && !message.isCliResponse) {
+            if (message.senderKey != null) {
+              _ref
+                  .read(unreadCountsProvider.notifier)
+                  .incrementContact(_hex6(message.senderKey!));
+            }
             final senderHex6 =
                 message.senderKey != null ? _hex6(message.senderKey!) : null;
             final contacts = _ref.read(contactsProvider);
@@ -257,16 +292,77 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
             );
           }
         case ChannelMessageResponse(:final message):
-          _ref.read(messagesProvider.notifier).addMessage(message);
-          if (!message.isOutgoing) {
+          // Channel messages arrive via CMD_SYNC_NEXT_MESSAGE.
+          // Heard-by-repeater counting is driven by PUSH_CODE_LOG_RX_DATA
+          // (0x88) packet-hash deduplication — not loopback text matching.
+          //
+          // Skip if this is a loopback echo of our own sent message.
+          // The firmware may pass the first repeater echo through dedup and
+          // queue it.  We already have the outgoing copy from addOutgoing().
+          final isLoopback =
+              message.channelIndex != null &&
+              _ref
+                  .read(messagesProvider)
+                  .any(
+                    (m) =>
+                        m.isOutgoing &&
+                        m.channelIndex == message.channelIndex &&
+                        m.timestamp == message.timestamp,
+                  );
+          if (isLoopback) break;
+          // For incoming channel messages, try to link the packet hash from
+          // the most recent unmatched 0x88 GRP_TXT frame for this channel.
+          // The 0x88 frame always arrives before the ChannelMessageResponse.
+          ChatMessage finalMessage = message;
+          if (!message.isOutgoing && message.channelIndex != null) {
+            final pendingHash = _ref
+                .read(messagesProvider.notifier)
+                .consumeIncomingHash(message.channelIndex!);
+            if (pendingHash != null) {
+              finalMessage = message.copyWith(packetHashHex: pendingHash);
+            }
+          }
+          _ref.read(messagesProvider.notifier).addMessage(finalMessage);
+          // Auto-log incoming CQ Plano 333 messages on the #plano333 channel
+          // as stations heard — these become QSL confirmations to send later.
+          if (!finalMessage.isOutgoing && finalMessage.channelIndex != null) {
+            final channels = _ref.read(channelsProvider);
+            final plan333Ch =
+                channels
+                    .where((c) => c.name.trim().toLowerCase() == '#plano333')
+                    .firstOrNull;
+            if (plan333Ch != null &&
+                finalMessage.channelIndex == plan333Ch.index) {
+              final cq = Plan333Service.tryParseCq(
+                finalMessage.text,
+                pathLen: finalMessage.pathLen,
+              );
+              if (cq != null) {
+                // Skip own CQ (echo from the radio).
+                final myStation =
+                    _ref.read(plan333ConfigProvider).stationName.trim();
+                if (myStation.isEmpty ||
+                    cq.stationName.toLowerCase() != myStation.toLowerCase()) {
+                  // Deduplicate — same station sends up to 3 CQs per event.
+                  final log = _ref.read(qslLogProvider);
+                  if (!log.any(
+                    (r) =>
+                        r.stationName.toLowerCase() ==
+                        cq.stationName.toLowerCase(),
+                  )) {
+                    _ref.read(qslLogProvider.notifier).add(cq);
+                  }
+                }
+              }
+            }
+          }
+          if (!finalMessage.isOutgoing) {
             _ref.read(networkStatsProvider.notifier).incrementRx();
-          }
-          if (message.channelIndex != null) {
-            _ref
-                .read(unreadCountsProvider.notifier)
-                .incrementChannel(message.channelIndex!);
-          }
-          if (!message.isOutgoing) {
+            if (message.channelIndex != null) {
+              _ref
+                  .read(unreadCountsProvider.notifier)
+                  .incrementChannel(message.channelIndex!);
+            }
             final channels = _ref.read(channelsProvider);
             final idx = message.channelIndex ?? 0;
             final channel = channels.where((c) => c.index == idx).firstOrNull;
@@ -274,10 +370,28 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
                 (channel != null && channel.name.isNotEmpty)
                     ? channel.name
                     : 'Canal $idx';
+            // Channel messages embed sender as "Name: body" when senderName
+            // is not set separately.  Parse both parts so the notification
+            // shows "Name: body" rather than "Desconhecido: Name: body".
+            final String notifSender;
+            final String notifBody;
+            if (message.senderName != null && message.senderName!.isNotEmpty) {
+              notifSender = message.senderName!;
+              notifBody = message.text;
+            } else {
+              final colonIdx = message.text.indexOf(': ');
+              if (colonIdx > 0) {
+                notifSender = message.text.substring(0, colonIdx).trim();
+                notifBody = message.text.substring(colonIdx + 2);
+              } else {
+                notifSender = 'Desconhecido';
+                notifBody = message.text;
+              }
+            }
             NotificationService.instance.showChannelMessage(
               channelName: channelName,
-              senderName: message.senderName ?? 'Desconhecido',
-              text: message.text,
+              senderName: notifSender,
+              text: notifBody,
               isAppInForeground: AppLifecycleObserver.isInForeground,
             );
           }
@@ -294,16 +408,61 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         case SendConfirmedPush():
           _ref.read(messagesProvider.notifier).confirmLastOutgoing();
         case SentResponse(:final routeFlag):
-          _ref.read(networkStatsProvider.notifier).incrementTx();
           _ref.read(messagesProvider.notifier).markLastOutgoingRoute(routeFlag);
         case ErrorResponse():
           _ref.read(networkStatsProvider.notifier).incrementError();
-        case AdvertPush():
+        case AdvertPush(
+          :final publicKey,
+          :final type,
+          :final name,
+          :final isNew,
+        ):
           _ref.read(networkStatsProvider.notifier).incrementHeard();
+          _ref
+              .read(contactsProvider.notifier)
+              .upsertFromAdvert(publicKey, type, name);
+          // When pushNewAdvert (isNew=true) the radio may NOT have added the
+          // contact to its own table (manual-contact mode). Write it back
+          // explicitly — but only if the user's auto-add setting allows this
+          // node type.
+          if (isNew) {
+            final autoAdd = _ref.read(advertAutoAddProvider);
+            if (type != 0 && autoAdd.allowsType(type)) {
+              final service = _ref.read(radioServiceProvider);
+              if (service != null) {
+                final contact =
+                    _ref
+                        .read(contactsProvider)
+                        .where(
+                          (c) => ContactsNotifier._keysEqual(
+                            c.publicKey,
+                            publicKey,
+                          ),
+                        )
+                        .firstOrNull;
+                if (contact != null) {
+                  service.addUpdateContact(contact).catchError((_) {});
+                }
+              }
+            }
+          }
         case TelemetryPush(:final data):
           final readings = CayenneLPP.decode(data);
           if (readings.isNotEmpty) {
             _ref.read(telemetryProvider.notifier).add(readings);
+          }
+        case PathDiscoveryPush(:final pubKeyPrefix, :final outPath):
+          if (pubKeyPrefix.length >= 6 && outPath.isNotEmpty) {
+            final prefixHex =
+                pubKeyPrefix
+                    .sublist(0, 6)
+                    .map((b) => b.toRadixString(16).padLeft(2, '0'))
+                    .join();
+            final current = Map<String, List<int>>.from(
+              _ref.read(pathCacheProvider),
+            );
+            current[prefixHex] = outPath;
+            _ref.read(pathCacheProvider.notifier).state = current;
           }
         case TraceDataPush(:final data):
           final contacts = _ref.read(contactsProvider);
@@ -324,10 +483,103 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _ref.read(loginResultProvider.notifier).state = true;
         case LoginFailPush():
           _ref.read(loginResultProvider.notifier).state = false;
+        case PathUpdatedPush():
+          // Radio has updated a contact's cached route — re-sync the contact
+          // list so the UI shows the new hop count.
+          service.requestContacts().catchError((_) {});
+        case StatsCoreResponse():
+          _ref.read(radioStatsCoreProvider.notifier).state = response;
+        case StatsRadioResponse():
+          _ref.read(radioStatsRadioProvider.notifier).state = response;
+        case StatsPacketsResponse():
+          _ref.read(radioStatsPacketsProvider.notifier).state = response;
+        case LogRxDataPush(:final data):
+          _processLogRxData(data);
         default:
           break;
       }
     });
+  }
+
+  /// Process a PUSH_CODE_LOG_RX_DATA (0x88) frame.
+  ///
+  /// Parses the raw RF packet, computes its SHA-256 packet hash, and checks
+  /// for duplicate hashes.  Each duplicate = another repeater heard the
+  /// packet.  For outgoing channel messages the heard count on the matching
+  /// [ChatMessage] is incremented.
+  void _processLogRxData(Uint8List data) {
+    final parsed = parseLogRxData(data);
+    if (parsed == null || parsed.packet == null) return;
+
+    final pkt = parsed.packet!;
+    final hashHex = pkt.packetHashHex;
+    final log = Logger(printer: SimplePrinter(printTime: false));
+    log.d(
+      '0x88: type=0x${pkt.payloadType.toRadixString(16)} '
+      'hash=$hashHex chHash=${pkt.channelHashByte} '
+      'path=${pkt.pathHashCount}hops snr=${parsed.snr} rssi=${parsed.rssi}',
+    );
+
+    // Update the global packet-heard tracker.
+    final tracker = _ref.read(packetHeardProvider.notifier);
+    final count = tracker.record(
+      hashHex,
+      snr: parsed.snr,
+      rssi: parsed.rssi,
+      pathBytes: pkt.pathBytes,
+      pathHashCount: pkt.pathHashCount,
+      pathHashSize: pkt.pathHashSize,
+    );
+
+    // For advert packets, update last-heard on the matching contact.
+    // The radio doesn't push 0x80 for already-known contacts, so the 0x88
+    // log frame is the only signal we get.
+    // Advert payload starts with 32-byte public key — first 6 bytes = prefix.
+    if (pkt.payloadType == payloadTypeAdvert && pkt.payload.length >= 6) {
+      _ref
+          .read(contactsProvider.notifier)
+          .touchLastHeard(Uint8List.fromList(pkt.payload.sublist(0, 6)));
+    }
+
+    // Only GRP_TXT packets can match outgoing channel messages.
+    if (pkt.payloadType != payloadTypeGrpTxt) return;
+    // For our outgoing messages the radio never receives its own TX via 0x88,
+    // so every 0x88 occurrence with a GRP_TXT hash IS a repeater echo.
+
+    // Determine which channel index this RF packet belongs to by comparing
+    // the 1-byte channel hash from the raw payload against our known channels.
+    final rxChHash = pkt.channelHashByte;
+    if (rxChHash == null) return;
+
+    final channels = _ref.read(channelsProvider);
+    int? matchedChannelIdx;
+    for (final ch in channels) {
+      if (ch.secret != null && !ch.isEmpty) {
+        if (computeChannelHash(ch.secret!) == rxChHash) {
+          matchedChannelIdx = ch.index;
+          break;
+        }
+      }
+    }
+    if (matchedChannelIdx == null) {
+      log.d(
+        '0x88: no channel matched for chHash=0x${rxChHash.toRadixString(16)}',
+      );
+      return;
+    }
+    log.i('0x88: GRP_TXT ch=$matchedChannelIdx hash=$hashHex count=$count');
+
+    // Try to match against an outgoing message first.
+    // If not matched (i.e. this is an incoming packet from another station),
+    // buffer the hash so the ChannelMessageResponse can claim it.
+    final matchedOutgoing = _ref
+        .read(messagesProvider.notifier)
+        .incrementHeardByHash(matchedChannelIdx, hashHex, count);
+    if (!matchedOutgoing) {
+      _ref
+          .read(messagesProvider.notifier)
+          .queueIncomingHash(matchedChannelIdx, hashHex);
+    }
   }
 
   /// Wait for a specific response type from the radio after sending a command.
@@ -390,8 +642,11 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     );
     log.d('DeviceInfo: ${devResp?.runtimeType ?? "TIMEOUT"}');
 
-    // 2. Battery — fire and forget, let it arrive whenever.
+    // 2. Battery + radio stats — fire and forget, let them arrive whenever.
     await service.requestBattAndStorage();
+    unawaited(service.requestStats(statsTypeCore).catchError((_) {}));
+    unawaited(service.requestStats(statsTypeRadio).catchError((_) {}));
+    unawaited(service.requestStats(statsTypePackets).catchError((_) {}));
 
     // 3. Contacts — wait for the end-of-contacts marker.
     _setStep(3, 'A sincronizar contactos...');
@@ -405,40 +660,89 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
 
     // 4. Channels — send all requests with a short stagger and collect
     //    responses in parallel rather than round-tripping one at a time.
-    //    Each GET_CHANNEL round-trip is typically 20–60 ms over BLE; doing
-    //    them sequentially with a 500 ms timeout could waste up to 4 s for
-    //    8 slots.  Instead we:
-    //      a) Start a single listener that collects every ChannelInfoResponse.
-    //      b) Fire all requests 30 ms apart (gives the firmware write queue
-    //         time to drain without blocking on each response).
-    //      c) Wait for all slots to arrive, or a 1.5 s overall timeout.
+    //    Strategy:
+    //      a) Start a listener that collects every ChannelInfoResponse index.
+    //      b) Fire all requests 30 ms apart (lets the firmware TX queue drain).
+    //      c) Wait up to 2 s for all slots to arrive.
+    //      d) Retry any missing slots once (BLE packet loss / radio busy after
+    //         contacts sync), waiting 500 ms per missing slot.
+    //      e) Final explicit refresh so storage always reflects the authoritative
+    //         complete set — not whatever the last intermediate save had.
     _setStep(4, 'A sincronizar canais...');
     final maxChannels = service.deviceInfo?.maxChannels ?? 8;
     final receivedChannels = <int>{};
-    final channelsDone = Completer<void>();
-    final channelSub = service.responses.listen((r) {
+
+    Future<void> waitForChannels({
+      required Duration timeout,
+      required Set<int> alreadyReceived,
+    }) async {
+      final done = Completer<void>();
+      final sub = service.responses.listen((r) {
+        if (r is ChannelInfoResponse) {
+          alreadyReceived.add(r.channel.index);
+          if (alreadyReceived.length >= maxChannels && !done.isCompleted) {
+            done.complete();
+          }
+        }
+      });
+      try {
+        await done.future.timeout(timeout);
+      } on TimeoutException {
+        // Continue with whatever arrived.
+      }
+      await sub.cancel();
+    }
+
+    // First sweep — request all slots.
+    final sweepDone = Completer<void>();
+    final sweepSub = service.responses.listen((r) {
       if (r is ChannelInfoResponse) {
         receivedChannels.add(r.channel.index);
-        if (receivedChannels.length >= maxChannels &&
-            !channelsDone.isCompleted) {
-          channelsDone.complete();
+        if (receivedChannels.length >= maxChannels && !sweepDone.isCompleted) {
+          sweepDone.complete();
         }
       }
     });
-
     for (var i = 0; i < maxChannels; i++) {
       await service.requestChannel(i);
       if (i < maxChannels - 1) {
         await Future.delayed(const Duration(milliseconds: 30));
       }
     }
-
     try {
-      await channelsDone.future.timeout(const Duration(milliseconds: 1500));
+      await sweepDone.future.timeout(const Duration(milliseconds: 2000));
     } on TimeoutException {
-      // Partial results are fine — proceed with whatever arrived.
+      // Fall through to retry.
     }
-    await channelSub.cancel();
+    await sweepSub.cancel();
+    log.d('Channels sweep: ${receivedChannels.length}/$maxChannels received');
+
+    // Retry any slots that were missed (BLE loss, radio busy, etc.).
+    final missing =
+        List.generate(
+          maxChannels,
+          (i) => i,
+        ).where((i) => !receivedChannels.contains(i)).toList();
+
+    if (missing.isNotEmpty) {
+      log.w('Channels: ${missing.length} missing slots, retrying: $missing');
+      for (final slot in missing) {
+        await service.requestChannel(slot);
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+      await waitForChannels(
+        timeout: Duration(milliseconds: missing.length * 500),
+        alreadyReceived: receivedChannels,
+      );
+      log.d(
+        'Channels after retry: ${receivedChannels.length}/$maxChannels received',
+      );
+    }
+
+    // Persist the final authoritative channel set.  This overwrites any
+    // intermediate partial saves that _setupListeners may have written during
+    // the sweep, ensuring storage is always consistent.
+    _ref.read(channelsProvider.notifier).refresh(service.channels);
     log.d('Channels done: ${receivedChannels.length}/$maxChannels received');
 
     // 5. Drain any messages queued while the app was disconnected.
@@ -448,6 +752,54 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     await service.syncNextMessage();
 
     _setStep(5, 'Ligado!');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private key backup / restore
+  // ---------------------------------------------------------------------------
+
+  /// Request the radio to export its 64-byte private key via the companion
+  /// protocol (requires firmware built with ENABLE_PRIVATE_KEY_EXPORT=1).
+  ///
+  /// Returns the key as a 128-char hex string on success, or null if the radio
+  /// timed out, replied with an error, or has the feature disabled.
+  Future<String?> exportPrivateKey() async {
+    final service = _ref.read(radioServiceProvider);
+    if (service == null) return null;
+    final resp = await _sendAndWait(
+      service,
+      () => service.requestPrivateKeyExport(),
+      (r) => r is PrivateKeyResponse || r is ErrorResponse,
+      timeout: const Duration(seconds: 5),
+    );
+    if (resp is PrivateKeyResponse) {
+      return resp.privateKey
+          .map((b) => b.toRadixString(16).padLeft(2, '0'))
+          .join();
+    }
+    return null;
+  }
+
+  /// Send a 64-byte private key to the radio (requires firmware built with
+  /// ENABLE_PRIVATE_KEY_IMPORT=1).
+  ///
+  /// [prvKeyHex] must be exactly 128 hex characters (64 bytes).
+  /// Returns true on success (radio replied OK), false otherwise.
+  Future<bool> importPrivateKey(String prvKeyHex) async {
+    final service = _ref.read(radioServiceProvider);
+    if (service == null) return false;
+    if (prvKeyHex.length != 128) return false;
+    final bytes = Uint8List(64);
+    for (var i = 0; i < 64; i++) {
+      bytes[i] = int.parse(prvKeyHex.substring(i * 2, i * 2 + 2), radix: 16);
+    }
+    final resp = await _sendAndWait(
+      service,
+      () => service.importPrivateKey(bytes),
+      (r) => r is OkResponse || r is ErrorResponse,
+      timeout: const Duration(seconds: 5),
+    );
+    return resp is OkResponse;
   }
 }
 
@@ -479,6 +831,7 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
   }
 
   void refresh(List<Contact> contacts) {
+    // Contacts from the radio — carry over customName from local cache.
     final merged =
         contacts.map((incoming) {
           final existing = state.firstWhere(
@@ -489,6 +842,17 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
               ? incoming.withCustomName(existing.customName)
               : incoming;
         }).toList();
+
+    // Preserve locally-cached contacts that are not in the radio's list.
+    // These are contacts received via AdvertPush (heard on the mesh) but not
+    // yet formally stored in the radio's contacts table.  Dropping them on
+    // every refresh causes the node to "disappear" after an app restart.
+    for (final local in state) {
+      if (!merged.any((c) => _keysEqual(c.publicKey, local.publicKey))) {
+        merged.add(local);
+      }
+    }
+
     state = merged;
     StorageService.instance.saveContacts(merged);
   }
@@ -510,6 +874,82 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
   void remove(Uint8List publicKey) {
     final next =
         state.where((c) => !_keysEqual(c.publicKey, publicKey)).toList();
+    state = next;
+    StorageService.instance.saveContacts(next);
+  }
+
+  /// Called when an AdvertPush is received over the mesh.
+  /// Update lastModified on a contact matched by key prefix (6 bytes).
+  /// Called when any incoming private message (chat or CLI) is received.
+  void touchLastHeard(Uint8List senderKey) {
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final idx = state.indexWhere(
+      (c) =>
+          c.publicKey.length >= 6 &&
+          senderKey.length >= 6 &&
+          c.publicKey[0] == senderKey[0] &&
+          c.publicKey[1] == senderKey[1] &&
+          c.publicKey[2] == senderKey[2] &&
+          c.publicKey[3] == senderKey[3] &&
+          c.publicKey[4] == senderKey[4] &&
+          c.publicKey[5] == senderKey[5],
+    );
+    if (idx < 0) return;
+    final existing = state[idx];
+    final next = [...state];
+    next[idx] = Contact(
+      publicKey: existing.publicKey,
+      type: existing.type,
+      flags: existing.flags,
+      pathLen: existing.pathLen,
+      name: existing.name,
+      lastAdvertTimestamp: existing.lastAdvertTimestamp,
+      latitude: existing.latitude,
+      longitude: existing.longitude,
+      lastModified: now,
+      customName: existing.customName,
+    );
+    state = next;
+    StorageService.instance.saveContacts(next);
+  }
+
+  /// Adds a new contact if unseen, or refreshes the name/type/timestamp if already known.
+  void upsertFromAdvert(Uint8List publicKey, int type, String name) {
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final idx = state.indexWhere((c) => _keysEqual(c.publicKey, publicKey));
+    List<Contact> next;
+    if (idx >= 0) {
+      final existing = state[idx];
+      next = [...state];
+      next[idx] = Contact(
+        publicKey: existing.publicKey,
+        // Preserve the known type if the advert carries type=0 (unknown).
+        // Firmware pushAdvert (0x80) can omit the type for path-update adverts.
+        type: type != 0 ? type : existing.type,
+        flags: existing.flags,
+        pathLen: existing.pathLen,
+        name: name.isNotEmpty ? name : existing.name,
+        lastAdvertTimestamp: now,
+        latitude: existing.latitude,
+        longitude: existing.longitude,
+        // Update lastModified so _bestTs() reflects the live reception time.
+        // Without this, _bestTs prefers the old lastModified and "Visto" never changes.
+        lastModified: now,
+        customName: existing.customName,
+      );
+    } else {
+      next = [
+        ...state,
+        Contact(
+          publicKey: publicKey,
+          type: type,
+          flags: 0,
+          pathLen: 0,
+          name: name,
+          lastAdvertTimestamp: now,
+        ),
+      ];
+    }
     state = next;
     StorageService.instance.saveContacts(next);
   }
@@ -553,11 +993,28 @@ final channelsProvider =
 
 // Messages
 class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
-  MessagesNotifier() : super([]);
+  MessagesNotifier(this._ref) : super([]);
+  final Ref _ref;
 
   final Set<String> _loadedKeys = {};
 
+  /// Per-key save lock: ensures saves for the same key are serialised so a
+  /// slower earlier save never overwrites a faster later save.
+  final Map<String, Future<void>> _saveLocks = {};
+
   void addMessage(ChatMessage message) {
+    // Dedup: skip if an identical message already exists in state.
+    // Include senderKey prefix so messages from different contacts with
+    // identical text+timestamp are never wrongly merged.
+    final dominated = state.any(
+      (m) =>
+          m.timestamp == message.timestamp &&
+          m.channelIndex == message.channelIndex &&
+          m.text == message.text &&
+          m.isOutgoing == message.isOutgoing &&
+          _senderKeyMatch(m, message),
+    );
+    if (dominated) return;
     state = [...state, message];
     _saveForMessage(message);
   }
@@ -565,37 +1022,86 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   void addOutgoing(ChatMessage message) {
     state = [...state, message];
     _saveForMessage(message);
+    _ref.read(networkStatsProvider.notifier).incrementTx();
   }
 
-  /// Increment the heard-by-repeater count on the matching sent channel message.
-  /// Called when a loopback echo of our own channel message is received.
-  /// Matches first by [channelIndex] + [timestamp] (exact, since both encoder
-  /// and stored message now share the same computed second), then falls back
-  /// to body-text match as a safeguard for messages sent before this fix.
-  void incrementHeardCount(
-    int channelIndex,
-    String bodyText, {
-    int? timestamp,
-  }) {
+  /// Increment heard count on an outgoing channel message matched by packet
+  /// hash.  The first 0x88 duplicate for a GRP_TXT packet is the original
+  /// transmission; subsequent duplicates are repeater echoes.  [totalHeard]
+  /// is the cumulative repeater count (duplicates minus 1).
+  ///
+  /// If [hashHex] matches a message that already has the same packetHashHex,
+  /// update its heardCount.  Otherwise try to assign the hash to the most
+  /// recent outgoing message on [channelIndex] that has no hash yet.
+  ///
+  /// Returns `true` if the hash was matched/assigned to an outgoing message,
+  /// `false` if not (i.e. this is an incoming message from another station).
+  bool incrementHeardByHash(int channelIndex, String hashHex, int totalHeard) {
+    // First pass — find a message already tagged with this hash.
+    for (var i = state.length - 1; i >= 0; i--) {
+      final msg = state[i];
+      if (msg.packetHashHex == hashHex) {
+        if (msg.heardCount != totalHeard) {
+          final updated = msg.copyWith(heardCount: totalHeard);
+          final newList = List<ChatMessage>.from(state);
+          newList[i] = updated;
+          state = newList;
+          _saveForMessage(updated);
+        }
+        return true;
+      }
+    }
+    // Second pass — assign hash to the most recent outgoing message on this
+    // channel that does not yet have a packetHashHex.
+    // Only consider messages sent in the last 60 seconds to avoid wrongly
+    // assigning an incoming packet's hash to a stale outgoing message.
+    final cutoff = DateTime.now().millisecondsSinceEpoch ~/ 1000 - 60;
     for (var i = state.length - 1; i >= 0; i--) {
       final msg = state[i];
       if (!msg.isOutgoing || msg.channelIndex != channelIndex) continue;
-      final matchByTs = timestamp != null && msg.timestamp == timestamp;
-      final matchByText = msg.text == bodyText;
-      if (matchByTs || matchByText) {
-        final updated = msg.copyWith(heardCount: msg.heardCount + 1);
-        final newList = List<ChatMessage>.from(state);
-        newList[i] = updated;
-        state = newList;
-        _saveForMessage(updated);
-        return;
-      }
+      if (msg.packetHashHex != null) continue;
+      if (msg.timestamp < cutoff) break; // too old — stop searching
+      final updated = msg.copyWith(
+        packetHashHex: hashHex,
+        heardCount: totalHeard,
+      );
+      final newList = List<ChatMessage>.from(state);
+      newList[i] = updated;
+      state = newList;
+      _saveForMessage(updated);
+      return true;
     }
+    return false;
+  }
+
+  // Per-channel FIFO buffer of unmatched GRP_TXT packet hashes from 0x88 frames.
+  // Populated when the hash doesn't match any outgoing message (i.e. it came
+  // from another station).  Consumed when the corresponding ChannelMessageResponse
+  // arrives so the incoming ChatMessage can be tagged with its packetHashHex.
+  final Map<int, List<String>> _pendingIncomingHashes = {};
+
+  /// Buffer [hashHex] as a pending incoming-message path for [channelIndex].
+  void queueIncomingHash(int channelIndex, String hashHex) {
+    final q = _pendingIncomingHashes[channelIndex] ?? <String>[];
+    if (q.length >= 16) q.removeAt(0); // prevent unbounded growth
+    _pendingIncomingHashes[channelIndex] = [...q, hashHex];
+  }
+
+  /// Pop and return the oldest pending incoming hash for [channelIndex],
+  /// or null if none is buffered.
+  String? consumeIncomingHash(int channelIndex) {
+    final q = _pendingIncomingHashes[channelIndex];
+    if (q == null || q.isEmpty) return null;
+    final hash = q.first;
+    _pendingIncomingHashes[channelIndex] = q.sublist(1);
+    return hash;
   }
 
   /// Mark the most recent unconfirmed outgoing message as confirmed.
   /// Called when a [SendConfirmedPush] arrives from the radio.
   void confirmLastOutgoing() {
+    // Walk backwards and only touch the most-recently-added unconfirmed
+    // outgoing message (private or channel — whichever came last).
     for (var i = state.length - 1; i >= 0; i--) {
       final msg = state[i];
       if (msg.isOutgoing && !msg.confirmed) {
@@ -609,8 +1115,9 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     }
   }
 
-  /// Store the route flag on the most recent outgoing private message.
-  /// Called when [SentResponse] arrives: 0 = direct, 1 = flood (via repeaters).
+  /// Store the route flag on the most recent outgoing *private* message that
+  /// does not yet have a sentRouteFlag.  Channel messages don't use this flag.
+  /// Called when [SentResponse] arrives: 0 = direct, 1 = flood.
   void markLastOutgoingRoute(int routeFlag) {
     for (var i = state.length - 1; i >= 0; i--) {
       final msg = state[i];
@@ -659,8 +1166,20 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     state = merged;
   }
 
-  String _msgId(ChatMessage m) =>
-      '${m.timestamp}_${m.isOutgoing ? 1 : 0}_${m.text.hashCode}';
+  String _msgId(ChatMessage m) {
+    // Use the full text instead of hashCode — hashCode is not stable and
+    // can collide, causing legitimate messages to be treated as duplicates.
+    final keyPart =
+        m.senderKey != null ? _hex6(m.senderKey!) : 'ch${m.channelIndex}';
+    return '${m.timestamp}_${m.isOutgoing ? 1 : 0}_${m.channelIndex}_${m.text}_$keyPart';
+  }
+
+  /// True when both messages have the same sender (or both have no sender).
+  bool _senderKeyMatch(ChatMessage a, ChatMessage b) {
+    if (a.senderKey == null && b.senderKey == null) return true;
+    if (a.senderKey == null || b.senderKey == null) return false;
+    return _prefixMatch6(a.senderKey!, b.senderKey!);
+  }
 
   void _saveForMessage(ChatMessage msg) {
     final String storageKey;
@@ -671,7 +1190,7 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     } else {
       return;
     }
-    // Collect all messages for this key.
+    // Collect all messages for this key (snapshot current state).
     final forKey =
         state.where((m) {
           if (msg.channelIndex != null) {
@@ -680,15 +1199,27 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
           if (m.senderKey == null) return false;
           return _prefixMatch6(m.senderKey!, msg.senderKey!);
         }).toList();
-    StorageService.instance.saveMessages(storageKey, forKey);
+
+    // Serialise saves per key: chain each save behind the previous one so
+    // a slower earlier future never overwrites a faster later snapshot.
+    final prev = _saveLocks[storageKey] ?? Future.value();
+    final next = prev.then(
+      (_) => StorageService.instance.saveMessages(storageKey, forKey),
+    );
+    _saveLocks[storageKey] = next;
+    // Clean up the lock entry once the save completes to avoid unbounded growth.
+    next.whenComplete(() {
+      if (_saveLocks[storageKey] == next) _saveLocks.remove(storageKey);
+    });
   }
 
   bool _prefixMatch6(Uint8List a, Uint8List b) {
     final len = (a.length < b.length ? a.length : b.length).clamp(0, 6);
+    if (len == 0) return false; // don't match two empty/unknown keys
     for (var i = 0; i < len; i++) {
       if (a[i] != b[i]) return false;
     }
-    return len > 0;
+    return true;
   }
 
   /// Get messages for a specific contact (private).
@@ -711,6 +1242,34 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     return state.where((m) => m.channelIndex == channelIndex).toList();
   }
 
+  /// Delete a single message from state and re-persist its conversation.
+  void deleteMessage(ChatMessage msg) {
+    final targetId = _msgId(msg);
+    state = state.where((m) => _msgId(m) != targetId).toList();
+    if (msg.channelIndex != null) {
+      final forKey =
+          state.where((m) => m.channelIndex == msg.channelIndex).toList();
+      StorageService.instance.saveMessages('ch_${msg.channelIndex}', forKey);
+    } else if (msg.senderKey != null) {
+      final key = 'contact_${_hex6(msg.senderKey!)}';
+      final forKey =
+          state
+              .where(
+                (m) =>
+                    m.senderKey != null &&
+                    _prefixMatch6(m.senderKey!, msg.senderKey!),
+              )
+              .toList();
+      StorageService.instance.saveMessages(key, forKey);
+    }
+  }
+
+  /// Delete all messages for a channel from state and storage.
+  Future<void> deleteChannelHistory(int channelIndex) async {
+    state = state.where((m) => m.channelIndex != channelIndex).toList();
+    await StorageService.instance.clearMessages('ch_$channelIndex');
+  }
+
   bool _prefixMatch(Uint8List a, Uint8List b) {
     final len = a.length < b.length ? a.length : b.length;
     for (var i = 0; i < len; i++) {
@@ -722,7 +1281,7 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
 
 final messagesProvider =
     StateNotifierProvider<MessagesNotifier, List<ChatMessage>>((ref) {
-      return MessagesNotifier();
+      return MessagesNotifier(ref);
     });
 
 // ---------------------------------------------------------------------------
@@ -975,6 +1534,11 @@ final scannedDevicesProvider = StateProvider<List<RadioDevice>>((_) => []);
 /// Updated whenever a new trace push arrives; null until first trace received.
 final traceResultProvider = StateProvider<TraceResult?>((ref) => null);
 
+/// Cache of outPath bytes per contact, keyed by 6-byte pubKeyPrefix hex.
+/// Populated whenever a PathDiscoveryPush (0x8D) is received.
+/// Used by the trace flow to supply correct hop-hash path bytes.
+final pathCacheProvider = StateProvider<Map<String, List<int>>>((_) => {});
+
 // ---------------------------------------------------------------------------
 // Repeater remote-admin
 // ---------------------------------------------------------------------------
@@ -1016,3 +1580,303 @@ class FavoritesNotifier extends StateNotifier<Set<String>> {
 final favoritesProvider = StateNotifierProvider<FavoritesNotifier, Set<String>>(
   (ref) => FavoritesNotifier(),
 );
+
+// ---------------------------------------------------------------------------
+// Advert auto-add settings (app-side, per contact type)
+// ---------------------------------------------------------------------------
+
+/// Controls whether incoming adverts are automatically written back to the
+/// radio's contact table (via CMD_ADD_UPDATE_CONTACT) for each node type.
+///
+/// All types default to true (auto-add). The user can disable per type
+/// in Radio Settings → "Adição automática de contactos".
+class AdvertAutoAddSettings {
+  const AdvertAutoAddSettings({
+    this.addChat = true,
+    this.addRepeater = true,
+    this.addRoom = true,
+    this.addSensor = true,
+  });
+
+  final bool addChat; // type 1
+  final bool addRepeater; // type 2
+  final bool addRoom; // type 3
+  final bool addSensor; // type 4
+
+  bool allowsType(int type) {
+    switch (type) {
+      case 1:
+        return addChat;
+      case 2:
+        return addRepeater;
+      case 3:
+        return addRoom;
+      case 4:
+        return addSensor;
+      default:
+        return false;
+    }
+  }
+
+  AdvertAutoAddSettings copyWith({
+    bool? addChat,
+    bool? addRepeater,
+    bool? addRoom,
+    bool? addSensor,
+  }) => AdvertAutoAddSettings(
+    addChat: addChat ?? this.addChat,
+    addRepeater: addRepeater ?? this.addRepeater,
+    addRoom: addRoom ?? this.addRoom,
+    addSensor: addSensor ?? this.addSensor,
+  );
+}
+
+class AdvertAutoAddNotifier extends StateNotifier<AdvertAutoAddSettings> {
+  AdvertAutoAddNotifier() : super(const AdvertAutoAddSettings()) {
+    _load();
+  }
+
+  static const _key = 'advert_autoadd_v1';
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = AdvertAutoAddSettings(
+      addChat: prefs.getBool('${_key}_chat') ?? true,
+      addRepeater: prefs.getBool('${_key}_repeater') ?? true,
+      addRoom: prefs.getBool('${_key}_room') ?? true,
+      addSensor: prefs.getBool('${_key}_sensor') ?? true,
+    );
+  }
+
+  Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await Future.wait([
+      prefs.setBool('${_key}_chat', state.addChat),
+      prefs.setBool('${_key}_repeater', state.addRepeater),
+      prefs.setBool('${_key}_room', state.addRoom),
+      prefs.setBool('${_key}_sensor', state.addSensor),
+    ]);
+  }
+
+  void setChat(bool v) {
+    state = state.copyWith(addChat: v);
+    _save();
+  }
+
+  void setRepeater(bool v) {
+    state = state.copyWith(addRepeater: v);
+    _save();
+  }
+
+  void setRoom(bool v) {
+    state = state.copyWith(addRoom: v);
+    _save();
+  }
+
+  void setSensor(bool v) {
+    state = state.copyWith(addSensor: v);
+    _save();
+  }
+}
+
+final advertAutoAddProvider =
+    StateNotifierProvider<AdvertAutoAddNotifier, AdvertAutoAddSettings>(
+      (ref) => AdvertAutoAddNotifier(),
+    );
+
+// ---------------------------------------------------------------------------
+// Radio hardware stats (CMD_GET_STATS responses)
+// ---------------------------------------------------------------------------
+
+/// Latest core device statistics from the connected radio.
+/// Polled every 5 minutes alongside the battery; null until first response.
+final radioStatsCoreProvider = StateProvider<StatsCoreResponse?>((_) => null);
+
+/// Latest radio-layer statistics (noise floor, RSSI, SNR, airtime).
+final radioStatsRadioProvider = StateProvider<StatsRadioResponse?>((_) => null);
+
+/// Latest packet counters (received, sent, flood/direct breakdown, CRC errors).
+final radioStatsPacketsProvider = StateProvider<StatsPacketsResponse?>(
+  (_) => null,
+);
+
+// ---------------------------------------------------------------------------
+// Packet heard tracker (driven by 0x88 raw RF log)
+// ---------------------------------------------------------------------------
+
+/// Tracks how many times each unique packet hash has been received.
+///
+/// The firmware pushes `PUSH_CODE_LOG_RX_DATA` (0x88) for every raw RF
+/// reception **before** mesh deduplication.  Identical packet hashes mean the
+/// same logical packet was heard multiple times — each duplicate represents
+/// a different repeater that forwarded it.
+///
+/// The state maps `packetHashHex` → list of [MessagePath] records.
+class PacketHeardNotifier
+    extends StateNotifier<Map<String, List<MessagePath>>> {
+  PacketHeardNotifier(this._ref) : super({});
+  final Ref _ref;
+
+  /// Load persisted paths from storage (called on app start and after reset).
+  Future<void> loadFromStorage() async {
+    final saved = await StorageService.instance.loadMessagePaths();
+    if (saved.isNotEmpty) {
+      // Merge: runtime data wins over stored data for any shared key.
+      state = {...saved, ...state};
+    }
+  }
+
+  /// Record a reception of [hashHex] with its path details.
+  /// Returns the new total count (number of paths stored for this hash).
+  int record(
+    String hashHex, {
+    required double snr,
+    required int rssi,
+    required Uint8List pathBytes,
+    required int pathHashCount,
+    required int pathHashSize,
+  }) {
+    final path = MessagePath(
+      snr: snr,
+      rssi: rssi,
+      pathHashCount: pathHashCount,
+      pathHashSize: pathHashSize,
+      pathBytes: pathBytes,
+    );
+    final prev = state[hashHex] ?? [];
+    final next = [...prev, path];
+    state = {...state, hashHex: next};
+    // Persist after every record so paths survive app restarts.
+    StorageService.instance.saveMessagePaths(state);
+    return next.length;
+  }
+
+  /// Clear the in-memory state (e.g. on disconnect) then reload persisted
+  /// paths so historical data remains available for the UI.
+  void reset() {
+    state = {};
+    Future.microtask(loadFromStorage);
+  }
+}
+
+final packetHeardProvider =
+    StateNotifierProvider<PacketHeardNotifier, Map<String, List<MessagePath>>>(
+      (ref) => PacketHeardNotifier(ref),
+    );
+
+// ---------------------------------------------------------------------------
+// Contacts screen persistent UI state (survives app restarts)
+// ---------------------------------------------------------------------------
+
+enum ContactFilter {
+  todos,
+  favoritos,
+  companheiros,
+  repetidores,
+  salas,
+  sensores,
+}
+
+enum ContactSort { nome, ouvidoRecentemente, ultimaMensagem }
+
+class _ContactFilterNotifier extends StateNotifier<ContactFilter> {
+  _ContactFilterNotifier() : super(ContactFilter.todos) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final idx = prefs.getInt('contacts_filter');
+    if (idx != null && idx >= 0 && idx < ContactFilter.values.length) {
+      state = ContactFilter.values[idx];
+    }
+  }
+
+  Future<void> set(ContactFilter f) async {
+    state = f;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('contacts_filter', f.index);
+  }
+}
+
+class _ContactSortNotifier extends StateNotifier<ContactSort> {
+  _ContactSortNotifier() : super(ContactSort.ouvidoRecentemente) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final idx = prefs.getInt('contacts_sort');
+    if (idx != null && idx >= 0 && idx < ContactSort.values.length) {
+      state = ContactSort.values[idx];
+    }
+  }
+
+  Future<void> set(ContactSort s) async {
+    state = s;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('contacts_sort', s.index);
+  }
+}
+
+final contactFilterProvider =
+    StateNotifierProvider<_ContactFilterNotifier, ContactFilter>(
+      (_) => _ContactFilterNotifier(),
+    );
+
+final contactSortProvider =
+    StateNotifierProvider<_ContactSortNotifier, ContactSort>(
+      (_) => _ContactSortNotifier(),
+    );
+
+// ---------------------------------------------------------------------------
+// Mention pill colours (persisted to SharedPreferences)
+// ---------------------------------------------------------------------------
+
+class MentionColorNotifier extends StateNotifier<Color> {
+  MentionColorNotifier(super.defaultColor, this._key) {
+    _load();
+  }
+  final String _key;
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final val = prefs.getInt(_key);
+    if (val != null) {
+      state = Color.fromARGB(
+        (val >> 24) & 0xFF,
+        (val >> 16) & 0xFF,
+        (val >> 8) & 0xFF,
+        val & 0xFF,
+      );
+    }
+  }
+
+  Future<void> setColor(Color color) async {
+    state = color;
+    final prefs = await SharedPreferences.getInstance();
+    final a = (color.a * 255).round();
+    final r = (color.r * 255).round();
+    final g = (color.g * 255).round();
+    final b = (color.b * 255).round();
+    await prefs.setInt(_key, (a << 24) | (r << 16) | (g << 8) | b);
+  }
+}
+
+/// Pill background for @[YourName] (you are mentioned).  Default: amber.
+final selfMentionColorProvider =
+    StateNotifierProvider<MentionColorNotifier, Color>(
+      (ref) => MentionColorNotifier(
+        const Color.fromARGB(0xFF, 0xFF, 0xB3, 0x47), // amber
+        'mention_color_self',
+      ),
+    );
+
+/// Pill background for @[OtherName] (someone else mentioned).  Default: orange.
+final otherMentionColorProvider =
+    StateNotifierProvider<MentionColorNotifier, Color>(
+      (ref) => MentionColorNotifier(
+        const Color.fromARGB(0xFF, 0xFF, 0x6B, 0x00), // orange
+        'mention_color_other',
+      ),
+    );

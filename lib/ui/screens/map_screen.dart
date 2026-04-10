@@ -531,7 +531,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   Color _contactColor(Contact c) {
     if (c.isChat) return Colors.blue.shade600;
-    if (c.isRepeater) return Colors.orange.shade700;
+    if (c.isRepeater) {
+      final name = c.name.toUpperCase();
+      if (name.contains('R4')) return Colors.green.shade700; // 433 MHz
+      if (name.contains('R8')) return Colors.deepOrange.shade700; // 868 MHz
+      return Colors.orange.shade700; // unknown band
+    }
     if (c.isRoom) return Colors.purple.shade600;
     return Colors.teal.shade600;
   }

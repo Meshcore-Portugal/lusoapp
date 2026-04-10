@@ -15,6 +15,11 @@ import '../../transport/transport.dart';
 import '../theme.dart';
 
 // ---------------------------------------------------------------------------
+// Temporary event badge — set to false to remove.
+// ---------------------------------------------------------------------------
+const _showSummitEdition = true;
+
+// ---------------------------------------------------------------------------
 // Composite model — a discovered device paired with its connection type.
 // ---------------------------------------------------------------------------
 
@@ -279,7 +284,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       _connectingTarget = target;
       _cachedContactCount = ref.read(contactsProvider).length;
       _cachedChannelCount =
-          ref.read(channelsProvider).where((c) => c.name.isNotEmpty).length;
+          ref.read(channelsProvider).where((c) => !c.isEmpty).length;
     });
     final connection = ref.read(connectionProvider.notifier);
     final name = target.device.name;
@@ -333,7 +338,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       );
       _cachedContactCount = ref.read(contactsProvider).length;
       _cachedChannelCount =
-          ref.read(channelsProvider).where((c) => c.name.isNotEmpty).length;
+          ref.read(channelsProvider).where((c) => !c.isEmpty).length;
     });
     if (last.type == 'ble' && !_checkBluetoothOn()) return;
 
@@ -382,7 +387,48 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
           child: Column(
             children: [
               const SizedBox(height: 48),
-              Image.asset('assets/images/meshcore-pt-logo.webp', height: 120),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Image.asset(
+                    'assets/images/meshcore-pt-logo.webp',
+                    height: 120,
+                  ),
+                  if (_showSummitEdition)
+                    Positioned(
+                      bottom: 0,
+                      right: -16,
+                      child: Transform.rotate(
+                        angle: -0.6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black87,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0xFFFF8C00),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: const Text(
+                            'SUMMIT\nEDITION',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Color(0xFFFF8C00),
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
               const SizedBox(height: 16),
               Text(
                 'MeshCore Portugal',
@@ -403,7 +449,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                   channelCount:
                       ref
                           .watch(channelsProvider)
-                          .where((c) => c.name.isNotEmpty)
+                          .where((c) => !c.isEmpty)
                           .length,
                   cachedContactCount: _cachedContactCount,
                   cachedChannelCount: _cachedChannelCount,

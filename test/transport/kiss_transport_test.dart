@@ -76,7 +76,7 @@ void main() {
       final decoded = Kiss.decode(inner_);
       expect(decoded, isNotNull);
       expect(decoded!.command, 0x00);
-      expect(decoded!.data, payload);
+      expect(decoded.data, payload);
     });
 
     test('send escapes FEND bytes in payload', () async {

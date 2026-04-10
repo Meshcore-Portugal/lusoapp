@@ -57,6 +57,9 @@ class _McAppPtState extends ConsumerState<McAppPt> {
     // Restore cached channels for offline browsing.
     await ref.read(channelsProvider.notifier).loadFromStorage();
 
+    // Restore persisted message paths so path details are available after reboot.
+    await ref.read(packetHeardProvider.notifier).loadFromStorage();
+
     // Restore last connected device for the quick-connect card.
     final last = await StorageService.instance.loadLastDevice();
     if (last != null && mounted) {
@@ -70,6 +73,7 @@ class _McAppPtState extends ConsumerState<McAppPt> {
       await ref.read(favoritesProvider.notifier).loadFromStorage();
       await ref.read(plan333EnabledProvider.notifier).loadFromStorage();
       await ref.read(plan333ConfigProvider.notifier).loadFromStorage();
+      await ref.read(qslLogProvider.notifier).loadFromStorage();
       // Eagerly initialize the auto-send notifier (starts background timer).
       ref.read(plan333AutoSendProvider);
     }
@@ -95,7 +99,7 @@ class _McAppPtState extends ConsumerState<McAppPt> {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: 'MeshCore PT',
+      title: 'LusoAPP',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,

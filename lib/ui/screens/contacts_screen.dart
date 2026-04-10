@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -11,13 +12,17 @@ import 'package:share_plus/share_plus.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 import '../theme.dart';
+import '../widgets/path_sheet.dart';
 import 'qr_scanner_screen.dart';
 
-// Filter tabs
-enum _Filter { todos, favoritos, companheiros, repetidores, salas, sensores }
-
-// Sort order
-enum _Sort { nome, ouvidoRecentemente, ultimaMensagem }
+/// Best available "last-heard" timestamp for [contact].
+/// Prefers [lastModified] (our radio's clock — updated whenever we hear
+/// from them) over [lastAdvertTimestamp] (the remote node's own clock —
+/// may be wildly wrong on nodes without GPS/NTP sync).
+int _bestTs(Contact contact) {
+  final lm = contact.lastModified ?? 0;
+  return lm > 0 ? lm : contact.lastAdvertTimestamp;
+}
 
 /// Contacts list screen with filter tabs.
 class ContactsScreen extends ConsumerStatefulWidget {
@@ -28,8 +33,6 @@ class ContactsScreen extends ConsumerStatefulWidget {
 }
 
 class _ContactsScreenState extends ConsumerState<ContactsScreen> {
-  _Filter _filter = _Filter.todos;
-  _Sort _sort = _Sort.ouvidoRecentemente;
   final _searchCtrl = TextEditingController();
   String _query = '';
 
@@ -58,6 +61,8 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final filter = ref.watch(contactFilterProvider);
+    final sort = ref.watch(contactSortProvider);
     final contacts = ref.watch(contactsProvider);
     final favorites = ref.watch(favoritesProvider);
     final messages = ref.watch(messagesProvider);
@@ -78,18 +83,18 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
             .toList();
 
     List<Contact> filtered;
-    switch (_filter) {
-      case _Filter.companheiros:
+    switch (filter) {
+      case ContactFilter.companheiros:
         filtered = chatContacts;
-      case _Filter.repetidores:
+      case ContactFilter.repetidores:
         filtered = repeaters;
-      case _Filter.salas:
+      case ContactFilter.salas:
         filtered = rooms;
-      case _Filter.sensores:
+      case ContactFilter.sensores:
         filtered = sensors;
-      case _Filter.favoritos:
+      case ContactFilter.favoritos:
         filtered = favoriteContacts;
-      case _Filter.todos:
+      case ContactFilter.todos:
         filtered = contacts;
     }
 
@@ -115,20 +120,26 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     }
 
     filtered = [...filtered];
-    switch (_sort) {
-      case _Sort.nome:
+    switch (sort) {
+      case ContactSort.nome:
         filtered.sort(
-          (a, b) =>
-              a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
+          (a, b) => a.displayName.toLowerCase().compareTo(
+            b.displayName.toLowerCase(),
+          ),
         );
-      case _Sort.ouvidoRecentemente:
+      case ContactSort.ouvidoRecentemente:
         filtered.sort(
-          (a, b) => b.lastAdvertTimestamp.compareTo(a.lastAdvertTimestamp),
+          (a, b) => _bestTs(b).compareTo(_bestTs(a)),
         );
-      case _Sort.ultimaMensagem:
+      case ContactSort.ultimaMensagem:
         filtered.sort((a, b) {
-          final aTs = lastMsgTs[_hex6(a.publicKey)] ?? 0;
-          final bTs = lastMsgTs[_hex6(b.publicKey)] ?? 0;
+          final aMsg = lastMsgTs[_hex6(a.publicKey)] ?? 0;
+          final bMsg = lastMsgTs[_hex6(b.publicKey)] ?? 0;
+          // Contacts with a known message timestamp sort by message time.
+          // Contacts with no messages (aMsg==0) fall back to last-heard time
+          // so they sort consistently below the contacts with messages.
+          final aTs = aMsg > 0 ? aMsg : _bestTs(a);
+          final bTs = bMsg > 0 ? bMsg : _bestTs(b);
           return bTs.compareTo(aTs);
         });
     }
@@ -138,8 +149,8 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
         Column(
           children: [
             // Filter chips bar
-            _FilterBar(
-              filter: _filter,
+            ContactFilterBar(
+              filter: filter,
               counts: (
                 todos: contacts.length,
                 favoritos: favoriteContacts.length,
@@ -148,7 +159,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                 salas: rooms.length,
                 sensores: sensors.length,
               ),
-              onChanged: (f) => setState(() => _filter = f),
+              onChanged: (f) => ref.read(contactFilterProvider.notifier).set(f),
             ),
 
             // Search bar + sort button
@@ -183,29 +194,64 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                       ),
                     ),
                   ),
-                  PopupMenuButton<_Sort>(
+                  // Advert button — always visible
+                  PopupMenuButton<_AdvertType>(
+                    icon: const Icon(Icons.broadcast_on_personal),
+                    tooltip: 'Enviar Anúncio',
+                    onSelected: (type) {
+                      final svc = ref.read(radioServiceProvider);
+                      switch (type) {
+                        case _AdvertType.zeroHop:
+                          svc?.sendAdvert(flood: false);
+                        case _AdvertType.flood:
+                          svc?.sendAdvert(flood: true);
+                      }
+                    },
+                    itemBuilder:
+                        (_) => [
+                          const PopupMenuItem(
+                            value: _AdvertType.zeroHop,
+                            child: ListTile(
+                              leading: Icon(Icons.wifi_tethering),
+                              title: Text('Anúncio · Zero Hop'),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: _AdvertType.flood,
+                            child: ListTile(
+                              leading: Icon(Icons.broadcast_on_home),
+                              title: Text('Anúncio · Flood'),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                        ],
+                  ),
+                  PopupMenuButton<ContactSort>(
                     icon: Icon(
                       Icons.sort,
                       color:
-                          _sort != _Sort.ouvidoRecentemente
+                          sort != ContactSort.ouvidoRecentemente
                               ? Theme.of(context).colorScheme.primary
                               : null,
                     ),
                     tooltip: 'Ordenar',
-                    initialValue: _sort,
-                    onSelected: (s) => setState(() => _sort = s),
+                    initialValue: sort,
+                    onSelected: (s) => ref.read(contactSortProvider.notifier).set(s),
                     itemBuilder:
                         (_) => [
                           const PopupMenuItem(
-                            value: _Sort.nome,
+                            value: ContactSort.nome,
                             child: Text('Nome (A-Z)'),
                           ),
                           const PopupMenuItem(
-                            value: _Sort.ouvidoRecentemente,
+                            value: ContactSort.ouvidoRecentemente,
                             child: Text('Ouvido recentemente'),
                           ),
                           const PopupMenuItem(
-                            value: _Sort.ultimaMensagem,
+                            value: ContactSort.ultimaMensagem,
                             child: Text('Última mensagem'),
                           ),
                         ],
@@ -218,13 +264,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
             Expanded(
               child:
                   filtered.isEmpty
-                      ? _EmptyState(
-                        filter: _filter,
-                        onAdvert:
-                            () => ref
-                                .read(radioServiceProvider)
-                                ?.sendAdvert(flood: true),
-                      )
+                      ? _EmptyState(filter: filter)
                       : RefreshIndicator(
                         onRefresh:
                             () async =>
@@ -291,16 +331,16 @@ typedef _Counts =
       int sensores,
     });
 
-class _FilterBar extends StatelessWidget {
-  const _FilterBar({
+class ContactFilterBar extends StatelessWidget {
+  const ContactFilterBar({
     required this.filter,
     required this.counts,
     required this.onChanged,
   });
 
-  final _Filter filter;
+  final ContactFilter filter;
   final _Counts counts;
-  final ValueChanged<_Filter> onChanged;
+  final ValueChanged<ContactFilter> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -310,28 +350,28 @@ class _FilterBar extends StatelessWidget {
       child: Row(
         spacing: 8,
         children: [
-          _chip(_Filter.todos, 'Todos', Icons.people, counts.todos),
-          _chip(_Filter.favoritos, 'Favoritos', Icons.star, counts.favoritos),
+          _chip(ContactFilter.todos, 'Todos', Icons.people, counts.todos),
+          _chip(ContactFilter.favoritos, 'Favoritos', Icons.star, counts.favoritos),
           _chip(
-            _Filter.companheiros,
+            ContactFilter.companheiros,
             'Companheiros',
             Icons.person,
             counts.companheiros,
           ),
           _chip(
-            _Filter.repetidores,
+            ContactFilter.repetidores,
             'Repetidores',
             Icons.cell_tower,
             counts.repetidores,
           ),
-          _chip(_Filter.salas, 'Salas', Icons.meeting_room, counts.salas),
-          _chip(_Filter.sensores, 'Sensores', Icons.sensors, counts.sensores),
+          _chip(ContactFilter.salas, 'Salas', Icons.meeting_room, counts.salas),
+          _chip(ContactFilter.sensores, 'Sensores', Icons.sensors, counts.sensores),
         ],
       ),
     );
   }
 
-  Widget _chip(_Filter f, String label, IconData icon, int count) {
+  Widget _chip(ContactFilter f, String label, IconData icon, int count) {
     final selected = filter == f;
     return FilterChip(
       selected: selected,
@@ -348,20 +388,19 @@ class _FilterBar extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.filter, required this.onAdvert});
-  final _Filter filter;
-  final VoidCallback onAdvert;
+  const _EmptyState({required this.filter});
+  final ContactFilter filter;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final (icon, msg) = switch (filter) {
-      _Filter.companheiros => (Icons.person_off, 'Sem companheiros na rede'),
-      _Filter.repetidores => (Icons.cell_tower, 'Sem repetidores na rede'),
-      _Filter.salas => (Icons.meeting_room, 'Sem salas na rede'),
-      _Filter.sensores => (Icons.sensors_off, 'Sem sensores na rede'),
-      _Filter.todos => (Icons.contacts_outlined, 'Sem contactos'),
-      _Filter.favoritos => (Icons.star_border, 'Sem favoritos'),
+      ContactFilter.companheiros => (Icons.person_off, 'Sem companheiros na rede'),
+      ContactFilter.repetidores => (Icons.cell_tower, 'Sem repetidores na rede'),
+      ContactFilter.salas => (Icons.meeting_room, 'Sem salas na rede'),
+      ContactFilter.sensores => (Icons.sensors_off, 'Sem sensores na rede'),
+      ContactFilter.todos => (Icons.contacts_outlined, 'Sem contactos'),
+      ContactFilter.favoritos => (Icons.star_border, 'Sem favoritos'),
     };
 
     return Center(
@@ -385,17 +424,17 @@ class _EmptyState extends StatelessWidget {
             'Os contactos aparecem quando o radio os descobre',
             style: theme.textTheme.bodySmall,
           ),
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: onAdvert,
-            icon: const Icon(Icons.broadcast_on_home),
-            label: const Text('Enviar Anúncio'),
-          ),
         ],
       ),
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Advert type enum (used by the toolbar advert popup)
+// ---------------------------------------------------------------------------
+
+enum _AdvertType { zeroHop, flood }
 
 // ---------------------------------------------------------------------------
 // Contact tile
@@ -431,10 +470,8 @@ class _ContactTile extends ConsumerWidget {
       favoritesProvider.select((s) => s.contains(keyHex)),
     );
 
-    final lastSeen =
-        contact.lastAdvertTimestamp > 0
-            ? _formatTimestamp(contact.lastAdvertTimestamp)
-            : 'Nunca';
+    final ts = _bestTs(contact);
+    final lastSeen = ts > 0 ? _formatTimestamp(ts) : 'Nunca';
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
@@ -459,8 +496,8 @@ class _ContactTile extends ConsumerWidget {
         ),
         subtitle: Text(
           contact.customName != null
-              ? '${contact.name.isNotEmpty ? contact.name : contact.shortId}  •  Visto: $lastSeen  |  Saltos: ${contact.pathLen}'
-              : 'Visto: $lastSeen  |  Saltos: ${contact.pathLen}',
+              ? '${contact.name.isNotEmpty ? contact.name : contact.shortId}  •  Visto: $lastSeen  |  Caminho: ${contactPathLabel(contact.pathLen)}'
+              : 'Visto: $lastSeen  |  Caminho: ${contactPathLabel(contact.pathLen)}',
           style: theme.textTheme.bodySmall,
         ),
         trailing:
@@ -563,6 +600,14 @@ class _ContactTile extends ConsumerWidget {
     );
   }
 
+  void _showPathSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => ContactPathSheet(contact: contact),
+    );
+  }
+
   void _showContactQrCode(BuildContext context) {
     final uri = MeshCoreUri.buildContactUri(
       name: contact.name.isNotEmpty ? contact.name : contact.shortId,
@@ -595,6 +640,36 @@ class _ContactTile extends ConsumerWidget {
     }
   }
 
+  Future<void> _saveToRadio(BuildContext context, WidgetRef ref) async {
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+    try {
+      final respFuture = service.responses
+          .firstWhere((r) => r is OkResponse || r is ErrorResponse)
+          .timeout(const Duration(seconds: 5));
+      await service.addUpdateContact(contact);
+      final resp = await respFuture;
+      if (!context.mounted) return;
+      if (resp is OkResponse) {
+        await service.requestContacts();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${contact.displayName} guardado no rádio'),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erro ao guardar contacto no rádio')),
+        );
+      }
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Timeout: rádio não respondeu')),
+      );
+    }
+  }
+
   void _showOptionsSheet(
     BuildContext context,
     WidgetRef ref,
@@ -602,6 +677,19 @@ class _ContactTile extends ConsumerWidget {
     String keyHex,
   ) {
     final theme = Theme.of(context);
+
+    // A contact is "on radio" when it appears in the service's confirmed
+    // contact list (populated by GET_CONTACTS). Advert-only contacts
+    // (heard via pushNewAdvert) are cached locally but not on the radio.
+    final service = ref.read(radioServiceProvider);
+    final isOnRadio =
+        service == null ||
+        service.contacts.any(
+          (c) =>
+              c.publicKey.map((b) => b.toRadixString(16).padLeft(2, '0')).join() ==
+              keyHex,
+        );
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -650,6 +738,17 @@ class _ContactTile extends ConsumerWidget {
                   ),
                 ),
                 const Divider(),
+                // Save to radio — only shown for locally-cached (advert-only) contacts
+                if (!isOnRadio)
+                  ListTile(
+                    leading: const Icon(Icons.save_outlined),
+                    title: const Text('Guardar no rádio'),
+                    subtitle: const Text('Este contacto foi ouvido mas não está guardado no rádio'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _saveToRadio(context, ref);
+                    },
+                  ),
                 // Favourite
                 ListTile(
                   leading: Icon(
@@ -712,6 +811,21 @@ class _ContactTile extends ConsumerWidget {
                       _showAdminSheet(context, ref);
                     },
                   ),
+                // Path management — available for all node types
+                ListTile(
+                  leading: const Icon(Icons.route),
+                  title: const Text('Gerir caminho'),
+                  subtitle: Text(
+                    'Caminho actual: ${contactPathLabel(contact.pathLen)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withAlpha(130),
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showPathSheet(context);
+                  },
+                ),
                 const Divider(),
                 // Delete
                 ListTile(
@@ -819,6 +933,7 @@ class _ContactTile extends ConsumerWidget {
     if (diff.inHours < 24) return '${diff.inHours}h atrás';
     return '${diff.inDays}d atrás';
   }
+
 }
 
 // ---------------------------------------------------------------------------
@@ -1047,6 +1162,7 @@ class _AddContactSheetState extends State<_AddContactSheet> {
 }
 
 // ---------------------------------------------------------------------------
+// Path management sheet → lives in lib/ui/widgets/path_sheet.dart
 // Repeater remote-admin bottom sheet
 // ---------------------------------------------------------------------------
 
@@ -1064,6 +1180,9 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
   bool _obscure = true;
   bool _waiting = false;
   String? _loginError;
+  String? _lastResponse;
+  bool _pendingCommand = false;
+  String? _pendingLabel;
 
   String get _prefixHex =>
       widget.contact.publicKey
@@ -1087,14 +1206,56 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
   }
 
   Future<void> _login() async {
-    final password = _passCtrl.text; // empty string = no-password repeater
+    final password = _passCtrl.text;
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+
     ref.read(loginResultProvider.notifier).state = null;
     setState(() {
       _waiting = true;
       _loginError = null;
     });
-    final service = ref.read(radioServiceProvider);
-    await service?.login(widget.contact.publicKey, password);
+
+    // Listen for the radio response directly so we can catch ErrorResponse
+    // (e.g. ERR_NOT_FOUND when the contact isn't in the radio's table) and
+    // show a useful message instead of spinning forever.
+    final completer = Completer<String?>(); // null = success, non-null = error
+    late StreamSubscription<CompanionResponse> sub;
+    sub = service.responses.listen((r) {
+      if (completer.isCompleted) return;
+      if (r is LoginSuccessPush) {
+        completer.complete(null);
+      } else if (r is LoginFailPush) {
+        completer.complete('Falhou — verifique a palavra-passe');
+      } else if (r is ErrorResponse) {
+        final msg =
+            r.errorCode == 2
+                ? 'Contacto não encontrado no rádio — force um advert deste nó'
+                : 'Erro do rádio (código ${r.errorCode})';
+        completer.complete(msg);
+      }
+    });
+
+    await service.login(widget.contact.publicKey, password);
+
+    // Timeout after 10 s if radio never replies.
+    final error = await completer.future
+        .timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => 'Sem resposta do rádio (timeout)',
+        )
+        .whenComplete(sub.cancel);
+
+    if (!mounted) return;
+    if (error == null) {
+      // Success — loginResultProvider listener handles the UI transition.
+      ref.read(loginResultProvider.notifier).state = true;
+    } else {
+      setState(() {
+        _waiting = false;
+        _loginError = error;
+      });
+    }
   }
 
   Future<void> _requestStatus() async {
@@ -1107,22 +1268,111 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
     }
   }
 
+  Future<void> _sendAdminCommand(String command, String label) async {
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+
+    setState(() {
+      _pendingCommand = true;
+      _pendingLabel = label;
+      _lastResponse = null;
+    });
+
+    final prefix = Uint8List.fromList(
+      widget.contact.publicKey.take(6).toList(),
+    );
+
+    final completer = Completer<String>();
+    late StreamSubscription<CompanionResponse> sub;
+    sub = service.responses.listen((r) {
+      if (completer.isCompleted) return;
+      if (r is PrivateMessageResponse && r.message.senderKey != null) {
+        final key = r.message.senderKey!;
+        if (key.length >= 6 &&
+            key[0] == prefix[0] &&
+            key[1] == prefix[1] &&
+            key[2] == prefix[2] &&
+            key[3] == prefix[3] &&
+            key[4] == prefix[4] &&
+            key[5] == prefix[5]) {
+          completer.complete(r.message.text.trim());
+        }
+      }
+    });
+
+    await service.sendAdminCommand(widget.contact.publicKey, command);
+
+    final response = await completer.future
+        .timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => '(sem resposta do nó)',
+        )
+        .whenComplete(sub.cancel);
+
+    if (!mounted) return;
+    setState(() {
+      _pendingCommand = false;
+      _pendingLabel = null;
+      _lastResponse = response;
+    });
+
+    if (command == 'start ota' &&
+        response.toLowerCase().startsWith('ok - mac:')) {
+      _showOtaDialog(response);
+    }
+  }
+
+  void _showOtaDialog(String response) {
+    showDialog<void>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('OTA Iniciado'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.system_update_alt,
+                  size: 48,
+                  color: Colors.blue,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  response,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Ligue-se ao nó via BLE DFU (ex: nRF Connect) para actualizar o firmware.',
+                  style: TextStyle(fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
 
-    // Listen for login result push.
+    // Listen for login success from loginResultProvider (set by _login() on success).
     ref.listen<bool?>(loginResultProvider, (_, result) {
-      if (result == null || !mounted) return;
-      setState(() {
-        _waiting = false;
-        if (result) {
+      if (result == true && mounted) {
+        setState(() {
+          _waiting = false;
           _loginError = null;
-        } else {
-          _loginError = 'Falhou — verifique a palavra-passe';
-        }
-      });
+        });
+      }
     });
 
     final loginResult = ref.watch(loginResultProvider);
@@ -1134,7 +1384,8 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottom),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1212,6 +1463,7 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
               label: Text(_waiting ? 'A ligar...' : 'Entrar'),
             ),
           ] else ...[
+            // ── Auth status row ──────────────────────────────────────
             Row(
               children: [
                 const Icon(Icons.check_circle, color: Colors.green, size: 18),
@@ -1225,19 +1477,141 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
                 ),
                 const Spacer(),
                 OutlinedButton.icon(
-                  onPressed: _requestStatus,
+                  onPressed: _pendingCommand ? null : _requestStatus,
                   icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Pedir estado'),
+                  label: const Text('Estado'),
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+
+            // ── Pending indicator ─────────────────────────────────────
+            if (_pendingCommand) ...[
+              Row(
+                children: [
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'A enviar: $_pendingLabel...',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            // ── Last CLI response ─────────────────────────────────────
+            if (_lastResponse != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.terminal,
+                      size: 14,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _lastResponse!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            // ── Remote actions ────────────────────────────────────────
+            const Divider(height: 20),
+            Text(
+              'Acções Remotas',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 4),
+            _AdminTile(
+              icon: Icons.broadcast_on_home,
+              title: 'Anúncio Flood',
+              subtitle: 'Força o nó a enviar um anúncio flood',
+              enabled: !_pendingCommand,
+              onTap: () => _sendAdminCommand('advert', 'Anúncio Flood'),
+            ),
+            _AdminTile(
+              icon: Icons.wifi_tethering,
+              title: 'Anúncio Zero-Hop',
+              subtitle: 'Anúncio só para vizinhos directos',
+              enabled: !_pendingCommand,
+              onTap: () =>
+                  _sendAdminCommand('advert.zerohop', 'Anúncio Zero-Hop'),
+            ),
+            _AdminTile(
+              icon: Icons.schedule,
+              title: 'Sincronizar Relógio',
+              subtitle: 'Envia o timestamp actual para o nó',
+              enabled: !_pendingCommand,
+              onTap: () => _sendAdminCommand('clock sync', 'Sync Clock'),
+            ),
+            _AdminTile(
+              icon: Icons.system_update_alt,
+              title: 'Iniciar OTA',
+              subtitle: 'Inicia actualização OTA — NRF DFU / ESP32',
+              enabled: !_pendingCommand,
+              onTap: () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Confirmar OTA'),
+                    content: const Text(
+                      'O rádio vai entrar em modo de actualização OTA e ficará '
+                      'temporariamente inacessível.\n\n'
+                      'Tens a certeza?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancelar'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                        ),
+                        child: const Text('Iniciar OTA'),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok == true) await _sendAdminCommand('start ota', 'OTA');
+              },
+            ),
+
+            // ── Stats ─────────────────────────────────────────────────
             if (stats != null) ...[
-              const SizedBox(height: 12),
+              const Divider(height: 20),
               _StatsCard(stats: stats, theme: theme),
             ] else ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Text(
-                'Prima "Pedir estado" para obter as estatísticas do repetidor.',
+                'Prima "Estado" para obter as estatísticas do repetidor.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -1245,7 +1619,58 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
             ],
           ],
         ],
+        ),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Admin action tile
+// ---------------------------------------------------------------------------
+
+class _AdminTile extends StatelessWidget {
+  const _AdminTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        icon,
+        size: 22,
+        color: enabled
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurface.withAlpha(60),
+      ),
+      title: Text(
+        title,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          fontWeight: FontWeight.w500,
+          color: enabled ? null : theme.colorScheme.onSurface.withAlpha(80),
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      onTap: enabled ? onTap : null,
     );
   }
 }

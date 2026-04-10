@@ -127,6 +127,13 @@ class RadioService {
     await _send(CompanionEncoder.getBattAndStorage());
   }
 
+  /// Request one stats sub-type from the radio.
+  ///
+  /// Use [statsTypeCore], [statsTypeRadio], or [statsTypePackets].
+  Future<void> requestStats(int subType) async {
+    await _send(CompanionEncoder.getStats(subType));
+  }
+
   Future<void> requestChannel(int index) async {
     await _send(CompanionEncoder.getChannel(index));
   }
@@ -147,6 +154,10 @@ class RadioService {
     await _send(CompanionEncoder.resetPath(publicKey));
   }
 
+  Future<void> sendPathDiscovery(Uint8List publicKey) async {
+    await _send(CompanionEncoder.sendPathDiscoveryReq(publicKey));
+  }
+
   Future<void> tracePath(int tag, {int authCode = 0, Uint8List? path}) async {
     await _send(
       CompanionEncoder.sendTracePath(tag: tag, authCode: authCode, path: path),
@@ -161,8 +172,25 @@ class RadioService {
     await _send(CompanionEncoder.reboot());
   }
 
+  Future<void> requestPrivateKeyExport() async {
+    await _send(CompanionEncoder.exportPrivateKey());
+  }
+
+  Future<void> importPrivateKey(Uint8List privateKey) async {
+    await _send(CompanionEncoder.importPrivateKey(privateKey));
+  }
+
   Future<void> login(Uint8List peerPublicKey, String password) async {
     await _send(CompanionEncoder.sendLogin(peerPublicKey, password));
+  }
+
+  /// Send a CLI admin command to a remote peer node.
+  /// Must be called after a successful [login] to that peer.
+  /// The response arrives as a [PrivateMessageResponse] on [responses].
+  Future<void> sendAdminCommand(Uint8List pubKey, String command) async {
+    final prefix =
+        pubKey.sublist(0, pubKey.length < 6 ? pubKey.length : 6);
+    await _send(CompanionEncoder.sendAdminCommand(prefix, command));
   }
 
   Future<void> sendStatusRequest(Uint8List pubKey) async {

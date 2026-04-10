@@ -1,17 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'screens/apps_screen.dart';
 import 'screens/connect_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/channels_list_screen.dart';
 import 'screens/channel_chat_screen.dart';
 import 'screens/map_screen.dart';
+import 'screens/plan333_screen.dart';
 import 'screens/private_chat_screen.dart';
 import 'screens/radio_settings_screen.dart';
-import 'screens/radio_tab_screen.dart';
 import 'screens/contacts_screen.dart';
 import 'screens/room_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/event_program_screen.dart';
+import 'screens/telemetry_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -41,6 +44,22 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(path: '/map', builder: (context, state) => const MapScreen()),
           GoRoute(
+            path: '/apps',
+            builder: (context, state) => const AppsScreen(),
+          ),
+          GoRoute(
+            path: '/apps/plan333',
+            builder: (context, state) => const Plan333Screen(),
+          ),
+          GoRoute(
+            path: '/apps/telemetry',
+            builder: (context, state) => const TelemetryScreen(),
+          ),
+          GoRoute(
+            path: '/apps/event',
+            builder: (context, state) => const EventProgramScreen(),
+          ),
+          GoRoute(
             path: '/chat/:keyHex',
             builder: (context, state) {
               final keyHex = state.pathParameters['keyHex']!;
@@ -53,10 +72,6 @@ final routerProvider = Provider<GoRouter>((ref) {
               final keyHex = state.pathParameters['keyHex']!;
               return RoomScreen(contactKeyHex: keyHex);
             },
-          ),
-          GoRoute(
-            path: '/radio',
-            builder: (context, state) => const RadioTabScreen(),
           ),
           GoRoute(
             path: '/settings',

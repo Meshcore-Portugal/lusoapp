@@ -1,6 +1,16 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
+
+/// Derives the 16-byte hashtag channel key used by MeshCore firmware.
+/// Key = first 16 bytes of SHA-256("#name"), where [name] gets a '#' prefix
+/// if it does not already start with one.
+Uint8List hashtagChannelKey(String name) {
+  final withHash = name.startsWith('#') ? name : '#$name';
+  final digest = sha256.convert(utf8.encode(withHash));
+  return Uint8List.fromList(digest.bytes.sublist(0, 16));
+}
 
 /// Represents a MeshCore contact as received from the radio.
 class Contact extends Equatable {
@@ -96,6 +106,50 @@ class Contact extends Equatable {
   };
 }
 
+/// A single reception path recorded for an outgoing channel message.
+/// Each instance corresponds to one 0x88 LogRxData frame (a repeater echo).
+class MessagePath {
+  const MessagePath({
+    required this.snr,
+    required this.rssi,
+    required this.pathHashCount,
+    required this.pathHashSize,
+    required this.pathBytes,
+  });
+
+  factory MessagePath.fromJson(Map<String, dynamic> json) => MessagePath(
+    snr: (json['snr'] as num).toDouble(),
+    rssi: json['rssi'] as int,
+    pathHashCount: json['pathHashCount'] as int,
+    pathHashSize: json['pathHashSize'] as int,
+    pathBytes: base64Decode(json['pathBytes'] as String),
+  );
+
+  /// Signal-to-noise ratio in dB.
+  final double snr;
+
+  /// Received signal strength in dBm.
+  final int rssi;
+
+  /// Number of relay hops recorded in the packet path.
+  final int pathHashCount;
+
+  /// Bytes per hop hash (1–3).
+  final int pathHashSize;
+
+  /// Concatenated hop hash bytes: [pathHashCount] × [pathHashSize] bytes.
+  /// Each hop hash is the first [pathHashSize] bytes of the relay node's public key.
+  final Uint8List pathBytes;
+
+  Map<String, dynamic> toJson() => {
+    'snr': snr,
+    'rssi': rssi,
+    'pathHashCount': pathHashCount,
+    'pathHashSize': pathHashSize,
+    'pathBytes': base64Encode(pathBytes),
+  };
+}
+
 /// A chat message (private or channel).
 class ChatMessage extends Equatable {
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -115,6 +169,7 @@ class ChatMessage extends Equatable {
     sentRouteFlag:
         json['sentRouteFlag'] as int? ??
         (json['sentViaFlood'] == true ? 1 : null),
+    packetHashHex: json['packetHashHex'] as String?,
   );
   const ChatMessage({
     required this.text,
@@ -128,6 +183,8 @@ class ChatMessage extends Equatable {
     this.pathLen,
     this.heardCount = 0,
     this.sentRouteFlag,
+    this.packetHashHex,
+    this.isCliResponse = false,
   });
 
   final String text;
@@ -145,6 +202,14 @@ class ChatMessage extends Equatable {
   /// Route flag from RESP_CODE_SENT: null=unknown, 0=direct, 1=flood (via repeaters).
   final int? sentRouteFlag;
 
+  /// 8-byte packet hash (hex) from 0x88 LogRxData frames.
+  /// Used to track how many repeaters re-broadcast this message.
+  final String? packetHashHex;
+
+  /// True when this message carries TXT_TYPE_CLI_DATA (0x01) — i.e. it is a
+  /// CLI command response, not a user-visible chat message.
+  final bool isCliResponse;
+
   bool get isChannel => channelIndex != null;
   bool get isPrivate => channelIndex == null;
 
@@ -160,6 +225,8 @@ class ChatMessage extends Equatable {
     int? pathLen,
     int? heardCount,
     int? sentRouteFlag,
+    String? packetHashHex,
+    bool? isCliResponse,
   }) {
     return ChatMessage(
       text: text ?? this.text,
@@ -173,6 +240,8 @@ class ChatMessage extends Equatable {
       pathLen: pathLen ?? this.pathLen,
       heardCount: heardCount ?? this.heardCount,
       sentRouteFlag: sentRouteFlag ?? this.sentRouteFlag,
+      packetHashHex: packetHashHex ?? this.packetHashHex,
+      isCliResponse: isCliResponse ?? this.isCliResponse,
     );
   }
 
@@ -188,6 +257,7 @@ class ChatMessage extends Equatable {
     'pathLen': pathLen,
     'heardCount': heardCount,
     'sentRouteFlag': sentRouteFlag,
+    'packetHashHex': packetHashHex,
   };
 
   @override
@@ -198,6 +268,7 @@ class ChatMessage extends Equatable {
     channelIndex,
     heardCount,
     sentRouteFlag,
+    packetHashHex,
   ];
 }
 
