@@ -1,6 +1,6 @@
 # MeshCore PT — Aplicacao Companion para a Comunidade Portuguesa MeshCore
 
-**MeshCore PT (MCAPPPT)** e uma aplicacao companion Flutter para radios [MeshCore](https://meshcore.net), criada por e para a comunidade portuguesa de radioamadores e redes mesh.
+**MeshCore PT (lusoapp)** e uma aplicacao companion Flutter para radios [MeshCore](https://meshcore.net), criada por e para a comunidade portuguesa de radioamadores e redes mesh.
 
 ## Funcionalidades
 
@@ -29,8 +29,8 @@
 
 ```bash
 # Clonar o repositorio
-git clone <repo-url> mcapppt
-cd mcapppt
+git clone <repo-url> lusoapp
+cd lusoapp
 
 # Obter dependencias
 flutter pub get

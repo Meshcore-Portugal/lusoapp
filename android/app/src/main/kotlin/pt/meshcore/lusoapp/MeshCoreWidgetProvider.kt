@@ -1,4 +1,4 @@
-package pt.meshcore.mcapppt
+package pt.meshcore.lusoapp
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager

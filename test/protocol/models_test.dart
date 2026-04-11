@@ -1,21 +1,24 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mcapppt/protocol/models.dart';
+import 'package:lusoapp/protocol/models.dart';
 
 void main() {
   group('Contact', () {
-    test('shortId returns empty string when publicKey has fewer than 4 bytes', () {
-      final contact = Contact(
-        publicKey: Uint8List.fromList([0x01, 0x02]),
-        type: 1,
-        flags: 0,
-        pathLen: 0,
-        name: 'Short',
-        lastAdvertTimestamp: 0,
-      );
-      expect(contact.shortId, isEmpty);
-    });
+    test(
+      'shortId returns empty string when publicKey has fewer than 4 bytes',
+      () {
+        final contact = Contact(
+          publicKey: Uint8List.fromList([0x01, 0x02]),
+          type: 1,
+          flags: 0,
+          pathLen: 0,
+          name: 'Short',
+          lastAdvertTimestamp: 0,
+        );
+        expect(contact.shortId, isEmpty);
+      },
+    );
 
     test('isRoom returns true for type 3', () {
       final contact = Contact(
@@ -77,11 +80,7 @@ void main() {
     });
 
     test('isPrivate is true when channelIndex is null', () {
-      const msg = ChatMessage(
-        text: 'hello',
-        timestamp: 1000,
-        isOutgoing: true,
-      );
+      const msg = ChatMessage(text: 'hello', timestamp: 1000, isOutgoing: true);
       expect(msg.isPrivate, true);
       expect(msg.isChannel, false);
     });

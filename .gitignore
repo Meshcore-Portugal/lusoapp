@@ -37,6 +37,9 @@ migrate_working_dir/
 **/android/gradlew.bat
 **/android/local.properties
 **/android/**/GeneratedPluginRegistrant.java
+**/android/key.properties
+keystore.jks
+keystore.jks.base64
 
 # iOS
 **/ios/**/*.mode1v3
@@ -72,3 +75,6 @@ app.*.map.json
 # Exceptions
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 !**/ios/Flutter/.last_build_id
+
+# AI
+opencode.json

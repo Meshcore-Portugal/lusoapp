@@ -1,76 +1,82 @@
 #!/usr/bin/env bash
-# MCAPPPT — Linux/macOS build script for CI and release packaging
+# lusoapp — Dispatcher for platform-specific build scripts
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-BUILD_DIR="$PROJECT_DIR/build"
-VERSION=$(grep 'version:' "$PROJECT_DIR/pubspec.yaml" | head -1 | awk '{print $2}' | tr -d "'\"")
-
-cd "$PROJECT_DIR"
 
 log() { echo -e "\033[0;32m[BUILD]\033[0m $*"; }
 err() { echo -e "\033[0;31m[BUILD]\033[0m $*" >&2; }
+warn() { echo -e "\033[1;33m[BUILD]\033[0m $*"; }
 
-if ! command -v flutter &>/dev/null; then
-    err "Flutter not found"; exit 1
+run_script() {
+    local script="$1"
+    shift
+    if [ -x "$script" ]; then
+        "$script" "$@"
+    else
+        bash "$script" "$@"
+    fi
+}
+
+run_windows_script() {
+    local script="$SCRIPT_DIR/build.ps1"
+
+    if command -v pwsh >/dev/null 2>&1; then
+        pwsh -File "$script" "$@"
+    elif command -v powershell >/dev/null 2>&1; then
+        powershell -File "$script" "$@"
+    else
+        err "PowerShell not found (pwsh/powershell missing)"
+        exit 1
+    fi
+}
+
+TARGET="${1:-all}"
+if [ "$#" -gt 0 ]; then
+    shift
 fi
 
-log "MCAPPPT v$VERSION — Release Build"
-log "================================="
+case "$TARGET" in
+    linux)
+        run_script "$SCRIPT_DIR/build.linux.sh" "$@"
+        ;;
+    android)
+        run_script "$SCRIPT_DIR/build.android.sh" "$@"
+        ;;
+    ios)
+        run_script "$SCRIPT_DIR/build.ios.sh" "$@"
+        ;;
+    web)
+        run_script "$SCRIPT_DIR/build.web.sh" "$@"
+        ;;
+    windows)
+        run_windows_script "$@"
+        ;;
+    all)
+        if [[ "$(uname -s)" == "Linux" ]]; then
+            log "Running Linux build..."
+            run_script "$SCRIPT_DIR/build.linux.sh" "$@"
+        else
+            warn "Skipping Linux build on non-Linux host"
+        fi
 
-# Clean
-log "Cleaning previous build..."
-flutter clean
+        log "Running Android build..."
+        run_script "$SCRIPT_DIR/build.android.sh" "$@"
 
-# Dependencies
-log "Getting dependencies..."
-flutter pub get
+        log "Running Web build..."
+        run_script "$SCRIPT_DIR/build.web.sh" "$@"
 
-# Analyze
-log "Running analysis..."
-flutter analyze --no-fatal-infos || true
-
-# Test
-log "Running tests..."
-flutter test || { err "Tests failed"; exit 1; }
-
-# Build targets based on OS
-case "$(uname -s)" in
-    Linux*)
-        log "Building Linux desktop..."
-        flutter build linux --release
-        
-        LINUX_OUT="$BUILD_DIR/linux/x64/release/bundle"
-        if [ -d "$LINUX_OUT" ]; then
-            ARCHIVE="$BUILD_DIR/mcapppt-${VERSION}-linux-x64.tar.gz"
-            tar -czf "$ARCHIVE" -C "$BUILD_DIR/linux/x64/release" bundle
-            log "Linux archive: $ARCHIVE"
+        if [[ "$(uname -s)" == "Darwin" ]]; then
+            log "Running iOS build..."
+            run_script "$SCRIPT_DIR/build.ios.sh" "$@"
+        else
+            warn "Skipping iOS build on non-macOS host"
         fi
         ;;
-    Darwin*)
-        log "Building macOS desktop..."
-        flutter build macos --release
+    *)
+        err "Unknown target: $TARGET"
+        echo "Usage: $(basename "$0") [all|linux|android|ios|web|windows] [target args]"
+        echo "Example: $(basename "$0") linux --release"
+        exit 1
         ;;
 esac
-
-# Always try APK if Android SDK is available
-if command -v adb &>/dev/null || [ -n "${ANDROID_HOME:-}" ]; then
-    log "Building Android APK..."
-    flutter build apk --release
-    
-    APK="$BUILD_DIR/app/outputs/flutter-apk/app-release.apk"
-    if [ -f "$APK" ]; then
-        SIZE=$(du -h "$APK" | cut -f1)
-        log "APK: $APK ($SIZE)"
-        # Copy to dist folder
-        mkdir -p "$BUILD_DIR/dist"
-        cp "$APK" "$BUILD_DIR/dist/mcapppt-${VERSION}.apk"
-    fi
-    
-    log "Building Android App Bundle..."
-    flutter build appbundle --release
-fi
-
-log "================================="
-log "Build complete: v$VERSION"

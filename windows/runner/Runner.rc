@@ -92,7 +92,7 @@ BEGIN
             VALUE "CompanyName", "pt.meshcore" "\0"
             VALUE "FileDescription", "LusoAPP" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "mcapppt" "\0"
+            VALUE "InternalName", "lusoapp" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 pt.meshcore. All rights reserved." "\0"
             VALUE "OriginalFilename", "mcapppt.exe" "\0"
             VALUE "ProductName", "LusoAPP" "\0"

@@ -1,0 +1,58 @@
+{
+	"name": "MeshCore | lusoapp",
+	"image": "mcr.microsoft.com/devcontainers/base:bookworm",
+	"features": {
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "latest"
+		},
+		"ghcr.io/NordcomInc/devcontainer-features/android-sdk:1": {
+			"version": "latest"
+		},
+		"ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
+			"packages": [
+				"build-essential",
+				"clang",
+				"cmake",
+				"curl",
+				"git",
+				"git",
+				"libglu1-mesa",
+				"libgtk-3-dev",
+				"lld-14",
+				"llvm-14",
+				"ninja-build",
+				"pkg-config",
+				"sudo",
+				"unzip",
+				"xz-utils",
+				"zip"
+			]
+		}
+	},
+	"runArgs": [
+		"--network=host"
+	],
+	"onCreateCommand": {
+		"flutter": "bash -c 'cd .devcontainer && bash flutter.sh'",
+		"opencode": "bash -c 'cd .devcontainer && bash opencode.sh'"
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"Dart-Code.flutter",
+				"alexisvt.flutter-snippets",
+				"github.vscode-github-actions",
+				"GitHub.vscode-pull-request-github"
+			],
+			"settings": {
+				"dart.devToolsLocation": {
+					"default": "beside",
+					"inspector": "sidebar"
+				},
+				"dart.flutterSdkPaths": [
+					"/home/vscode/sdk/flutter"
+				]
+			}
+		}
+	}
+}

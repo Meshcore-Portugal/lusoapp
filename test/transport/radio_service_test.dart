@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mcapppt/protocol/protocol.dart';
-import 'package:mcapppt/services/radio_service.dart';
+import 'package:lusoapp/protocol/protocol.dart';
+import 'package:lusoapp/services/radio_service.dart';
 
 import 'mock_radio_transport.dart';
 
@@ -64,7 +64,11 @@ void main() {
       final failService = RadioService(failTransport);
       final ok = await failService.connect();
       expect(ok, false);
-      expect(failTransport.sentData, isEmpty, reason: 'no commands sent on failed connect');
+      expect(
+        failTransport.sentData,
+        isEmpty,
+        reason: 'no commands sent on failed connect',
+      );
       await failService.dispose();
     });
   });
@@ -233,14 +237,16 @@ void main() {
 
     test('ContactsStart clears contacts list', () async {
       // Pre-populate a fake contact
-      service.contacts.add(Contact(
-        publicKey: Uint8List(32),
-        type: 1,
-        flags: 0,
-        pathLen: 0,
-        name: 'Old',
-        lastAdvertTimestamp: 0,
-      ));
+      service.contacts.add(
+        Contact(
+          publicKey: Uint8List(32),
+          type: 1,
+          flags: 0,
+          pathLen: 0,
+          name: 'Old',
+          lastAdvertTimestamp: 0,
+        ),
+      );
       expect(service.contacts.length, 1);
 
       transport.injectData(framedResponse([respContactsStart]));

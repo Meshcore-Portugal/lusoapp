@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mcapppt/protocol/kiss.dart';
-import 'package:mcapppt/transport/kiss_transport.dart';
+import 'package:lusoapp/protocol/kiss.dart';
+import 'package:lusoapp/transport/kiss_transport.dart';
 
 import 'mock_radio_transport.dart';
 
