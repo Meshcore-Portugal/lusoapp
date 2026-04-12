@@ -816,7 +816,7 @@ class _ContactTile extends ConsumerWidget {
                   leading: const Icon(Icons.route),
                   title: const Text('Gerir caminho'),
                   subtitle: Text(
-                    'Caminho actual: ${contactPathLabel(contact.pathLen)}',
+                    'Caminho atual: ${contactPathLabel(contact.pathLen)}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withAlpha(130),
                     ),
@@ -1417,7 +1417,7 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Ligue-se ao nó via BLE DFU (ex: nRF Connect) para actualizar o firmware.',
+                  'Ligue-se ao nó via BLE DFU (ex: nRF Connect) para atualizar o firmware.',
                   style: TextStyle(fontSize: 12),
                   textAlign: TextAlign.center,
                 ),
@@ -1615,7 +1615,7 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
             // ── Remote actions ────────────────────────────────────────
             const Divider(height: 20),
             Text(
-              'Acções Remotas',
+              'Ações Remotas',
               style: theme.textTheme.labelMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -1631,7 +1631,7 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
             _AdminTile(
               icon: Icons.wifi_tethering,
               title: 'Anúncio Zero-Hop',
-              subtitle: 'Anúncio só para vizinhos directos',
+              subtitle: 'Anúncio só para vizinhos diretos',
               enabled: !_pendingCommand,
               onTap: () =>
                   _sendAdminCommand('advert.zerohop', 'Anúncio Zero-Hop'),
@@ -1639,14 +1639,14 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
             _AdminTile(
               icon: Icons.schedule,
               title: 'Sincronizar Relógio',
-              subtitle: 'Envia o timestamp actual para o nó',
+              subtitle: 'Envia o timestamp atual para o nó',
               enabled: !_pendingCommand,
               onTap: () => _sendAdminCommand('clock sync', 'Sync Clock'),
             ),
             _AdminTile(
               icon: Icons.system_update_alt,
               title: 'Iniciar OTA',
-              subtitle: 'Inicia actualização OTA — NRF DFU / ESP32',
+              subtitle: 'Inicia atualização OTA — NRF DFU / ESP32',
               enabled: !_pendingCommand,
               onTap: () async {
                 final ok = await showDialog<bool>(
@@ -1654,7 +1654,7 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
                   builder: (ctx) => AlertDialog(
                     title: const Text('Confirmar OTA'),
                     content: const Text(
-                      'O rádio vai entrar em modo de actualização OTA e ficará '
+                      'O rádio vai entrar em modo de atualização OTA e ficará '
                       'temporariamente inacessível.\n\n'
                       'Tens a certeza?',
                     ),
@@ -1777,7 +1777,7 @@ class _StatsCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  'Actualizado: $ts',
+                  'Atualizado: $ts',
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -1810,7 +1810,7 @@ class _StatsCard extends StatelessWidget {
               theme,
             ),
             _row(
-              'Directo RX/TX',
+              'Direto RX/TX',
               '${stats.recvDirect} / ${stats.sentDirect}',
               theme,
             ),

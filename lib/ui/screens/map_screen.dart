@@ -130,7 +130,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        _showSnack('Servico de localizacao desactivado');
+        _showSnack('Serviço de localização desativado');
         return;
       }
       var permission = await Geolocator.checkPermission();

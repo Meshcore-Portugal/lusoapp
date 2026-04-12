@@ -192,7 +192,7 @@ class _ContactPathSheetState extends ConsumerState<ContactPathSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            'ID: ${contact.shortId}  |  Caminho actual: $pathLabelStr',
+            'ID: ${contact.shortId}  |  Caminho atual: $pathLabelStr',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),

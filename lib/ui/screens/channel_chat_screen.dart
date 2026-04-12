@@ -1032,7 +1032,7 @@ class _MessageBubble extends ConsumerWidget {
     if (msg.pathLen != null) {
       final hops = msg.pathLen == 0xFF ? -1 : msg.pathLen! & 0x3F;
       if (hops <= 0) {
-        parts.add('Directo');
+        parts.add('Direto');
       } else {
         parts.add('$hops hop${hops > 1 ? 's' : ''}');
       }
@@ -1190,7 +1190,7 @@ class _MessageBubble extends ConsumerWidget {
                       label: 'Caminho',
                       value:
                           hops == 0
-                              ? 'Directo'
+                              ? 'Direto'
                               : '$hops hop${hops > 1 ? 's' : ''}',
                       theme: theme,
                     ),

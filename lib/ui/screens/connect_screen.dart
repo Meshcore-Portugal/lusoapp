@@ -117,7 +117,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               ],
             ),
             content: const Text(
-              'O Bluetooth está desligado. Deseja activá-lo para ligar ao rádio MeshCore?',
+              'O Bluetooth está desligado. Deseja ativá-lo para ligar ao rádio MeshCore?',
             ),
             actions: [
               TextButton(
@@ -126,7 +126,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               ),
               FilledButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Activar'),
+                child: const Text('Ativar'),
               ),
             ],
           ),
@@ -143,7 +143,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Activação do Bluetooth recusada.'),
+                content: Text('Ativação do Bluetooth recusada.'),
                 duration: Duration(seconds: 3),
               ),
             );
@@ -155,7 +155,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Por favor active o Bluetooth nas Definições do sistema.',
+                'Por favor ative o Bluetooth nas Definições do sistema.',
               ),
               duration: Duration(seconds: 4),
             ),

@@ -20,7 +20,7 @@ class NotificationService {
   static const _androidChannelId = 'meshcore_messages';
   static const _androidChannelName = 'Mensagens MeshCore';
   static const _androidChannelDesc =
-      'Notificacoes de mensagens privadas e de canal';
+      'Notificações de mensagens privadas e de canal';
 
   static const _plan333ChannelId = 'plan333_alerts';
   static const _plan333ChannelName = 'Alertas Plano 3-3-3';

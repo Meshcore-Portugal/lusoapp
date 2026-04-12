@@ -458,7 +458,7 @@ class _ConfigSummaryCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Configuração Activa',
+                  'Configuração Ativa',
                   style: theme.textTheme.labelLarge?.copyWith(
                     color: theme.colorScheme.onPrimaryContainer,
                     fontWeight: FontWeight.bold,

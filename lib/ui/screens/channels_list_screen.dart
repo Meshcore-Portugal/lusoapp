@@ -940,7 +940,7 @@ class _EditChannelSheetState extends State<_EditChannelSheet> {
           title: const Text('Remover canal'),
           content: Text(
             'Tem a certeza que quer remover "${widget.channel.name}"?\n\n'
-            'Esta acção não pode ser desfeita. Para recuperar o canal terá de conhecer a chave secreta.',
+            'Esta ação não pode ser desfeita. Para recuperar o canal terá de conhecer a chave secreta.',
           ),
           actions: [
             TextButton(
@@ -1035,7 +1035,7 @@ class _EditChannelSheetState extends State<_EditChannelSheet> {
             // Key info (read-only)
             if (secret != null)
               _KeyInfoCard(
-                label: 'Chave actual',
+                label: 'Chave atual',
                 info: '',
                 secretHex: _toHex(secret),
               ),
@@ -1186,7 +1186,7 @@ class _EmptyState extends StatelessWidget {
           FilledButton.icon(
             onPressed: onRefresh,
             icon: const Icon(Icons.refresh),
-            label: const Text('Actualizar Canais'),
+            label: const Text('Atualizar Canais'),
           ),
         ],
       ),

@@ -1476,7 +1476,7 @@ class _TraceResultSheet extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                'Rota directa (sem repetidores)',
+                'Rota direta (sem repetidores)',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
