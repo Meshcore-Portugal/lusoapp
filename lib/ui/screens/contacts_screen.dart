@@ -839,7 +839,7 @@ class _ContactTile extends ConsumerWidget {
                   ),
                   onTap: () {
                     Navigator.pop(ctx);
-                    _confirmDelete(context, ref);
+                    _confirmDelete(context, ref, isOnRadio);
                   },
                 ),
                 const SizedBox(height: 8),
@@ -851,7 +851,11 @@ class _ContactTile extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    bool isOnRadio,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder:
@@ -876,11 +880,13 @@ class _ContactTile extends ConsumerWidget {
           ),
     );
     if (confirmed == true) {
-      final service = ref.read(radioServiceProvider);
-      if (service == null) return;
-      await service.removeContact(contact.publicKey);
-      await Future.delayed(const Duration(milliseconds: 300));
-      await service.requestContacts();
+      ref.read(contactsProvider.notifier).remove(contact.publicKey);
+      if (isOnRadio) {
+        final service = ref.read(radioServiceProvider);
+        if (service != null) {
+          await service.removeContact(contact.publicKey);
+        }
+      }
     }
   }
 

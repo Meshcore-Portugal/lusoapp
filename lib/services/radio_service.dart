@@ -148,6 +148,7 @@ class RadioService {
 
   Future<void> removeContact(Uint8List publicKey) async {
     await _send(CompanionEncoder.removeContact(publicKey));
+    contacts.removeWhere((c) => _keysEqual(c.publicKey, publicKey));
   }
 
   Future<void> resetPath(Uint8List publicKey) async {

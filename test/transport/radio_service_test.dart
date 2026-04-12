@@ -255,6 +255,39 @@ void main() {
       expect(service.contacts, isEmpty);
     });
 
+    test('removeContact removes matching contact from local list', () async {
+      final key = Uint8List.fromList(List.generate(32, (i) => i));
+      final otherKey = Uint8List.fromList(List.generate(32, (i) => i + 100));
+      service.contacts.addAll([
+        Contact(
+          publicKey: key,
+          type: 1,
+          flags: 0,
+          pathLen: 0,
+          name: 'Alice',
+          lastAdvertTimestamp: 0,
+        ),
+        Contact(
+          publicKey: otherKey,
+          type: 1,
+          flags: 0,
+          pathLen: 0,
+          name: 'Bob',
+          lastAdvertTimestamp: 0,
+        ),
+      ]);
+
+      await service.removeContact(key);
+
+      // Only Alice removed; Bob remains.
+      expect(service.contacts.length, 1);
+      expect(service.contacts[0].name, 'Bob');
+
+      // Command was still sent to radio.
+      expect(transport.sentData.length, 1);
+      expect(transport.sentData[0][3], cmdRemoveContact);
+    });
+
     test('MsgWaitingPush triggers syncNext automatically', () async {
       transport.injectData(framedResponse([pushMsgWaiting]));
       await Future<void>.delayed(Duration.zero);
