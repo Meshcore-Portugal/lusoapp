@@ -64,7 +64,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: 12),
                   ListTile(
                     title: const Text('Nome'),
-                    subtitle: Text(selfInfo?.name ?? 'Não conectado'),
+                    subtitle: Text(selfInfo?.name ?? 'Desligado'),
                     trailing: const Icon(Icons.edit),
                     onTap: () => _editName(context, ref),
                   ),
@@ -104,7 +104,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ListTile(
                       leading: const Icon(Icons.qr_code),
                       title: const Text('Partilhar o meu contacto'),
-                      subtitle: const Text('Mostra QR Code para partilhar'),
+                      subtitle: const Text('Outros podem adicionar-te ao ler o código'),
                       onTap: () => _showOwnQrCode(context, selfInfo),
                     ),
                 ],
@@ -289,7 +289,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             content: TextField(
               controller: controller,
               decoration: const InputDecoration(
-                labelText: 'Nome do no',
+                labelText: 'Nome do nó',
                 hintText: 'Ex: CT1XXX-MC',
               ),
               maxLength: 32,
@@ -543,7 +543,7 @@ class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
 
             // Master enable
             SwitchListTile(
-              title: const Text('Activar notificações'),
+              title: const Text('Ativar notificações'),
               subtitle: const Text('Mostrar alertas para novas mensagens'),
               value: settings.enabled,
               onChanged: (v) => notifier.update(settings.copyWith(enabled: v)),
@@ -582,7 +582,7 @@ class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
             SwitchListTile(
               title: const Text('Mensagens privadas'),
               subtitle: const Text(
-                'Notificar quando receber uma mensagem direta',
+                'Conversas diretas entre dois nós',
               ),
               value: settings.enabled && settings.privateMessages,
               onChanged:
@@ -593,7 +593,7 @@ class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
             ),
             SwitchListTile(
               title: const Text('Mensagens de canal'),
-              subtitle: const Text('Notificar mensagens em canais'),
+              subtitle: const Text('Mensagens em canais'),
               value: settings.enabled && settings.channelMessages,
               onChanged:
                   settings.enabled
@@ -668,7 +668,7 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Exportação falhou. O firmware pode não ter suporte activado.',
+              'Exportação falhou. O firmware pode não ter suporte ativado.',
             ),
           ),
         );
@@ -763,7 +763,7 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Chave inválida — deve ter exactamente 128 caracteres hexadecimais.',
+              'Chave inválida — deve ter exatamente 128 caracteres hexadecimais.',
             ),
             duration: Duration(seconds: 4),
           ),
@@ -806,7 +806,7 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
           (ctx) => AlertDialog(
             title: const Text('Restaurar Chave Privada'),
             content: const Text(
-              'Esta operação vai substituir a chave privada actual do rádio. '
+              'Esta operação vai substituir a chave privada atual do rádio. '
               'O rádio vai reiniciar automaticamente após a importação.\n\n'
               'Tens a certeza?',
             ),
@@ -836,7 +836,7 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
           content: Text(
             ok
                 ? 'Chave restaurada com sucesso. O rádio irá reiniciar.'
-                : 'Restauro falhou. Firmware pode não ter suporte activado.',
+                : 'Restauro falhou. Firmware pode não ter suporte ativado.',
           ),
           duration: const Duration(seconds: 4),
         ),
@@ -854,7 +854,7 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
             title: const Text('Apagar cópia de segurança'),
             content: const Text(
               'A cópia da chave privada guardada neste dispositivo será eliminada. '
-              'O rádio não é afectado.',
+              'O rádio não é afetado.',
             ),
             actions: [
               TextButton(
