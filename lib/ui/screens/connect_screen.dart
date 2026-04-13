@@ -17,7 +17,7 @@ import '../theme.dart';
 // ---------------------------------------------------------------------------
 // Temporary event badge — set to false to remove.
 // ---------------------------------------------------------------------------
-const _showSummitEdition = true;
+const _showSummitEdition = false;
 
 // ---------------------------------------------------------------------------
 // Composite model — a discovered device paired with its connection type.
@@ -747,76 +747,79 @@ class _ConnectingCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 200),
-                          child: Builder(builder: (context) {
-                            final live =
-                                i == 2 ? contactCount : channelCount;
-                            final cached =
-                                i == 2
-                                    ? cachedContactCount
-                                    : cachedChannelCount;
-                            final newCount = (live - cached).clamp(0, live);
-                            final badgeColor =
-                                (done
-                                        ? theme.colorScheme.primary
-                                        : theme.colorScheme.primaryContainer)
-                                    .withAlpha(40);
-                            final borderColor =
-                                done
-                                    ? theme.colorScheme.primary.withAlpha(120)
-                                    : theme.colorScheme.primary.withAlpha(80);
-                            final baseStyle =
-                                theme.textTheme.labelSmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 10,
-                                );
-                            return Container(
-                              key: ValueKey('${i}_$live'),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 1,
-                              ),
-                              decoration: BoxDecoration(
-                                color: badgeColor,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: borderColor,
-                                  width: 0.8,
+                          child: Builder(
+                            builder: (context) {
+                              final live = i == 2 ? contactCount : channelCount;
+                              final cached =
+                                  i == 2
+                                      ? cachedContactCount
+                                      : cachedChannelCount;
+                              final newCount = (live - cached).clamp(0, live);
+                              final badgeColor = (done
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.primaryContainer)
+                                  .withAlpha(40);
+                              final borderColor =
+                                  done
+                                      ? theme.colorScheme.primary.withAlpha(120)
+                                      : theme.colorScheme.primary.withAlpha(80);
+                              final baseStyle = theme.textTheme.labelSmall
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 10,
+                                  );
+                              return Container(
+                                key: ValueKey('${i}_$live'),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1,
                                 ),
-                              ),
-                              child:
-                                  cached > 0 && newCount > 0
-                                      ? Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            '$cached',
-                                            style: baseStyle?.copyWith(
-                                              color: theme
-                                                  .colorScheme.onSurface
-                                                  .withAlpha(110),
+                                decoration: BoxDecoration(
+                                  color: badgeColor,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: borderColor,
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child:
+                                    cached > 0 && newCount > 0
+                                        ? Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              '$cached',
+                                              style: baseStyle?.copyWith(
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurface
+                                                    .withAlpha(110),
+                                              ),
                                             ),
-                                          ),
-                                          Text(
-                                            ' +$newCount',
-                                            style: baseStyle?.copyWith(
-                                              color: theme.colorScheme.primary,
+                                            Text(
+                                              ' +$newCount',
+                                              style: baseStyle?.copyWith(
+                                                color:
+                                                    theme.colorScheme.primary,
+                                              ),
                                             ),
+                                          ],
+                                        )
+                                        : Text(
+                                          '$live',
+                                          style: baseStyle?.copyWith(
+                                            color:
+                                                done
+                                                    ? theme.colorScheme.primary
+                                                    : theme
+                                                        .colorScheme
+                                                        .onSurface
+                                                        .withAlpha(160),
                                           ),
-                                        ],
-                                      )
-                                      : Text(
-                                        '$live',
-                                        style: baseStyle?.copyWith(
-                                          color:
-                                              done
-                                                  ? theme.colorScheme.primary
-                                                  : theme
-                                                      .colorScheme.onSurface
-                                                      .withAlpha(160),
                                         ),
-                                      ),
-                            );
-                          }),
+                              );
+                            },
+                          ),
                         ),
                       ],
                     ],

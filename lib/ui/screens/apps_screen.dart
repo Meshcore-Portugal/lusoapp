@@ -11,14 +11,14 @@ class AppsScreen extends StatelessWidget {
   const AppsScreen({super.key});
 
   static const _apps = [
-    _AppEntry(
-      id: 'event',
-      title: 'Summit Edition',
-      subtitle: 'Programa do Evento',
-      icon: Icons.event_note,
-      color: Color(0xFFFF8C00),
-      route: '/apps/event',
-    ),
+    // _AppEntry(
+    //   id: 'event',
+    //   title: 'Summit Edition',
+    //   subtitle: 'Programa do Evento',
+    //   icon: Icons.event_note,
+    //   color: Color(0xFFFF8C00),
+    //   route: '/apps/event',
+    // ),
     _AppEntry(
       id: 'plan333',
       title: 'Plano 3-3-3',

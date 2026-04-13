@@ -35,6 +35,8 @@ class ContactsScreen extends ConsumerStatefulWidget {
 class _ContactsScreenState extends ConsumerState<ContactsScreen> {
   final _searchCtrl = TextEditingController();
   String _query = '';
+  bool _multiSelectMode = false;
+  final Set<String> _selectedContactKeys = <String>{};
 
   @override
   void initState() {
@@ -50,7 +52,124 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     super.dispose();
   }
 
-  /// Returns the first 6 bytes of [key] as a lowercase hex string.
+  void _toggleSelection(String keyHex) {
+    setState(() {
+      if (_selectedContactKeys.contains(keyHex)) {
+        _selectedContactKeys.remove(keyHex);
+        if (_selectedContactKeys.isEmpty) {
+          _multiSelectMode = false;
+        }
+      } else {
+        _selectedContactKeys.add(keyHex);
+        _multiSelectMode = true;
+      }
+    });
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _selectedContactKeys.clear();
+      _multiSelectMode = false;
+    });
+  }
+
+  Future<void> _confirmBulkDelete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Remover contactos'),
+            content: Text(
+              'Remover ${_selectedContactKeys.length} contacto(s)?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(ctx).colorScheme.error,
+                ),
+                child: const Text('Remover'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed != true) return;
+
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+
+    // Find contacts matching the selected keys
+    final contacts = ref.read(contactsProvider);
+    final contactsToDelete = <Contact>[];
+    for (final contact in contacts) {
+      final keyHex =
+          contact.publicKey
+              .map((b) => b.toRadixString(16).padLeft(2, '0'))
+              .join();
+      if (_selectedContactKeys.contains(keyHex)) {
+        contactsToDelete.add(contact);
+      }
+    }
+
+    if (!context.mounted) return;
+
+    try {
+      int deletedCount = 0;
+      int errorCount = 0;
+
+      // Remove locally first
+      for (final contact in contactsToDelete) {
+        ref.read(contactsProvider.notifier).remove(contact.publicKey);
+      }
+
+      // Send delete commands to radio
+      for (final contact in contactsToDelete) {
+        try {
+          final respFuture = service.responses
+              .firstWhere((r) => r is OkResponse || r is ErrorResponse)
+              .timeout(const Duration(seconds: 5));
+
+          await service.removeContact(contact.publicKey);
+          final resp = await respFuture;
+
+          if (resp is OkResponse) {
+            deletedCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (_) {
+          errorCount++;
+        }
+      }
+
+      if (!context.mounted) return;
+
+      // Show results
+      final message =
+          errorCount > 0
+              ? 'Removidos $deletedCount contacto(s), $errorCount erro(s)'
+              : 'Removidos $deletedCount contacto(s)';
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+
+      // Clear selection and re-sync
+      _clearSelection();
+      await service.requestContacts();
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro ao remover contactos')),
+      );
+    }
+  }
+
   static String _hex6(Uint8List key) {
     final n = key.length < 6 ? key.length : 6;
     return key
@@ -146,6 +265,38 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
       children: [
         Column(
           children: [
+            // Multi-select toolbar
+            if (_multiSelectMode)
+              Container(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${_selectedContactKeys.length} selecionado(s)',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          tooltip: 'Remover selecionados',
+                          onPressed: () => _confirmBulkDelete(context, ref),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          tooltip: 'Cancelar seleção',
+                          onPressed: _clearSelection,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             // Filter chips bar
             ContactFilterBar(
               filter: filter,
@@ -278,9 +429,32 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                         child: ListView.builder(
                           padding: const EdgeInsets.only(bottom: 80),
                           itemCount: filtered.length,
-                          itemBuilder:
-                              (context, i) =>
-                                  _ContactTile(contact: filtered[i]),
+                          itemBuilder: (context, i) {
+                            final contact = filtered[i];
+                            final keyHex =
+                                contact.publicKey
+                                    .map(
+                                      (b) =>
+                                          b.toRadixString(16).padLeft(2, '0'),
+                                    )
+                                    .join();
+                            final isSelected = _selectedContactKeys.contains(
+                              keyHex,
+                            );
+                            return _ContactTile(
+                              contact: contact,
+                              isMultiSelectMode: _multiSelectMode,
+                              isSelected: isSelected,
+                              onSelected:
+                                  _multiSelectMode
+                                      ? () => _toggleSelection(keyHex)
+                                      : null,
+                              onLongPress:
+                                  !_multiSelectMode
+                                      ? () => _toggleSelection(keyHex)
+                                      : null,
+                            );
+                          },
                         ),
                       ),
             ),
@@ -461,8 +635,19 @@ enum _AdvertType { zeroHop, flood }
 // ---------------------------------------------------------------------------
 
 class _ContactTile extends ConsumerWidget {
-  const _ContactTile({required this.contact});
+  const _ContactTile({
+    required this.contact,
+    this.isMultiSelectMode = false,
+    this.isSelected = false,
+    this.onSelected,
+    this.onLongPress,
+  });
+
   final Contact contact;
+  final bool isMultiSelectMode;
+  final bool isSelected;
+  final VoidCallback? onSelected;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -495,19 +680,29 @@ class _ContactTile extends ConsumerWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      color:
+          isSelected && isMultiSelectMode
+              ? Theme.of(context).colorScheme.primaryContainer
+              : null,
       child: ListTile(
-        leading: Badge(
-          isLabelVisible: unreadCount > 0,
-          label: Text(unreadCount > 99 ? '99+' : '$unreadCount'),
-          child: CircleAvatar(
-            backgroundColor: _avatarColor(contact).withAlpha(40),
-            child: Icon(
-              _avatarIcon(contact),
-              color: _avatarColor(contact),
-              size: 20,
-            ),
-          ),
-        ),
+        leading:
+            isMultiSelectMode
+                ? Checkbox(
+                  value: isSelected,
+                  onChanged: (_) => onSelected?.call(),
+                )
+                : Badge(
+                  isLabelVisible: unreadCount > 0,
+                  label: Text(unreadCount > 99 ? '99+' : '$unreadCount'),
+                  child: CircleAvatar(
+                    backgroundColor: _avatarColor(contact).withAlpha(40),
+                    child: Icon(
+                      _avatarIcon(contact),
+                      color: _avatarColor(contact),
+                      size: 20,
+                    ),
+                  ),
+                ),
         title: Text(
           contact.displayName,
           style: TextStyle(
@@ -525,12 +720,18 @@ class _ContactTile extends ConsumerWidget {
                 ? const Icon(Icons.star, color: Colors.amber, size: 20)
                 : null,
         onTap:
-            contact.isChat
-                ? () => context.push('/chat/$keyHex')
-                : contact.isRoom
-                ? () => context.push('/room/$keyHex')
-                : null,
-        onLongPress: () => _showOptionsSheet(context, ref, isFavorite, keyHex),
+            isMultiSelectMode
+                ? () => onSelected?.call()
+                : (contact.isChat
+                    ? () => context.push('/chat/$keyHex')
+                    : contact.isRoom
+                    ? () => context.push('/room/$keyHex')
+                    : null),
+        onLongPress:
+            isMultiSelectMode
+                ? null
+                : onLongPress ??
+                    (() => _showOptionsSheet(context, ref, isFavorite, keyHex)),
       ),
     );
   }
