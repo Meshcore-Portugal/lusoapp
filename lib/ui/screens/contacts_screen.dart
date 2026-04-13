@@ -128,9 +128,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
           ),
         );
       case ContactSort.ouvidoRecentemente:
-        filtered.sort(
-          (a, b) => _bestTs(b).compareTo(_bestTs(a)),
-        );
+        filtered.sort((a, b) => _bestTs(b).compareTo(_bestTs(a)));
       case ContactSort.ultimaMensagem:
         filtered.sort((a, b) {
           final aMsg = lastMsgTs[_hex6(a.publicKey)] ?? 0;
@@ -239,7 +237,8 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                     ),
                     tooltip: 'Ordenar',
                     initialValue: sort,
-                    onSelected: (s) => ref.read(contactSortProvider.notifier).set(s),
+                    onSelected:
+                        (s) => ref.read(contactSortProvider.notifier).set(s),
                     itemBuilder:
                         (_) => [
                           const PopupMenuItem(
@@ -255,6 +254,11 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                             child: Text('Última mensagem'),
                           ),
                         ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.explore),
+                    tooltip: 'Descobrir Contactos',
+                    onPressed: () => context.push('/discover'),
                   ),
                 ],
               ),
@@ -351,7 +355,12 @@ class ContactFilterBar extends StatelessWidget {
         spacing: 8,
         children: [
           _chip(ContactFilter.todos, 'Todos', Icons.people, counts.todos),
-          _chip(ContactFilter.favoritos, 'Favoritos', Icons.star, counts.favoritos),
+          _chip(
+            ContactFilter.favoritos,
+            'Favoritos',
+            Icons.star,
+            counts.favoritos,
+          ),
           _chip(
             ContactFilter.companheiros,
             'Companheiros',
@@ -365,7 +374,12 @@ class ContactFilterBar extends StatelessWidget {
             counts.repetidores,
           ),
           _chip(ContactFilter.salas, 'Salas', Icons.meeting_room, counts.salas),
-          _chip(ContactFilter.sensores, 'Sensores', Icons.sensors, counts.sensores),
+          _chip(
+            ContactFilter.sensores,
+            'Sensores',
+            Icons.sensors,
+            counts.sensores,
+          ),
         ],
       ),
     );
@@ -395,8 +409,14 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final (icon, msg) = switch (filter) {
-      ContactFilter.companheiros => (Icons.person_off, 'Sem companheiros na rede'),
-      ContactFilter.repetidores => (Icons.cell_tower, 'Sem repetidores na rede'),
+      ContactFilter.companheiros => (
+        Icons.person_off,
+        'Sem companheiros na rede',
+      ),
+      ContactFilter.repetidores => (
+        Icons.cell_tower,
+        'Sem repetidores na rede',
+      ),
       ContactFilter.salas => (Icons.meeting_room, 'Sem salas na rede'),
       ContactFilter.sensores => (Icons.sensors_off, 'Sem sensores na rede'),
       ContactFilter.todos => (Icons.contacts_outlined, 'Sem contactos'),
@@ -653,9 +673,7 @@ class _ContactTile extends ConsumerWidget {
       if (resp is OkResponse) {
         await service.requestContacts();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${contact.displayName} guardado no rádio'),
-          ),
+          SnackBar(content: Text('${contact.displayName} guardado no rádio')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -686,7 +704,9 @@ class _ContactTile extends ConsumerWidget {
         service == null ||
         service.contacts.any(
           (c) =>
-              c.publicKey.map((b) => b.toRadixString(16).padLeft(2, '0')).join() ==
+              c.publicKey
+                  .map((b) => b.toRadixString(16).padLeft(2, '0'))
+                  .join() ==
               keyHex,
         );
 
@@ -743,7 +763,9 @@ class _ContactTile extends ConsumerWidget {
                   ListTile(
                     leading: const Icon(Icons.save_outlined),
                     title: const Text('Guardar no rádio'),
-                    subtitle: const Text('Este contacto foi ouvido mas não está guardado no rádio'),
+                    subtitle: const Text(
+                      'Este contacto foi ouvido mas não está guardado no rádio',
+                    ),
                     onTap: () {
                       Navigator.pop(ctx);
                       _saveToRadio(context, ref);
@@ -877,10 +899,40 @@ class _ContactTile extends ConsumerWidget {
     );
     if (confirmed == true) {
       final service = ref.read(radioServiceProvider);
+      // Remove locally first so advert-cached contacts disappear immediately.
+      ref.read(contactsProvider.notifier).remove(contact.publicKey);
+
       if (service == null) return;
-      await service.removeContact(contact.publicKey);
-      await Future.delayed(const Duration(milliseconds: 300));
-      await service.requestContacts();
+
+      try {
+        final respFuture = service.responses
+            .firstWhere((r) => r is OkResponse || r is ErrorResponse)
+            .timeout(const Duration(seconds: 5));
+
+        await service.removeContact(contact.publicKey);
+        final resp = await respFuture;
+
+        if (!context.mounted) return;
+        if (resp is ErrorResponse) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Erro ao remover no rádio (código ${resp.errorCode})',
+              ),
+            ),
+          );
+        }
+      } catch (_) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Timeout: rádio não respondeu à remoção'),
+          ),
+        );
+      } finally {
+        // Always re-sync from the radio so local and radio tables converge.
+        await service.requestContacts();
+      }
     }
   }
 
@@ -933,7 +985,6 @@ class _ContactTile extends ConsumerWidget {
     if (diff.inHours < 24) return '${diff.inHours}h atrás';
     return '${diff.inDays}d atrás';
   }
-
 }
 
 // ---------------------------------------------------------------------------
@@ -1201,17 +1252,26 @@ class _TypeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = selected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withAlpha(80);
+    final color =
+        selected
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurface.withAlpha(80);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
         decoration: BoxDecoration(
-          color: selected ? theme.colorScheme.primary.withAlpha(30) : Colors.transparent,
+          color:
+              selected
+                  ? theme.colorScheme.primary.withAlpha(30)
+                  : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
+            color:
+                selected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outlineVariant,
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -1459,239 +1519,241 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
       padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottom),
       child: SingleChildScrollView(
         child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Handle
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.onSurface.withAlpha(40),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(Icons.cell_tower, color: AppTheme.primary, size: 22),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Admin: ${widget.contact.name.isNotEmpty ? widget.contact.name : widget.contact.shortId}',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'ID: ${widget.contact.shortId}  |  Saltos: ${widget.contact.pathLen}',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const Divider(height: 20),
-
-          if (!loggedIn) ...[
-            Text(
-              'Autenticação',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _passCtrl,
-              obscureText: _obscure,
-              decoration: InputDecoration(
-                labelText: 'Palavra-passe (opcional)',
-                hintText: 'Deixar em branco se sem palavra-passe',
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.lock_outline),
-                errorText: _loginError,
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscure ? Icons.visibility : Icons.visibility_off,
-                  ),
-                  onPressed: () => setState(() => _obscure = !_obscure),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurface.withAlpha(40),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
-            const SizedBox(height: 10),
-            FilledButton.icon(
-              onPressed: _waiting ? null : _login,
-              icon:
-                  _waiting
-                      ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                      : const Icon(Icons.login),
-              label: Text(_waiting ? 'A ligar...' : 'Entrar'),
-            ),
-          ] else ...[
-            // ── Auth status row ──────────────────────────────────────
+            const SizedBox(height: 12),
             Row(
               children: [
-                const Icon(Icons.check_circle, color: Colors.green, size: 18),
-                const SizedBox(width: 6),
-                Text(
-                  'Autenticado',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.green,
-                    fontWeight: FontWeight.bold,
+                const Icon(Icons.cell_tower, color: AppTheme.primary, size: 22),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Admin: ${widget.contact.name.isNotEmpty ? widget.contact.name : widget.contact.shortId}',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const Spacer(),
-                OutlinedButton.icon(
-                  onPressed: _pendingCommand ? null : _requestStatus,
-                  icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Estado'),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-
-            // ── Pending indicator ─────────────────────────────────────
-            if (_pendingCommand) ...[
-              Row(
-                children: [
-                  const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'A enviar: $_pendingLabel...',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-            ],
-
-            // ── Last CLI response ─────────────────────────────────────
-            if (_lastResponse != null) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.terminal,
-                      size: 14,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _lastResponse!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-
-            // ── Remote actions ────────────────────────────────────────
-            const Divider(height: 20),
+            const SizedBox(height: 4),
             Text(
-              'Acções Remotas',
-              style: theme.textTheme.labelMedium?.copyWith(
+              'ID: ${widget.contact.shortId}  |  Saltos: ${widget.contact.pathLen}',
+              style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 4),
-            _AdminTile(
-              icon: Icons.broadcast_on_home,
-              title: 'Anúncio Flood',
-              subtitle: 'Força o nó a enviar um anúncio flood',
-              enabled: !_pendingCommand,
-              onTap: () => _sendAdminCommand('advert', 'Anúncio Flood'),
-            ),
-            _AdminTile(
-              icon: Icons.wifi_tethering,
-              title: 'Anúncio Zero-Hop',
-              subtitle: 'Anúncio só para vizinhos directos',
-              enabled: !_pendingCommand,
-              onTap: () =>
-                  _sendAdminCommand('advert.zerohop', 'Anúncio Zero-Hop'),
-            ),
-            _AdminTile(
-              icon: Icons.schedule,
-              title: 'Sincronizar Relógio',
-              subtitle: 'Envia o timestamp actual para o nó',
-              enabled: !_pendingCommand,
-              onTap: () => _sendAdminCommand('clock sync', 'Sync Clock'),
-            ),
-            _AdminTile(
-              icon: Icons.system_update_alt,
-              title: 'Iniciar OTA',
-              subtitle: 'Inicia actualização OTA — NRF DFU / ESP32',
-              enabled: !_pendingCommand,
-              onTap: () async {
-                final ok = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Confirmar OTA'),
-                    content: const Text(
-                      'O rádio vai entrar em modo de actualização OTA e ficará '
-                      'temporariamente inacessível.\n\n'
-                      'Tens a certeza?',
+            const Divider(height: 20),
+
+            if (!loggedIn) ...[
+              Text(
+                'Autenticação',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _passCtrl,
+                obscureText: _obscure,
+                decoration: InputDecoration(
+                  labelText: 'Palavra-passe (opcional)',
+                  hintText: 'Deixar em branco se sem palavra-passe',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  errorText: _loginError,
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscure ? Icons.visibility : Icons.visibility_off,
                     ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('Cancelar'),
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                onPressed: _waiting ? null : _login,
+                icon:
+                    _waiting
+                        ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Icon(Icons.login),
+                label: Text(_waiting ? 'A ligar...' : 'Entrar'),
+              ),
+            ] else ...[
+              // ── Auth status row ──────────────────────────────────────
+              Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Autenticado',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  OutlinedButton.icon(
+                    onPressed: _pendingCommand ? null : _requestStatus,
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('Estado'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // ── Pending indicator ─────────────────────────────────────
+              if (_pendingCommand) ...[
+                Row(
+                  children: [
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'A enviar: $_pendingLabel...',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
+
+              // ── Last CLI response ─────────────────────────────────────
+              if (_lastResponse != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.terminal,
+                        size: 14,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.orange,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _lastResponse!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontFamily: 'monospace',
+                          ),
                         ),
-                        child: const Text('Iniciar OTA'),
                       ),
                     ],
                   ),
-                );
-                if (ok == true) await _sendAdminCommand('start ota', 'OTA');
-              },
-            ),
+                ),
+                const SizedBox(height: 8),
+              ],
 
-            // ── Stats ─────────────────────────────────────────────────
-            if (stats != null) ...[
+              // ── Remote actions ────────────────────────────────────────
               const Divider(height: 20),
-              _StatsCard(stats: stats, theme: theme),
-            ] else ...[
-              const SizedBox(height: 4),
               Text(
-                'Prima "Estado" para obter as estatísticas do repetidor.',
-                style: theme.textTheme.bodySmall?.copyWith(
+                'Acções Remotas',
+                style: theme.textTheme.labelMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
+              const SizedBox(height: 4),
+              _AdminTile(
+                icon: Icons.broadcast_on_home,
+                title: 'Anúncio Flood',
+                subtitle: 'Força o nó a enviar um anúncio flood',
+                enabled: !_pendingCommand,
+                onTap: () => _sendAdminCommand('advert', 'Anúncio Flood'),
+              ),
+              _AdminTile(
+                icon: Icons.wifi_tethering,
+                title: 'Anúncio Zero-Hop',
+                subtitle: 'Anúncio só para vizinhos directos',
+                enabled: !_pendingCommand,
+                onTap:
+                    () =>
+                        _sendAdminCommand('advert.zerohop', 'Anúncio Zero-Hop'),
+              ),
+              _AdminTile(
+                icon: Icons.schedule,
+                title: 'Sincronizar Relógio',
+                subtitle: 'Envia o timestamp actual para o nó',
+                enabled: !_pendingCommand,
+                onTap: () => _sendAdminCommand('clock sync', 'Sync Clock'),
+              ),
+              _AdminTile(
+                icon: Icons.system_update_alt,
+                title: 'Iniciar OTA',
+                subtitle: 'Inicia actualização OTA — NRF DFU / ESP32',
+                enabled: !_pendingCommand,
+                onTap: () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder:
+                        (ctx) => AlertDialog(
+                          title: const Text('Confirmar OTA'),
+                          content: const Text(
+                            'O rádio vai entrar em modo de actualização OTA e ficará '
+                            'temporariamente inacessível.\n\n'
+                            'Tens a certeza?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancelar'),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                              ),
+                              child: const Text('Iniciar OTA'),
+                            ),
+                          ],
+                        ),
+                  );
+                  if (ok == true) await _sendAdminCommand('start ota', 'OTA');
+                },
+              ),
+
+              // ── Stats ─────────────────────────────────────────────────
+              if (stats != null) ...[
+                const Divider(height: 20),
+                _StatsCard(stats: stats, theme: theme),
+              ] else ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Prima "Estado" para obter as estatísticas do repetidor.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ],
           ],
-        ],
         ),
       ),
     );
@@ -1726,9 +1788,10 @@ class _AdminTile extends StatelessWidget {
       leading: Icon(
         icon,
         size: 22,
-        color: enabled
-            ? theme.colorScheme.primary
-            : theme.colorScheme.onSurface.withAlpha(60),
+        color:
+            enabled
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurface.withAlpha(60),
       ),
       title: Text(
         title,

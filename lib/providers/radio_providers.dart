@@ -508,6 +508,8 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   /// packet.  For outgoing channel messages the heard count on the matching
   /// [ChatMessage] is incremented.
   void _processLogRxData(Uint8List data) {
+    _ref.read(rxLogProvider.notifier).recordFromLogRxFrame(data);
+
     final parsed = parseLogRxData(data);
     if (parsed == null || parsed.packet == null) return;
 
@@ -1762,6 +1764,76 @@ final packetHeardProvider =
     StateNotifierProvider<PacketHeardNotifier, Map<String, List<MessagePath>>>(
       (ref) => PacketHeardNotifier(),
     );
+
+// ---------------------------------------------------------------------------
+// RX log (raw 0x88 frames for diagnostics / PCAP export)
+// ---------------------------------------------------------------------------
+
+class RxLogEntry {
+  const RxLogEntry({
+    required this.receivedAt,
+    required this.snr,
+    required this.rssi,
+    required this.rawPacket,
+    this.payloadType,
+    this.packetHashHex,
+    this.pathHops,
+  });
+
+  final DateTime receivedAt;
+  final double snr;
+  final int rssi;
+
+  /// Raw over-the-air packet bytes (without the 0x88 SNR/RSSI preamble).
+  final Uint8List rawPacket;
+
+  final int? payloadType;
+  final String? packetHashHex;
+  final int? pathHops;
+}
+
+class RxLogNotifier extends StateNotifier<List<RxLogEntry>> {
+  RxLogNotifier() : super(const []);
+
+  static const int _maxEntries = 4000;
+
+  /// Record one PUSH_CODE_LOG_RX_DATA frame payload (bytes after 0x88).
+  void recordFromLogRxFrame(Uint8List data) {
+    if (data.length < 2) return;
+
+    final snrByte = data[0];
+    final snr = (snrByte < 128 ? snrByte : snrByte - 256) / 4.0;
+    final rssiByte = data[1];
+    final rssi = rssiByte < 128 ? rssiByte : rssiByte - 256;
+    final raw =
+        data.length > 2 ? Uint8List.fromList(data.sublist(2)) : Uint8List(0);
+
+    final parsed = parseRawPacket(raw);
+
+    final entry = RxLogEntry(
+      receivedAt: DateTime.now(),
+      snr: snr,
+      rssi: rssi,
+      rawPacket: raw,
+      payloadType: parsed?.payloadType,
+      packetHashHex: parsed?.packetHashHex,
+      pathHops: parsed?.pathHashCount,
+    );
+
+    final next = [...state, entry];
+    if (next.length > _maxEntries) {
+      state = next.sublist(next.length - _maxEntries);
+    } else {
+      state = next;
+    }
+  }
+
+  void clear() => state = const [];
+}
+
+final rxLogProvider = StateNotifierProvider<RxLogNotifier, List<RxLogEntry>>(
+  (ref) => RxLogNotifier(),
+);
 
 // ---------------------------------------------------------------------------
 // Contacts screen persistent UI state (survives app restarts)

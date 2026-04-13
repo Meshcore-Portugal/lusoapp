@@ -158,6 +158,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => context.push('/settings/radio'),
                     ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => _confirmAndReboot(context),
+                            icon: const Icon(Icons.restart_alt),
+                            label: const Text('Reboot'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Shutdown não disponível neste firmware',
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.power_settings_new),
+                            label: const Text('Shutdown'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ],
               ),
@@ -229,6 +257,54 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         return 'Erro de ligacao';
       case TransportState.disconnected:
         return 'Desligado';
+    }
+  }
+
+  Future<void> _confirmAndReboot(BuildContext context) async {
+    final service = ref.read(radioServiceProvider);
+    if (service == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Rádio não ligado')));
+      return;
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Reiniciar rádio'),
+            content: const Text(
+              'Isto vai reiniciar o firmware e a ligação será interrompida por alguns segundos. Continuar?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Reiniciar'),
+              ),
+            ],
+          ),
+    );
+
+    if (ok != true || !mounted) return;
+
+    try {
+      await service.reboot();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Comando de reboot enviado. A aguardar reconexão...'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Falha ao enviar comando de reboot')),
+      );
     }
   }
 

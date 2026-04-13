@@ -36,6 +36,14 @@ class AppsScreen extends StatelessWidget {
       route: '/apps/telemetry',
     ),
     _AppEntry(
+      id: 'rxlog',
+      title: 'RX Log',
+      subtitle: 'Captura e exporta PCAP',
+      icon: Icons.radar,
+      color: Color(0xFF4F46E5),
+      route: '/apps/rxlog',
+    ),
+    _AppEntry(
       id: 'qr',
       title: 'Leitor QR',
       subtitle: 'Digitalizar código QR',
