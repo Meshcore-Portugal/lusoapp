@@ -413,15 +413,39 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                           ),
                         ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.explore),
-                    tooltip: 'Descobrir Contactos',
-                    onPressed: () => context.push('/discover'),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.checklist),
-                    tooltip: 'Selecionar múltiplos',
-                    onPressed: _enterMultiSelectMode,
+                  PopupMenuButton<_ContactsToolbarAction>(
+                    icon: const Icon(Icons.more_vert),
+                    tooltip: 'Mais opções',
+                    onSelected: (action) {
+                      switch (action) {
+                        case _ContactsToolbarAction.discover:
+                          context.push('/discover');
+                        case _ContactsToolbarAction.multiSelect:
+                          _enterMultiSelectMode();
+                      }
+                    },
+                    itemBuilder:
+                        (_) => [
+                          const PopupMenuItem(
+                            value: _ContactsToolbarAction.discover,
+                            child: ListTile(
+                              leading: Icon(Icons.explore),
+                              title: Text('Descobrir contactos'),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: _ContactsToolbarAction.multiSelect,
+                            enabled: !_multiSelectMode,
+                            child: const ListTile(
+                              leading: Icon(Icons.checklist),
+                              title: Text('Selecionar múltiplos'),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                        ],
                   ),
                 ],
               ),
@@ -638,6 +662,8 @@ class _EmptyState extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 enum _AdvertType { zeroHop, flood }
+
+enum _ContactsToolbarAction { discover, multiSelect }
 
 // ---------------------------------------------------------------------------
 // Contact tile
