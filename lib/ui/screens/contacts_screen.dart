@@ -73,6 +73,13 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     });
   }
 
+  void _enterMultiSelectMode() {
+    setState(() {
+      _multiSelectMode = true;
+      _selectedContactKeys.clear();
+    });
+  }
+
   Future<void> _confirmBulkDelete(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -411,6 +418,11 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                     tooltip: 'Descobrir Contactos',
                     onPressed: () => context.push('/discover'),
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.checklist),
+                    tooltip: 'Selecionar múltiplos',
+                    onPressed: _enterMultiSelectMode,
+                  ),
                 ],
               ),
             ),
@@ -449,10 +461,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                                   _multiSelectMode
                                       ? () => _toggleSelection(keyHex)
                                       : null,
-                              onLongPress:
-                                  !_multiSelectMode
-                                      ? () => _toggleSelection(keyHex)
-                                      : null,
+                              onLongPress: null,
                             );
                           },
                         ),
