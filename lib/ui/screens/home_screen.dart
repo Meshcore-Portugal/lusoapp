@@ -19,7 +19,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
   bool _showVolts = false;
-  DateTime? _lastBackPress;
+  bool _exitDialogOpen = false;
 
   static const _tabs = ['/channels', '/contacts', '/map', '/apps', '/settings'];
 
@@ -61,11 +61,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final appSubTitle = _appSubTitles[currentPath];
     final isAppsSubPage = appSubTitle != null;
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
+    return BackButtonListener(
+      onBackButtonPressed: () async {
         _handleBack(context);
+        return true;
       },
       child: Scaffold(
         appBar: AppBar(
@@ -197,30 +196,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _handleBack(BuildContext context) {
+    final currentPath = GoRouterState.of(context).uri.path;
+    final isRootTab = _tabs.contains(currentPath);
+    if (isRootTab) {
+      if (currentPath == _tabs[0]) {
+        _confirmExit(context);
+      } else {
+        context.go(_tabs[0]);
+        setState(() => _currentIndex = 0);
+      }
+      return;
+    }
     final router = GoRouter.of(context);
     if (router.canPop()) {
       router.pop();
-      return;
-    }
-    final currentPath = GoRouterState.of(context).uri.path;
-    if (currentPath != _tabs[0]) {
+    } else {
       context.go(_tabs[0]);
       setState(() => _currentIndex = 0);
-      return;
     }
-    final now = DateTime.now();
-    if (_lastBackPress != null &&
-        now.difference(_lastBackPress!) < const Duration(seconds: 2)) {
-      SystemNavigator.pop();
-      return;
-    }
-    _lastBackPress = now;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Prima novamente para sair'),
-        duration: Duration(seconds: 2),
+  }
+
+  Future<void> _confirmExit(BuildContext context) async {
+    if (_exitDialogOpen) return;
+    _exitDialogOpen = true;
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Sair da LusoAPP?'),
+        content: const Text(
+          'A ligação ao rádio será terminada e a aplicação encerrada.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sair'),
+          ),
+        ],
       ),
     );
+    _exitDialogOpen = false;
+    if (shouldExit == true) await SystemNavigator.pop();
   }
 
   Future<void> _onConnectionIconTap(
