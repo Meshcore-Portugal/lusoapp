@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -18,6 +19,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
   bool _showVolts = false;
+  DateTime? _lastBackPress;
 
   static const _tabs = ['/channels', '/contacts', '/map', '/apps', '/settings'];
 
@@ -59,14 +61,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final appSubTitle = _appSubTitles[currentPath];
     final isAppsSubPage = appSubTitle != null;
 
-    return Scaffold(
-      appBar: AppBar(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleBack(context);
+      },
+      child: Scaffold(
+        appBar: AppBar(
         leading:
             isAppsSubPage
                 ? IconButton(
                   icon: const Icon(Icons.arrow_back),
                   tooltip: 'Voltar',
-                  onPressed: () => context.go('/apps'),
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go('/apps');
+                    }
+                  },
                 )
                 : null,
         title:
@@ -177,6 +191,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             label: 'Definições',
           ),
         ],
+      ),
+      ),
+    );
+  }
+
+  void _handleBack(BuildContext context) {
+    final router = GoRouter.of(context);
+    if (router.canPop()) {
+      router.pop();
+      return;
+    }
+    final currentPath = GoRouterState.of(context).uri.path;
+    if (currentPath != _tabs[0]) {
+      context.go(_tabs[0]);
+      setState(() => _currentIndex = 0);
+      return;
+    }
+    final now = DateTime.now();
+    if (_lastBackPress != null &&
+        now.difference(_lastBackPress!) < const Duration(seconds: 2)) {
+      SystemNavigator.pop();
+      return;
+    }
+    _lastBackPress = now;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Prima novamente para sair'),
+        duration: Duration(seconds: 2),
       ),
     );
   }
