@@ -28,6 +28,11 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
   late Timer _ticker;
   DateTime _now = DateTime.now();
 
+  // Debug-only: when non-null the screen uses this instead of real clock so
+  // the event-active UI branches can be tested without waiting for Saturday.
+  DateTime? _debugNow;
+  DateTime get _effectiveNow => _debugNow ?? _now;
+
   // Station-name / city / locality controllers (used in config card)
   final _nameCtrl = TextEditingController();
   final _cityCtrl = TextEditingController();
@@ -80,9 +85,9 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
     final cbEnabled = ref.watch(plan333EnabledProvider);
     final qslLogCount = ref.watch(qslLogProvider).length;
 
-    final meshActive = Plan333Service.isMeshEventActive(_now);
-    final qslActive = Plan333Service.isMeshQslActive(_now);
-    final nextMesh = Plan333Service.nextMeshEvent(_now);
+    final meshActive = Plan333Service.isMeshEventActive(_effectiveNow);
+    final qslActive = Plan333Service.isMeshQslActive(_effectiveNow);
+    final nextMesh = Plan333Service.nextMeshEvent(_effectiveNow);
 
     final radioConnected = connState == TransportState.connected;
 
@@ -93,7 +98,7 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
         children: [
           // ── 1. Mesh 3-3-3 status (PRIMARY) ──────────────────────────────
           _MeshStatusCard(
-            now: _now,
+            now: _effectiveNow,
             meshActive: meshActive,
             qslActive: qslActive,
             nextMesh: nextMesh,
@@ -103,8 +108,18 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
             radioConnected: radioConnected,
             onSendCq:
                 () => ref.read(plan333AutoSendProvider.notifier).sendManualCq(),
+            onAbort:
+                () => ref.read(plan333AutoSendProvider.notifier).abortSession(),
           ),
           const SizedBox(height: 16),
+
+          if (kDebugMode) ...[
+            _DebugAutomationCard(
+              debugNow: _debugNow,
+              onSimulate: (dt) => setState(() => _debugNow = dt),
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // ── 2. Configuração ──────────────────────────────────────────────
           _ConfigCard(
@@ -162,6 +177,7 @@ class _MeshStatusCard extends StatelessWidget {
     required this.qslLogCount,
     required this.radioConnected,
     required this.onSendCq,
+    required this.onAbort,
   });
 
   final DateTime now;
@@ -173,6 +189,7 @@ class _MeshStatusCard extends StatelessWidget {
   final int qslLogCount;
   final bool radioConnected;
   final VoidCallback onSendCq;
+  final VoidCallback onAbort;
 
   @override
   Widget build(BuildContext context) {
@@ -328,6 +345,53 @@ class _MeshStatusCard extends StatelessWidget {
                 radioConnected: radioConnected,
                 onTap: onSendCq,
               ),
+              const SizedBox(height: 8),
+
+              // Abort / aborted indicator
+              if (autoState.aborted)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.errorContainer.withAlpha(140),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.block,
+                        size: 16,
+                        color: theme.colorScheme.error,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Automação abortada — sem mais envios nesta sessão.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (config.autoSendCq && meshActive)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: onAbort,
+                    icon: const Icon(Icons.stop_circle_outlined, size: 16),
+                    label: const Text('Abortar auto-envio'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: theme.colorScheme.error,
+                      side: BorderSide(color: theme.colorScheme.error),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
             ] else ...[
               // Countdown to next event
               Row(
@@ -458,6 +522,234 @@ class _SendButton extends StatelessWidget {
           backgroundColor: canSend ? color.withAlpha(200) : null,
           foregroundColor: canSend ? Colors.black87 : null,
           padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// Debug automation test card (debug builds only)
+// ============================================================================
+
+class _DebugAutomationCard extends ConsumerWidget {
+  const _DebugAutomationCard({
+    required this.debugNow,
+    required this.onSimulate,
+  });
+
+  /// Currently active simulated time, or null when real clock is in use.
+  final DateTime? debugNow;
+
+  /// Called with a new simulated DateTime to freeze the screen display,
+  /// or null to restore the real clock.
+  final void Function(DateTime?) onSimulate;
+
+  static DateTime _nextSaturdayAt(int hour, int minute) {
+    final now = DateTime.now();
+    var d = DateTime(now.year, now.month, now.day, hour, minute);
+    if (d.isBefore(now)) d = d.add(const Duration(days: 1));
+    while (d.weekday != DateTime.saturday) {
+      d = d.add(const Duration(days: 1));
+    }
+    return d;
+  }
+
+  static String _hm(DateTime d) =>
+      '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+  /// Sets the screen simulated time AND triggers one automation pass at that
+  /// time so sent-counters advance exactly as they would in production.
+  void _activate(
+    BuildContext context,
+    WidgetRef ref,
+    DateTime sim,
+    String label,
+  ) {
+    onSimulate(sim);
+    ref.read(plan333AutoSendProvider.notifier).debugRunAutomationAt(sim);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Debug: a simular $label  (${_hm(sim)})'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final autoState = ref.watch(plan333AutoSendProvider);
+    final isSimulating = debugNow != null;
+
+    // Pre-compute preset DateTimes (next Saturday at each slot).
+    final cq1 = _nextSaturdayAt(21, 3);
+    final cq2 = _nextSaturdayAt(21, 23);
+    final cq3 = _nextSaturdayAt(21, 43);
+    final qslPhase = _nextSaturdayAt(21, 35);
+
+    bool isActive(DateTime candidate) =>
+        debugNow != null &&
+        debugNow!.hour == candidate.hour &&
+        debugNow!.minute == candidate.minute;
+
+    final cardColor =
+        isSimulating
+            ? theme.colorScheme.errorContainer.withAlpha(180)
+            : theme.colorScheme.secondaryContainer.withAlpha(140);
+
+    return Card(
+      color: cardColor,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header ────────────────────────────────────────────────────
+            Row(
+              children: [
+                Icon(
+                  isSimulating ? Icons.schedule : Icons.bug_report_outlined,
+                  color:
+                      isSimulating
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.primary,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isSimulating
+                        ? 'DEBUG  ·  A simular ${_hm(debugNow!)}'
+                        : 'Debug: Simular Evento 3-3-3',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: isSimulating ? theme.colorScheme.error : null,
+                    ),
+                  ),
+                ),
+                if (isSimulating)
+                  TextButton(
+                    onPressed: () => onSimulate(null),
+                    child: const Text('Hora real'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              isSimulating
+                  ? 'Ecrã e automação usam a hora simulada. Prima «Hora real» para repor.'
+                  : 'Seleciona uma janela para simular o ecrã do evento e disparar a automação.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // ── Phase preset buttons ───────────────────────────────────────
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _DebugPhaseButton(
+                  label: 'CQ slot 1\n${_hm(cq1)}',
+                  active: isActive(cq1),
+                  color: const Color(0xFF00E676),
+                  onTap: () => _activate(context, ref, cq1, 'CQ slot 1'),
+                ),
+                _DebugPhaseButton(
+                  label: 'CQ slot 2\n${_hm(cq2)}',
+                  active: isActive(cq2),
+                  color: const Color(0xFF00E676),
+                  onTap: () => _activate(context, ref, cq2, 'CQ slot 2'),
+                ),
+                _DebugPhaseButton(
+                  label: 'CQ slot 3\n${_hm(cq3)}',
+                  active: isActive(cq3),
+                  color: const Color(0xFF00E676),
+                  onTap: () => _activate(context, ref, cq3, 'CQ slot 3'),
+                ),
+                _DebugPhaseButton(
+                  label: 'QSL fase\n${_hm(qslPhase)}',
+                  active: isActive(qslPhase),
+                  color: const Color(0xFF40C4FF),
+                  onTap: () => _activate(context, ref, qslPhase, 'QSL fase'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // ── Automation state + reset ──────────────────────────────────
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Automação: CQ ${autoState.cqSentCount}/3  ·  QSL ${autoState.qslSentCount}'
+                    '${autoState.lastCqTime != null ? '  · último CQ ${_hm(autoState.lastCqTime!)}' : ''}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed:
+                      () =>
+                          ref
+                              .read(plan333AutoSendProvider.notifier)
+                              .debugResetAutomationState(),
+                  icon: const Icon(Icons.restart_alt, size: 15),
+                  label: const Text('Reset'),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Tappable animated chip used inside _DebugAutomationCard.
+class _DebugPhaseButton extends StatelessWidget {
+  const _DebugPhaseButton({
+    required this.label,
+    required this.active,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool active;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: active ? color.withAlpha(55) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: active ? color : color.withAlpha(80),
+            width: active ? 1.5 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: active ? color : color.withAlpha(180),
+            fontSize: 12,
+            fontWeight: active ? FontWeight.bold : FontWeight.normal,
+          ),
         ),
       ),
     );

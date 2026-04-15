@@ -83,6 +83,7 @@ class Plan333AutoSendState {
     this.lastCqTime,
     this.qslSentStations = const {},
     this.lastQslTime,
+    this.aborted = false,
   });
 
   /// Number of CQ messages sent in the current Saturday event (0–3).
@@ -97,6 +98,10 @@ class Plan333AutoSendState {
   /// Timestamp of the most recent QSL auto-send.
   final DateTime? lastQslTime;
 
+  /// When true, the user aborted the auto-send session — no further
+  /// automatic CQ/QSL messages will be sent until the state is reset.
+  final bool aborted;
+
   int get qslSentCount => qslSentStations.length;
 
   Plan333AutoSendState copyWith({
@@ -104,11 +109,13 @@ class Plan333AutoSendState {
     DateTime? lastCqTime,
     Set<String>? qslSentStations,
     DateTime? lastQslTime,
+    bool? aborted,
   }) => Plan333AutoSendState(
     cqSentCount: cqSentCount ?? this.cqSentCount,
     lastCqTime: lastCqTime ?? this.lastCqTime,
     qslSentStations: qslSentStations ?? this.qslSentStations,
     lastQslTime: lastQslTime ?? this.lastQslTime,
+    aborted: aborted ?? this.aborted,
   );
 }
 
@@ -477,18 +484,27 @@ class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
   Timer? _pollTimer;
 
   void _tick() {
-    final now = DateTime.now();
+    _runAutomation(DateTime.now());
+  }
+
+  void _runAutomation(
+    DateTime now, {
+    bool allowOutsideEvent = false,
+    bool ignoreAutoSendFlag = false,
+  }) {
     final config = _ref.read(plan333ConfigProvider);
 
     // Reset session state when the Mesh event window closes.
-    if (!Plan333Service.isMeshEventActive(now) &&
+    if (!allowOutsideEvent &&
+        !Plan333Service.isMeshEventActive(now) &&
         (state.cqSentCount > 0 || state.qslSentStations.isNotEmpty)) {
       state = const Plan333AutoSendState();
       return;
     }
 
-    if (!config.autoSendCq) return;
-    if (!Plan333Service.isMeshEventActive(now)) return;
+    if (state.aborted) return;
+    if (!ignoreAutoSendFlag && !config.autoSendCq) return;
+    if (!allowOutsideEvent && !Plan333Service.isMeshEventActive(now)) return;
     if (!config.isConfigured) return;
 
     // ── CQ phase: up to 3 sends at 21:02, 21:22, 21:42 ─────────────────
@@ -501,7 +517,7 @@ class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
     }
 
     // ── QSL confirmation phase (21:30–22:00) ─────────────────────────────
-    if (!Plan333Service.isMeshQslActive(now)) return;
+    if (!allowOutsideEvent && !Plan333Service.isMeshQslActive(now)) return;
 
     final qslLog = _ref.read(qslLogProvider);
     final unsent =
@@ -513,6 +529,31 @@ class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
     _doSendQsl(config, unsent.first);
   }
 
+  /// Debug helper: execute one automation scheduler pass at [simulatedNow].
+  ///
+  /// Intended for manual testing from debug UI, so weekly windows can be
+  /// verified without waiting for Saturday.
+  void debugRunAutomationAt(DateTime simulatedNow) {
+    _runAutomation(
+      simulatedNow,
+      allowOutsideEvent: true,
+      ignoreAutoSendFlag: false,
+    );
+  }
+
+  /// Stop any further automatic CQ/QSL sends for the rest of this session.
+  ///
+  /// The aborted flag is cleared automatically when the event window closes
+  /// (next [_tick] after 22:00 on Saturday) or via [debugResetAutomationState].
+  void abortSession() {
+    state = state.copyWith(aborted: true);
+  }
+
+  /// Debug helper: clear CQ/QSL session counters immediately.
+  void debugResetAutomationState() {
+    state = const Plan333AutoSendState();
+  }
+
   /// Manually send one CQ (ignores auto-send flag, respects 3-message limit).
   Future<void> sendManualCq() async {
     final config = _ref.read(plan333ConfigProvider);
@@ -520,9 +561,28 @@ class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
     _doSendCq(config);
   }
 
+  int _resolvePlan333ChannelIndex(Plan333Config config) {
+    // Prefer channel lookup by name; fall back to configured index.
+    final channels = _ref.read(channelsProvider);
+    final target = Plan333Service.meshCoreHashtag.trim().toLowerCase();
+    final targetNoHash = target.startsWith('#') ? target.substring(1) : target;
+
+    final ch =
+        channels.where((c) {
+          final name = c.name.trim().toLowerCase();
+          if (name.isEmpty) return false;
+          final nameNoHash = name.startsWith('#') ? name.substring(1) : name;
+          return name == target || nameNoHash == targetNoHash;
+        }).firstOrNull;
+
+    return ch?.index ?? config.meshChannelIndex;
+  }
+
   void _doSendCq(Plan333Config config) {
     final service = _ref.read(radioServiceProvider);
     if (service == null || !service.isConnected) return;
+
+    final channelIndex = _resolvePlan333ChannelIndex(config);
 
     final ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final msg = config.cqMessage;
@@ -534,10 +594,10 @@ class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
             text: msg,
             timestamp: ts,
             isOutgoing: true,
-            channelIndex: config.meshChannelIndex,
+            channelIndex: channelIndex,
           ),
         );
-    service.sendChannelMessage(config.meshChannelIndex, msg, timestamp: ts);
+    service.sendChannelMessage(channelIndex, msg, timestamp: ts);
 
     state = state.copyWith(
       cqSentCount: state.cqSentCount + 1,
@@ -549,17 +609,7 @@ class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
     final service = _ref.read(radioServiceProvider);
     if (service == null || !service.isConnected) return;
 
-    // Prefer channel lookup by name; fall back to configured index.
-    final channels = _ref.read(channelsProvider);
-    final ch =
-        channels
-            .where(
-              (c) =>
-                  c.name.trim().toLowerCase() ==
-                  Plan333Service.meshCoreHashtag.toLowerCase(),
-            )
-            .firstOrNull;
-    final channelIndex = ch?.index ?? config.meshChannelIndex;
+    final channelIndex = _resolvePlan333ChannelIndex(config);
 
     final ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final loc = record.location.isNotEmpty ? ', ${record.location}' : '';
