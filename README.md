@@ -44,12 +44,12 @@ flutter build apk --release
 
 ### Supported Platforms
 
-| Platform | Transport | Status |
-|----------|-----------|--------|
+| Platform | Transport    | Status         |
+| -------- | ------------ | -------------- |
 | Android  | BLE + Serial | Primary target |
-| iOS      | BLE | Planned |
-| Windows  | Serial | Planned |
-| Linux    | Serial | Planned |
+| iOS      | BLE          | Planned        |
+| Windows  | Serial       | Planned        |
+| Linux    | Serial       | Planned        |
 
 ## Architecture
 
