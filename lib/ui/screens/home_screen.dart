@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -200,7 +202,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final isRootTab = _tabs.contains(currentPath);
     if (isRootTab) {
       if (currentPath == _tabs[0]) {
-        _confirmExit(context);
+        unawaited(_confirmExit(context));
       } else {
         context.go(_tabs[0]);
         setState(() => _currentIndex = 0);
@@ -219,26 +221,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _confirmExit(BuildContext context) async {
     if (_exitDialogOpen) return;
     _exitDialogOpen = true;
-    final shouldExit = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Sair da LusoAPP?'),
-        content: const Text(
-          'A ligação ao rádio será terminada e a aplicação encerrada.',
+    bool? shouldExit;
+    try {
+      shouldExit = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Sair da LusoAPP?'),
+          content: const Text(
+            'A ligação ao rádio será terminada e a aplicação encerrada.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Sair'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Sair'),
-          ),
-        ],
-      ),
-    );
-    _exitDialogOpen = false;
+      );
+    } finally {
+      _exitDialogOpen = false;
+    }
     if (shouldExit == true) await SystemNavigator.pop();
   }
 
