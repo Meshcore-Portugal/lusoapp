@@ -31,6 +31,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return switch (path) {
       '/apps/plan333' => context.l10n.appsPlano333Title,
       '/apps/telemetry' => context.l10n.appsTelemetryTitle,
+      '/apps/rxlog' => context.l10n.appsRxLogTitle,
       _ => null,
     };
   }
@@ -74,129 +75,129 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-        leading:
-            isAppsSubPage
-                ? IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  tooltip: context.l10n.commonBack,
-                  onPressed: () {
-                    if (context.canPop()) {
-                      context.pop();
-                    } else {
-                      context.go('/apps');
-                    }
-                  },
-                )
-                : null,
-        title:
-            isAppsSubPage
-                ? Text(appSubTitle)
-                : Row(
-                  children: [
-                    Icon(
-                      Icons.cell_tower,
-                      color: theme.colorScheme.primary,
-                      size: 24,
+          leading:
+              isAppsSubPage
+                  ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: context.l10n.commonBack,
+                    onPressed: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/apps');
+                      }
+                    },
+                  )
+                  : null,
+          title:
+              isAppsSubPage
+                  ? Text(appSubTitle)
+                  : Row(
+                    children: [
+                      Icon(
+                        Icons.cell_tower,
+                        color: theme.colorScheme.primary,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(selfInfo?.name ?? 'LusoAPP'),
+                    ],
+                  ),
+          actions: [
+            // Battery indicator — tap to toggle % / voltage
+            if (batteryMv > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: GestureDetector(
+                  onTap: () => setState(() => _showVolts = !_showVolts),
+                  child: Chip(
+                    avatar: Icon(
+                      _batteryIcon(batteryMv),
+                      size: 18,
+                      color: _batteryColor(batteryMv),
                     ),
-                    const SizedBox(width: 8),
-                    Text(selfInfo?.name ?? 'LusoAPP'),
-                  ],
-                ),
-        actions: [
-          // Battery indicator — tap to toggle % / voltage
-          if (batteryMv > 0)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: GestureDetector(
-                onTap: () => setState(() => _showVolts = !_showVolts),
-                child: Chip(
-                  avatar: Icon(
-                    _batteryIcon(batteryMv),
-                    size: 18,
-                    color: _batteryColor(batteryMv),
-                  ),
-                  label: Text(
-                    _showVolts
-                        ? '${(batteryMv / 1000).toStringAsFixed(3)}V'
-                        : '${_batteryPercent(batteryMv)}%',
+                    label: Text(
+                      _showVolts
+                          ? '${(batteryMv / 1000).toStringAsFixed(3)}V'
+                          : '${_batteryPercent(batteryMv)}%',
+                    ),
                   ),
                 ),
               ),
-            ),
-          // Connection indicator — tap to connect / disconnect
-          IconButton(
-            icon: Icon(
-              connectionState == TransportState.connected
-                  ? Icons.link
-                  : Icons.link_off,
-              color:
-                  connectionState == TransportState.connected
-                      ? Colors.green
-                      : Colors.red,
-            ),
-            onPressed: () => _onConnectionIconTap(context, connectionState),
-          ),
-        ],
-      ),
-      body: widget.child,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() => _currentIndex = index);
-          context.go(_tabs[index]);
-        },
-        destinations: [
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: unread.totalChannels > 0,
-              label: Text(
-                unread.totalChannels > 99 ? '99+' : '${unread.totalChannels}',
+            // Connection indicator — tap to connect / disconnect
+            IconButton(
+              icon: Icon(
+                connectionState == TransportState.connected
+                    ? Icons.link
+                    : Icons.link_off,
+                color:
+                    connectionState == TransportState.connected
+                        ? Colors.green
+                        : Colors.red,
               ),
-              child: const Icon(Icons.forum_outlined),
+              onPressed: () => _onConnectionIconTap(context, connectionState),
             ),
-            selectedIcon: Badge(
-              isLabelVisible: unread.totalChannels > 0,
-              label: Text(
-                unread.totalChannels > 99 ? '99+' : '${unread.totalChannels}',
+          ],
+        ),
+        body: widget.child,
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (index) {
+            setState(() => _currentIndex = index);
+            context.go(_tabs[index]);
+          },
+          destinations: [
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: unread.totalChannels > 0,
+                label: Text(
+                  unread.totalChannels > 99 ? '99+' : '${unread.totalChannels}',
+                ),
+                child: const Icon(Icons.forum_outlined),
               ),
-              child: const Icon(Icons.forum),
-            ),
-            label: context.l10n.navChannels,
-          ),
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: unread.totalContacts > 0,
-              label: Text(
-                unread.totalContacts > 99 ? '99+' : '${unread.totalContacts}',
+              selectedIcon: Badge(
+                isLabelVisible: unread.totalChannels > 0,
+                label: Text(
+                  unread.totalChannels > 99 ? '99+' : '${unread.totalChannels}',
+                ),
+                child: const Icon(Icons.forum),
               ),
-              child: const Icon(Icons.contacts_outlined),
+              label: context.l10n.navChannels,
             ),
-            selectedIcon: Badge(
-              isLabelVisible: unread.totalContacts > 0,
-              label: Text(
-                unread.totalContacts > 99 ? '99+' : '${unread.totalContacts}',
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: unread.totalContacts > 0,
+                label: Text(
+                  unread.totalContacts > 99 ? '99+' : '${unread.totalContacts}',
+                ),
+                child: const Icon(Icons.contacts_outlined),
               ),
-              child: const Icon(Icons.contacts),
+              selectedIcon: Badge(
+                isLabelVisible: unread.totalContacts > 0,
+                label: Text(
+                  unread.totalContacts > 99 ? '99+' : '${unread.totalContacts}',
+                ),
+                child: const Icon(Icons.contacts),
+              ),
+              label: context.l10n.navContacts,
             ),
-            label: context.l10n.navContacts,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.map_outlined),
-            selectedIcon: const Icon(Icons.map),
-            label: context.l10n.navMap,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.apps_outlined),
-            selectedIcon: const Icon(Icons.apps),
-            label: context.l10n.navApps,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.settings_outlined),
-            selectedIcon: const Icon(Icons.settings),
-            label: context.l10n.navSettings,
-          ),
-        ],
-      ),
+            NavigationDestination(
+              icon: const Icon(Icons.map_outlined),
+              selectedIcon: const Icon(Icons.map),
+              label: context.l10n.navMap,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.apps_outlined),
+              selectedIcon: const Icon(Icons.apps),
+              label: context.l10n.navApps,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.settings_outlined),
+              selectedIcon: const Icon(Icons.settings),
+              label: context.l10n.navSettings,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -229,22 +230,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     try {
       shouldExit = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Sair da LusoAPP?'),
-          content: const Text(
-            'A ligação ao rádio será terminada e a aplicação encerrada.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar'),
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Sair da LusoAPP?'),
+              content: const Text(
+                'A ligação ao rádio será terminada e a aplicação encerrada.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Sair'),
+                ),
+              ],
             ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Sair'),
-            ),
-          ],
-        ),
       );
     } finally {
       _exitDialogOpen = false;
