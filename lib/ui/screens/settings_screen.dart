@@ -293,12 +293,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     try {
       await service.reboot();
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(context.l10n.settingsRebootSent)));
     } catch (_) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(context.l10n.settingsRebootFail)));
@@ -468,7 +468,7 @@ class _AppearanceCard extends ConsumerWidget {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: Text(AppLocalizations.of(ctx)!.commonCancel),
+                child: Text(AppLocalizations.of(ctx).commonCancel),
               ),
             ],
           ),
@@ -875,7 +875,7 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
       builder:
           (ctx) => AlertDialog(
             title: Text(
-              AppLocalizations.of(ctx)!.settingsRestorePrivateKeyTitle,
+              AppLocalizations.of(ctx).settingsRestorePrivateKeyTitle,
             ),
             content: const Text(
               'Esta operação vai substituir a chave privada actual do rádio. '
@@ -885,12 +885,12 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: Text(AppLocalizations.of(ctx)!.commonCancel),
+                child: Text(AppLocalizations.of(ctx).commonCancel),
               ),
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: Colors.red),
                 onPressed: () => Navigator.pop(ctx, true),
-                child: Text(AppLocalizations.of(ctx)!.settingsRestoreToRadio),
+                child: Text(AppLocalizations.of(ctx).settingsRestoreToRadio),
               ),
             ],
           ),
@@ -923,7 +923,7 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: Text(AppLocalizations.of(ctx)!.settingsDeleteBackupTitle),
+            title: Text(AppLocalizations.of(ctx).settingsDeleteBackupTitle),
             content: const Text(
               'A cópia da chave privada guardada neste dispositivo será eliminada. '
               'O rádio não é afectado.',
@@ -931,12 +931,12 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: Text(AppLocalizations.of(ctx)!.commonCancel),
+                child: Text(AppLocalizations.of(ctx).commonCancel),
               ),
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: Colors.red),
                 onPressed: () => Navigator.pop(ctx, true),
-                child: Text(AppLocalizations.of(ctx)!.commonDelete),
+                child: Text(AppLocalizations.of(ctx).commonDelete),
               ),
             ],
           ),

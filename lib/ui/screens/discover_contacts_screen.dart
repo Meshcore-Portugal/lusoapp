@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
-import '../theme.dart';
 
 /// Contacts discovered via mesh adverts but not (yet) saved to the radio.
 final discoveredContactsProvider = Provider<List<Contact>>((ref) {
@@ -69,7 +68,6 @@ class _DiscoverContactsScreenState
   @override
   Widget build(BuildContext context) {
     final discovered = ref.watch(discoveredContactsProvider);
-    final theme = Theme.of(context);
 
     List<Contact> filtered = discovered;
     if (_query.isNotEmpty) {
@@ -95,7 +93,7 @@ class _DiscoverContactsScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(context.l10n.discoverTitle),
-            Text(
+            const Text(
               'Anúncios Recentes',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
             ),

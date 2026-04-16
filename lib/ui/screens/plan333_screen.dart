@@ -29,10 +29,6 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
   late Timer _ticker;
   DateTime _now = DateTime.now();
 
-  // Debug-only: simulated clock is kept in a provider (not local state) so it
-  // survives navigation away from and back to this screen.
-  DateTime get _effectiveNow => ref.read(plan333DebugNowProvider) ?? _now;
-
   // Station-name / city / locality controllers (used in config card)
   final _nameCtrl = TextEditingController();
   final _cityCtrl = TextEditingController();

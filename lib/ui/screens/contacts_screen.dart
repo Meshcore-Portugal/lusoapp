@@ -523,7 +523,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
 // Filter bar
 // ---------------------------------------------------------------------------
 
-typedef _Counts =
+typedef ContactFilterCounts =
     ({
       int todos,
       int favoritos,
@@ -535,13 +535,14 @@ typedef _Counts =
 
 class ContactFilterBar extends StatelessWidget {
   const ContactFilterBar({
+    super.key,
     required this.filter,
     required this.counts,
     required this.onChanged,
   });
 
   final ContactFilter filter;
-  final _Counts counts;
+  final ContactFilterCounts counts;
   final ValueChanged<ContactFilter> onChanged;
 
   @override
@@ -932,6 +933,7 @@ class _ContactTile extends ConsumerWidget {
       if (!context.mounted) return;
       if (resp is OkResponse) {
         await service.requestContacts();
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
