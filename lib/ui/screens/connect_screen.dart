@@ -7,12 +7,15 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart'
     show FlutterBluePlus, BluetoothAdapterState, FlutterBluePlusException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:logger/logger.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../providers/radio_providers.dart';
 import '../../services/storage_service.dart';
 import '../../transport/transport.dart';
 import '../theme.dart';
+
+final _log = Logger(printer: SimplePrinter(printTime: false));
 
 // ---------------------------------------------------------------------------
 // Temporary event badge — set to false to remove.
@@ -250,7 +253,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       onDone: () {
         if (mounted) setState(() => _scanning = false);
       },
-      onError: (_) {
+      onError: (e, st) {
+        _log.w('BLE scan stream error', error: e, stackTrace: st);
         if (mounted) setState(() => _scanning = false);
       },
     );
@@ -321,6 +325,21 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   }
 
   Future<void> _connectToLastDevice(LastDevice last) async {
+    // Web Bluetooth permissions don't survive a page reload: BluetoothDevice
+    // handles are tied to the requestDevice() call that produced them, so the
+    // stored device id alone cannot reconnect. Re-run the scan (which opens
+    // the browser picker) instead of failing silently.
+    if (kIsWeb && last.type == 'ble') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No browser, selecione o rádio novamente no seletor.'),
+          duration: Duration(seconds: 4),
+        ),
+      );
+      await _startScan();
+      return;
+    }
+
     setState(() {
       _connectingTarget = _ConnectTarget(
         device: RadioDevice(
@@ -459,6 +478,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                   builder: (context) {
                     final lastDevice = ref.watch(lastDeviceProvider);
                     if (lastDevice == null) return const SizedBox.shrink();
+                    final isWebBle = kIsWeb && lastDevice.type == 'ble';
                     return Column(
                       children: [
                         Padding(
@@ -473,14 +493,18 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                                 color: theme.colorScheme.onPrimaryContainer,
                               ),
                               title: Text(
-                                'Ligar novamente',
+                                isWebBle
+                                    ? 'Procurar novamente'
+                                    : 'Ligar novamente',
                                 style: TextStyle(
                                   color: theme.colorScheme.onPrimaryContainer,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               subtitle: Text(
-                                lastDevice.name,
+                                isWebBle
+                                    ? '${lastDevice.name} — seletor do browser'
+                                    : lastDevice.name,
                                 style: TextStyle(
                                   color: theme.colorScheme.onPrimaryContainer
                                       .withAlpha(180),
