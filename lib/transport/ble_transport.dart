@@ -280,6 +280,34 @@ class BleTransport implements RadioTransport {
       // On web startScan already returned after the picker resolved — done.
       if (!kIsWeb) {
         await FlutterBluePlus.isScanning.where((scanning) => !scanning).first;
+      } else {
+        // On web, `startScan` returns as soon as the user picks a device from
+        // `requestDevice()`. However, flutter_blue_plus buffers the result in
+        // `_BufferStream` and only delivers it to `_scanResults` (and therefore
+        // to our `sub` listener above) after 1–2 asynchronous event-loop turns.
+        // If we cancelled `sub` immediately the device event would be lost.
+        //
+        // Fix: yield briefly so `_scanSubscription` can process the buffered
+        // response and push to `_scanResults`. Then check `lastScanResults`
+        // as a guaranteed fallback for any device that still wasn't delivered
+        // to our listener in time.
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        for (final r in FlutterBluePlus.lastScanResults) {
+          if (!seen.contains(r.device.remoteId.str) && !controller.isClosed) {
+            seen.add(r.device.remoteId.str);
+            controller.add(
+              RadioDevice(
+                id: r.device.remoteId.str,
+                name:
+                    r.device.platformName.isNotEmpty
+                        ? r.device.platformName
+                        : 'MeshCore (${r.device.remoteId.str.substring(0, 8)})',
+                type: RadioDeviceType.ble,
+                rssi: r.rssi,
+              ),
+            );
+          }
+        }
       }
 
       await sub.cancel();

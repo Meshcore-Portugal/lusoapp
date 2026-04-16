@@ -16,92 +16,80 @@ class RxLogScreen extends ConsumerWidget {
     final entries = ref.watch(rxLogProvider);
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.l10n.rxLogTitle),
-        actions: [
-          IconButton(
-            tooltip: context.l10n.rxLogExportPcap,
-            icon: const Icon(Icons.file_download_outlined),
-            onPressed: () => _exportPcapng(context, entries),
-          ),
-          IconButton(
-            tooltip: context.l10n.rxLogClearLog,
-            icon: const Icon(Icons.delete_outline),
-            onPressed:
-                entries.isEmpty ? null : () => _confirmClear(context, ref),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-            color: theme.colorScheme.surfaceContainerHighest.withAlpha(120),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.memory,
-                  size: 16,
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          color: theme.colorScheme.surfaceContainerHighest.withAlpha(120),
+          child: Row(
+            children: [
+              Icon(
+                Icons.memory,
+                size: 16,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${entries.length} ${context.l10n.rxLogPacketCount}',
+                style: theme.textTheme.labelMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '${entries.length} ${context.l10n.rxLogPacketCount}',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: context.l10n.rxLogClearLog,
+                icon: const Icon(Icons.delete_outline, size: 20),
+                onPressed:
+                    entries.isEmpty ? null : () => _confirmClear(context, ref),
+              ),
+              TextButton.icon(
+                onPressed:
+                    entries.isEmpty
+                        ? null
+                        : () => _exportPcapng(context, entries),
+                icon: const Icon(Icons.share_outlined, size: 16),
+                label: Text(context.l10n.rxLogExportPcap),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child:
+              entries.isEmpty
+                  ? _EmptyState(theme: theme)
+                  : ListView.builder(
+                    reverse: true,
+                    itemCount: entries.length,
+                    itemBuilder: (context, index) {
+                      final e = entries[index];
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.waves, size: 18),
+                        title: Text(
+                          _typeLabel(e.payloadType),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '${_fmtTime(e.receivedAt)}  |  SNR ${e.snr.toStringAsFixed(1)} dB  |  RSSI ${e.rssi} dBm  |  ${e.rawPacket.length} B',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        trailing:
+                            e.packetHashHex != null
+                                ? Text(
+                                  e.packetHashHex!.substring(0, 6),
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontFamily: 'monospace',
+                                  ),
+                                )
+                                : null,
+                      );
+                    },
                   ),
-                ),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed:
-                      entries.isEmpty
-                          ? null
-                          : () => _exportPcapng(context, entries),
-                  icon: const Icon(Icons.share_outlined, size: 16),
-                  label: Text(context.l10n.rxLogExportPcap),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child:
-                entries.isEmpty
-                    ? _EmptyState(theme: theme)
-                    : ListView.builder(
-                      reverse: true,
-                      itemCount: entries.length,
-                      itemBuilder: (context, index) {
-                        final e = entries[index];
-                        return ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.waves, size: 18),
-                          title: Text(
-                            _typeLabel(e.payloadType),
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          subtitle: Text(
-                            '${_fmtTime(e.receivedAt)}  |  SNR ${e.snr.toStringAsFixed(1)} dB  |  RSSI ${e.rssi} dBm  |  ${e.rawPacket.length} B',
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          trailing:
-                              e.packetHashHex != null
-                                  ? Text(
-                                    e.packetHashHex!.substring(0, 6),
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      fontFamily: 'monospace',
-                                    ),
-                                  )
-                                  : null,
-                        );
-                      },
-                    ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

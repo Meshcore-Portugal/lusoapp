@@ -202,10 +202,30 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       _targets.clear();
     });
 
+    // On web, BLE scan = browser requestDevice() picker.
+    // The picker is both scan and selection: await the single result and
+    // connect immediately without an intermediate list.
+    if (kIsWeb) {
+      try {
+        // Use a long timeout so the user has time to interact with the picker.
+        final device =
+            await BleTransport.scan(timeout: const Duration(minutes: 2)).first;
+        if (!mounted) return;
+        setState(() => _scanning = false);
+        await _connectTo(
+          _ConnectTarget(device: device, type: _ConnectType.ble),
+        );
+      } catch (_) {
+        // User dismissed the picker or scan failed — just stop spinning.
+        if (mounted) setState(() => _scanning = false);
+      }
+      return;
+    }
+
     // Request Bluetooth permissions on Android before attempting any scan.
     // Without these, startScan silently returns no results on Android 6+.
     // Platform.isAndroid must not be called on web (dart:io throws there).
-    if (!kIsWeb && Platform.isAndroid) {
+    if (Platform.isAndroid) {
       final statuses =
           await [
             Permission.bluetoothScan,
@@ -257,7 +277,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     );
 
     // Serial devices — not available on mobile or web.
-    if (!kIsWeb && !Platform.isAndroid && !Platform.isIOS) {
+    if (!Platform.isAndroid && !Platform.isIOS) {
       try {
         final serialDevices = await SerialTransport.listDevices();
         if (mounted) {
