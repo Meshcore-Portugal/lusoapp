@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Utilizado para leitura de QR Codes MeshCore</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Seleccionar imagem com QR Code MeshCore para importar contacto ou canal</string>
 </dict>
 </plist>
