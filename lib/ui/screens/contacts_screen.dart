@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 import '../theme.dart';
@@ -85,21 +86,21 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Remover contactos'),
+            title: Text(context.l10n.contactsRemoveTitle),
             content: Text(
               'Remover ${_selectedContactKeys.length} contacto(s)?',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancelar'),
+                child: Text(context.l10n.commonCancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
                 style: FilledButton.styleFrom(
                   backgroundColor: Theme.of(ctx).colorScheme.error,
                 ),
-                child: const Text('Remover'),
+                child: Text(context.l10n.commonRemove),
               ),
             ],
           ),
@@ -291,12 +292,12 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.delete_outline),
-                          tooltip: 'Remover selecionados',
+                          tooltip: context.l10n.contactsRemoveSelected,
                           onPressed: () => _confirmBulkDelete(context, ref),
                         ),
                         IconButton(
                           icon: const Icon(Icons.close),
-                          tooltip: 'Cancelar seleção',
+                          tooltip: context.l10n.contactsCancelSelection,
                           onPressed: _clearSelection,
                         ),
                       ],
@@ -328,7 +329,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                       controller: _searchCtrl,
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
-                        hintText: 'Pesquisar contactos...',
+                        hintText: context.l10n.contactsSearchHint,
                         prefixIcon: const Icon(Icons.search, size: 20),
                         suffixIcon:
                             _query.isNotEmpty
@@ -353,7 +354,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                   // Advert button — always visible
                   PopupMenuButton<_AdvertType>(
                     icon: const Icon(Icons.broadcast_on_personal),
-                    tooltip: 'Enviar Anúncio',
+                    tooltip: context.l10n.contactsSendAdvert,
                     onSelected: (type) {
                       final svc = ref.read(radioServiceProvider);
                       switch (type) {
@@ -365,20 +366,20 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                     },
                     itemBuilder:
                         (_) => [
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: _AdvertType.zeroHop,
                             child: ListTile(
-                              leading: Icon(Icons.wifi_tethering),
-                              title: Text('Anúncio · Zero Hop'),
+                              leading: const Icon(Icons.wifi_tethering),
+                              title: Text(context.l10n.contactsAdvertZeroHop),
                               contentPadding: EdgeInsets.zero,
                               dense: true,
                             ),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: _AdvertType.flood,
                             child: ListTile(
-                              leading: Icon(Icons.broadcast_on_home),
-                              title: Text('Anúncio · Flood'),
+                              leading: const Icon(Icons.broadcast_on_home),
+                              title: Text(context.l10n.contactsAdvertFlood),
                               contentPadding: EdgeInsets.zero,
                               dense: true,
                             ),
@@ -393,29 +394,29 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                               ? Theme.of(context).colorScheme.primary
                               : null,
                     ),
-                    tooltip: 'Ordenar',
+                    tooltip: context.l10n.contactsSort,
                     initialValue: sort,
                     onSelected:
                         (s) => ref.read(contactSortProvider.notifier).set(s),
                     itemBuilder:
                         (_) => [
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: ContactSort.nome,
-                            child: Text('Nome (A-Z)'),
+                            child: Text(context.l10n.contactsSortNameAZ),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: ContactSort.ouvidoRecentemente,
-                            child: Text('Ouvido recentemente'),
+                            child: Text(context.l10n.contactsSortLastHeard),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: ContactSort.ultimaMensagem,
-                            child: Text('Última mensagem'),
+                            child: Text(context.l10n.contactsSortLastMessage),
                           ),
                         ],
                   ),
                   PopupMenuButton<_ContactsToolbarAction>(
                     icon: const Icon(Icons.more_vert),
-                    tooltip: 'Mais opções',
+                    tooltip: context.l10n.contactsMoreOptions,
                     onSelected: (action) {
                       switch (action) {
                         case _ContactsToolbarAction.discover:
@@ -426,11 +427,11 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                     },
                     itemBuilder:
                         (_) => [
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: _ContactsToolbarAction.discover,
                             child: ListTile(
-                              leading: Icon(Icons.explore),
-                              title: Text('Descobrir contactos'),
+                              leading: const Icon(Icons.explore),
+                              title: Text(context.l10n.contactsDiscover),
                               contentPadding: EdgeInsets.zero,
                               dense: true,
                             ),
@@ -438,9 +439,9 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                           PopupMenuItem(
                             value: _ContactsToolbarAction.multiSelect,
                             enabled: !_multiSelectMode,
-                            child: const ListTile(
-                              leading: Icon(Icons.checklist),
-                              title: Text('Selecionar múltiplos'),
+                            child: ListTile(
+                              leading: const Icon(Icons.checklist),
+                              title: Text(context.l10n.contactsMultiSelect),
                               contentPadding: EdgeInsets.zero,
                               dense: true,
                             ),
@@ -519,7 +520,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                     ),
               );
             },
-            tooltip: 'Adicionar contacto',
+            tooltip: context.l10n.contactsAddContact,
             child: const Icon(Icons.person_add),
           ),
         ),
@@ -561,29 +562,39 @@ class ContactFilterBar extends StatelessWidget {
       child: Row(
         spacing: 8,
         children: [
-          _chip(ContactFilter.todos, 'Todos', Icons.people, counts.todos),
+          _chip(
+            ContactFilter.todos,
+            context.l10n.contactsAll,
+            Icons.people,
+            counts.todos,
+          ),
           _chip(
             ContactFilter.favoritos,
-            'Favoritos',
+            context.l10n.contactsFavorites,
             Icons.star,
             counts.favoritos,
           ),
           _chip(
             ContactFilter.companheiros,
-            'Companheiros',
+            context.l10n.contactsCompanions,
             Icons.person,
             counts.companheiros,
           ),
           _chip(
             ContactFilter.repetidores,
-            'Repetidores',
+            context.l10n.contactsRepeaters,
             Icons.cell_tower,
             counts.repetidores,
           ),
-          _chip(ContactFilter.salas, 'Salas', Icons.meeting_room, counts.salas),
+          _chip(
+            ContactFilter.salas,
+            context.l10n.contactsTypeRoom,
+            Icons.meeting_room,
+            counts.salas,
+          ),
           _chip(
             ContactFilter.sensores,
-            'Sensores',
+            context.l10n.contactsSensors,
             Icons.sensors,
             counts.sensores,
           ),
@@ -618,16 +629,28 @@ class _EmptyState extends StatelessWidget {
     final (icon, msg) = switch (filter) {
       ContactFilter.companheiros => (
         Icons.person_off,
-        'Sem companheiros na rede',
+        context.l10n.contactsEmptyCompanions,
       ),
       ContactFilter.repetidores => (
         Icons.cell_tower,
-        'Sem repetidores na rede',
+        context.l10n.contactsEmptyRepeaters,
       ),
-      ContactFilter.salas => (Icons.meeting_room, 'Sem salas na rede'),
-      ContactFilter.sensores => (Icons.sensors_off, 'Sem sensores na rede'),
-      ContactFilter.todos => (Icons.contacts_outlined, 'Sem contactos'),
-      ContactFilter.favoritos => (Icons.star_border, 'Sem favoritos'),
+      ContactFilter.salas => (
+        Icons.meeting_room,
+        context.l10n.contactsEmptyRooms,
+      ),
+      ContactFilter.sensores => (
+        Icons.sensors_off,
+        context.l10n.contactsEmptySensors,
+      ),
+      ContactFilter.todos => (
+        Icons.contacts_outlined,
+        context.l10n.contactsEmpty,
+      ),
+      ContactFilter.favoritos => (
+        Icons.star_border,
+        context.l10n.contactsEmptyFavorites,
+      ),
     };
 
     return Center(
@@ -648,7 +671,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Os contactos aparecem quando o radio os descobre',
+            context.l10n.contactsEmptyHint,
             style: theme.textTheme.bodySmall,
           ),
         ],
@@ -781,7 +804,7 @@ class _ContactTile extends ConsumerWidget {
       builder: (ctx) {
         final theme = Theme.of(ctx);
         return AlertDialog(
-          title: const Text('Renomear contacto'),
+          title: Text(context.l10n.contactsRenameTitle),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -798,9 +821,9 @@ class _ContactTile extends ConsumerWidget {
                 controller: ctrl,
                 autofocus: true,
                 textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Nome personalizado',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: context.l10n.contactsCustomName,
+                  border: const OutlineInputBorder(),
                 ),
               ),
             ],
@@ -808,7 +831,7 @@ class _ContactTile extends ConsumerWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar'),
+              child: Text(context.l10n.commonCancel),
             ),
             if (hasCustom)
               TextButton(
@@ -819,7 +842,7 @@ class _ContactTile extends ConsumerWidget {
                   Navigator.pop(ctx);
                 },
                 child: Text(
-                  'Limpar',
+                  context.l10n.commonClear,
                   style: TextStyle(color: theme.colorScheme.error),
                 ),
               ),
@@ -836,7 +859,7 @@ class _ContactTile extends ConsumerWidget {
                     );
                 Navigator.pop(ctx);
               },
-              child: const Text('Guardar'),
+              child: Text(context.l10n.commonSave),
             ),
           ],
         );
@@ -909,18 +932,22 @@ class _ContactTile extends ConsumerWidget {
       if (resp is OkResponse) {
         await service.requestContacts();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${contact.displayName} guardado no rádio')),
+          SnackBar(
+            content: Text(
+              context.l10n.contactsSavedToRadio(contact.displayName),
+            ),
+          ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro ao guardar contacto no rádio')),
+          SnackBar(content: Text(context.l10n.contactsSaveToRadioError)),
         );
       }
     } catch (_) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Timeout: rádio não respondeu')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.contactsSaveTimeout)));
     }
   }
 
@@ -998,10 +1025,8 @@ class _ContactTile extends ConsumerWidget {
                 if (!isOnRadio)
                   ListTile(
                     leading: const Icon(Icons.save_outlined),
-                    title: const Text('Guardar no rádio'),
-                    subtitle: const Text(
-                      'Este contacto foi ouvido mas não está guardado no rádio',
-                    ),
+                    title: Text(context.l10n.contactsSaveToRadioTitle),
+                    subtitle: Text(context.l10n.contactsNotSavedHint),
                     onTap: () {
                       Navigator.pop(ctx);
                       _saveToRadio(context, ref);
@@ -1015,8 +1040,8 @@ class _ContactTile extends ConsumerWidget {
                   ),
                   title: Text(
                     isFavorite
-                        ? 'Remover dos favoritos'
-                        : 'Adicionar aos favoritos',
+                        ? context.l10n.contactsRemoveFavorites
+                        : context.l10n.contactsAddFavorites,
                   ),
                   onTap: () {
                     ref.read(favoritesProvider.notifier).toggle(keyHex);
@@ -1026,7 +1051,7 @@ class _ContactTile extends ConsumerWidget {
                 // QR
                 ListTile(
                   leading: const Icon(Icons.qr_code),
-                  title: const Text('Partilhar via QR'),
+                  title: Text(context.l10n.contactsShareQR),
                   onTap: () {
                     Navigator.pop(ctx);
                     _showContactQrCode(context);
@@ -1035,7 +1060,7 @@ class _ContactTile extends ConsumerWidget {
                 // Rename
                 ListTile(
                   leading: const Icon(Icons.edit_outlined),
-                  title: const Text('Renomear'),
+                  title: Text(context.l10n.commonRename),
                   onTap: () {
                     Navigator.pop(ctx);
                     _showRenameDialog(context, ref);
@@ -1045,7 +1070,7 @@ class _ContactTile extends ConsumerWidget {
                 if (contact.isChat)
                   ListTile(
                     leading: const Icon(Icons.chat),
-                    title: const Text('Mensagem privada'),
+                    title: Text(context.l10n.contactsPrivateMessage),
                     onTap: () {
                       Navigator.pop(ctx);
                       context.push('/chat/$keyHex');
@@ -1054,7 +1079,7 @@ class _ContactTile extends ConsumerWidget {
                 if (contact.isRoom)
                   ListTile(
                     leading: const Icon(Icons.meeting_room),
-                    title: const Text('Entrar na sala'),
+                    title: Text(context.l10n.contactsJoinRoom),
                     onTap: () {
                       Navigator.pop(ctx);
                       context.push('/room/$keyHex');
@@ -1063,7 +1088,7 @@ class _ContactTile extends ConsumerWidget {
                 if (contact.isRepeater)
                   ListTile(
                     leading: const Icon(Icons.admin_panel_settings),
-                    title: const Text('Admin remoto'),
+                    title: Text(context.l10n.contactsRemoteAdmin),
                     onTap: () {
                       Navigator.pop(ctx);
                       _showAdminSheet(context, ref);
@@ -1072,9 +1097,9 @@ class _ContactTile extends ConsumerWidget {
                 // Path management — available for all node types
                 ListTile(
                   leading: const Icon(Icons.route),
-                  title: const Text('Gerir caminho'),
+                  title: Text(context.l10n.contactsManagePath),
                   subtitle: Text(
-                    'Caminho actual: ${contactPathLabel(contact.pathLen)}',
+                    '${context.l10n.contactsCurrentPath} ${contactPathLabel(contact.pathLen)}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withAlpha(130),
                     ),
@@ -1092,7 +1117,7 @@ class _ContactTile extends ConsumerWidget {
                     color: theme.colorScheme.error,
                   ),
                   title: Text(
-                    'Remover contacto',
+                    context.l10n.contactsRemoveContact,
                     style: TextStyle(color: theme.colorScheme.error),
                   ),
                   onTap: () {
@@ -1114,21 +1139,21 @@ class _ContactTile extends ConsumerWidget {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Remover contacto'),
+            title: Text(context.l10n.contactsRemoveContact),
             content: Text(
-              'Remover "${contact.displayName}" da lista de contactos?',
+              'Remover "${contact.displayName}" ${context.l10n.contactsRemoveFromListSuffix}',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancelar'),
+                child: Text(context.l10n.commonCancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
                 style: FilledButton.styleFrom(
                   backgroundColor: Theme.of(ctx).colorScheme.error,
                 ),
-                child: const Text('Remover'),
+                child: Text(context.l10n.commonRemove),
               ),
             ],
           ),
@@ -1161,9 +1186,7 @@ class _ContactTile extends ConsumerWidget {
       } catch (_) {
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Timeout: rádio não respondeu à remoção'),
-          ),
+          SnackBar(content: Text(context.l10n.contactsRemoveTimeout)),
         );
       } finally {
         // Always re-sync from the radio so local and radio tables converge.
@@ -1362,7 +1385,10 @@ class _AddContactSheetState extends State<_AddContactSheet> {
             ),
           ),
           const SizedBox(height: 16),
-          Text('Adicionar contacto', style: theme.textTheme.titleLarge),
+          Text(
+            context.l10n.contactsAddContact,
+            style: theme.textTheme.titleLarge,
+          ),
           const SizedBox(height: 4),
           Text(
             'Envie um anúncio para que outros nós o descubram automaticamente, ou adicione manualmente através da chave pública.',
@@ -1379,7 +1405,7 @@ class _AddContactSheetState extends State<_AddContactSheet> {
               Navigator.of(context).pop();
             },
             icon: const Icon(Icons.broadcast_on_home),
-            label: const Text('Enviar Anúncio (descoberta automática)'),
+            label: Text(context.l10n.contactsSendAdvertAuto),
           ),
           const SizedBox(height: 8),
 
@@ -1387,19 +1413,19 @@ class _AddContactSheetState extends State<_AddContactSheet> {
           OutlinedButton.icon(
             onPressed: _scanQr,
             icon: const Icon(Icons.qr_code_scanner),
-            label: const Text('Ler QR Code'),
+            label: Text(context.l10n.contactsReadQR),
           ),
 
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Row(
               children: [
-                Expanded(child: Divider()),
+                const Expanded(child: Divider()),
                 Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Text('ou adicionar manualmente'),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(context.l10n.contactsOrManual),
                 ),
-                Expanded(child: Divider()),
+                const Expanded(child: Divider()),
               ],
             ),
           ),
@@ -1408,7 +1434,7 @@ class _AddContactSheetState extends State<_AddContactSheet> {
           TextField(
             controller: _pubKeyCtrl,
             decoration: InputDecoration(
-              labelText: 'Chave pública (hex, 64 chars)',
+              labelText: context.l10n.contactsPublicKeyLabel,
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.vpn_key_outlined),
               errorText: _pubKeyError,
@@ -1421,7 +1447,7 @@ class _AddContactSheetState extends State<_AddContactSheet> {
           TextField(
             controller: _nameCtrl,
             decoration: InputDecoration(
-              labelText: 'Nome de exibição',
+              labelText: context.l10n.contactsDisplayName,
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.badge_outlined),
               errorText: _nameError,
@@ -1950,7 +1976,7 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
                     context: context,
                     builder:
                         (ctx) => AlertDialog(
-                          title: const Text('Confirmar OTA'),
+                          title: Text(context.l10n.contactsConfirmOTATitle),
                           content: const Text(
                             'O rádio vai entrar em modo de actualização OTA e ficará '
                             'temporariamente inacessível.\n\n'
@@ -2258,7 +2284,7 @@ class _ContactQrDialogState extends State<_ContactQrDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Fechar'),
+          child: Text(context.l10n.commonClose),
         ),
         TextButton.icon(
           onPressed: _sharingText ? null : _shareText,
@@ -2270,7 +2296,7 @@ class _ContactQrDialogState extends State<_ContactQrDialog> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                   : const Icon(Icons.text_fields),
-          label: const Text('Partilhar texto'),
+          label: Text(context.l10n.channelsShareText),
         ),
         FilledButton.icon(
           onPressed: _sharing ? null : _shareQr,
@@ -2282,7 +2308,7 @@ class _ContactQrDialogState extends State<_ContactQrDialog> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                   : const Icon(Icons.share),
-          label: const Text('Partilhar QR'),
+          label: Text(context.l10n.channelsShareQR),
         ),
       ],
     );

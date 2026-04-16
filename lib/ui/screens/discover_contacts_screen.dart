@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 import '../theme.dart';
@@ -89,11 +90,11 @@ class _DiscoverContactsScreenState
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Column(
+        title: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Descobrir'),
+            Text(context.l10n.discoverTitle),
             Text(
               'Anúncios Recentes',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
@@ -110,7 +111,7 @@ class _DiscoverContactsScreenState
             child: TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
-                hintText: 'Procurar contactos descobertos...',
+                hintText: context.l10n.discoverSearchHint,
                 prefixIcon: const Icon(Icons.search, size: 20),
                 suffixIcon:
                     _query.isNotEmpty
@@ -337,7 +338,7 @@ class _DiscoveredContactTile extends ConsumerWidget {
                           _saveToRadio(context, ref);
                         },
                         icon: const Icon(Icons.save),
-                        label: const Text('Guardar no rádio'),
+                        label: Text(context.l10n.discoverSaveToRadio),
                       ),
                       const SizedBox(height: 8),
                       if (contact.type == 0x01)
@@ -347,7 +348,7 @@ class _DiscoveredContactTile extends ConsumerWidget {
                             context.push('/chat/${_hex32(contact.publicKey)}');
                           },
                           icon: const Icon(Icons.chat),
-                          label: const Text('Enviar mensagem'),
+                          label: Text(context.l10n.discoverSendMessage),
                         ),
                       if (contact.type == 0x03)
                         FilledButton.icon(
@@ -356,7 +357,7 @@ class _DiscoveredContactTile extends ConsumerWidget {
                             context.push('/room/${_hex32(contact.publicKey)}');
                           },
                           icon: const Icon(Icons.meeting_room),
-                          label: const Text('Entrar na sala'),
+                          label: Text(context.l10n.discoverJoinRoom),
                         ),
                       if (contact.type != 0x01 && contact.type != 0x03)
                         FilledButton.icon(
@@ -365,7 +366,7 @@ class _DiscoveredContactTile extends ConsumerWidget {
                             _saveToRadio(context, ref);
                           },
                           icon: const Icon(Icons.person_add),
-                          label: const Text('Adicionar e guardar'),
+                          label: Text(context.l10n.discoverAddAndSave),
                         ),
                       const SizedBox(height: 16),
                     ],
@@ -396,18 +397,22 @@ class _DiscoveredContactTile extends ConsumerWidget {
         await service.requestContacts();
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${contact.displayName} guardado no rádio')),
+          SnackBar(
+            content: Text(
+              context.l10n.contactsSavedToRadio(contact.displayName),
+            ),
+          ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro ao guardar contacto no rádio')),
+          SnackBar(content: Text(context.l10n.contactsSaveToRadioError)),
         );
       }
     } catch (_) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Timeout: rádio não respondeu')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.contactsSaveTimeout)));
     }
   }
 

@@ -410,6 +410,15 @@ class QslLogNotifier extends StateNotifier<List<QslRecord>> {
 }
 
 // ---------------------------------------------------------------------------
+// plan333DebugNowProvider — debug-only simulated clock (survives navigation)
+// ---------------------------------------------------------------------------
+
+/// Holds the simulated [DateTime] used by the debug automation panel.
+/// Using a provider instead of widget-local state ensures the value is not
+/// lost when the user navigates away from Plan333Screen and comes back.
+/// Always null in non-debug builds (the panel is hidden by [kDebugMode]).
+final plan333DebugNowProvider = StateProvider<DateTime?>((ref) => null);
+
 // plan333ConfigProvider
 // ---------------------------------------------------------------------------
 

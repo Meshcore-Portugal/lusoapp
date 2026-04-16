@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../l10n/l10n.dart';
 import '../../providers/radio_providers.dart';
 
 /// RX log app: captures raw 0x88 RX frames and exports to PCAP.
@@ -17,15 +18,15 @@ class RxLogScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('RX Log'),
+        title: Text(context.l10n.rxLogTitle),
         actions: [
           IconButton(
-            tooltip: 'Exportar PCAPNG',
+            tooltip: context.l10n.rxLogExportPcap,
             icon: const Icon(Icons.file_download_outlined),
             onPressed: () => _exportPcapng(context, entries),
           ),
           IconButton(
-            tooltip: 'Limpar log',
+            tooltip: context.l10n.rxLogClearLog,
             icon: const Icon(Icons.delete_outline),
             onPressed:
                 entries.isEmpty ? null : () => _confirmClear(context, ref),
@@ -47,7 +48,7 @@ class RxLogScreen extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '${entries.length} pacotes capturados',
+                  '${entries.length} ${context.l10n.rxLogPacketCount}',
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -59,7 +60,7 @@ class RxLogScreen extends ConsumerWidget {
                           ? null
                           : () => _exportPcapng(context, entries),
                   icon: const Icon(Icons.share_outlined, size: 16),
-                  label: const Text('Exportar PCAPNG'),
+                  label: Text(context.l10n.rxLogExportPcap),
                 ),
               ],
             ),
@@ -109,16 +110,16 @@ class RxLogScreen extends ConsumerWidget {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Limpar RX Log'),
-            content: const Text('Remover todos os pacotes capturados?'),
+            title: Text(context.l10n.rxLogClearTitle),
+            content: Text(context.l10n.rxLogClearConfirm),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancelar'),
+                child: Text(context.l10n.commonCancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Limpar'),
+                child: Text(context.l10n.commonClear),
               ),
             ],
           ),
@@ -134,9 +135,9 @@ class RxLogScreen extends ConsumerWidget {
     List<RxLogEntry> entries,
   ) async {
     if (entries.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('RX Log vazio - nada para exportar')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.rxLogEmpty)));
       return;
     }
 
@@ -162,7 +163,7 @@ class RxLogScreen extends ConsumerWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Falha ao exportar PCAPNG')));
+      ).showSnackBar(SnackBar(content: Text(context.l10n.rxLogExportFail)));
     }
   }
 
@@ -283,10 +284,13 @@ class _EmptyState extends StatelessWidget {
             color: theme.colorScheme.onSurface.withAlpha(70),
           ),
           const SizedBox(height: 12),
-          Text('Sem pacotes RX', style: theme.textTheme.titleMedium),
+          Text(
+            context.l10n.rxLogEmptyTitle,
+            style: theme.textTheme.titleMedium,
+          ),
           const SizedBox(height: 6),
           Text(
-            'Quando a rádio receber tráfego mesh, os pacotes aparecem aqui.',
+            context.l10n.rxLogEmptyHint,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),

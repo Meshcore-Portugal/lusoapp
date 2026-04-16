@@ -6,6 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 import '../../services/notification_service.dart';
@@ -54,7 +55,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Icon(Icons.badge, color: theme.colorScheme.primary),
                       const SizedBox(width: 8),
                       Text(
-                        'Identidade',
+                        context.l10n.settingsIdentity,
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -63,14 +64,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   const SizedBox(height: 12),
                   ListTile(
-                    title: const Text('Nome'),
+                    title: Text(context.l10n.commonName),
                     subtitle: Text(selfInfo?.name ?? 'Não conectado'),
                     trailing: const Icon(Icons.edit),
                     onTap: () => _editName(context, ref),
                   ),
                   if (selfInfo != null)
                     ListTile(
-                      title: const Text('Chave Pública'),
+                      title: Text(context.l10n.settingsPublicKey),
                       subtitle: Text(
                         selfInfo.publicKey
                             .map((b) => b.toRadixString(16).padLeft(2, '0'))
@@ -82,7 +83,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       trailing: IconButton(
                         icon: const Icon(Icons.copy, size: 18),
-                        tooltip: 'Copiar chave pública',
+                        tooltip: context.l10n.settingsCopyPublicKey,
                         onPressed: () {
                           final hex =
                               selfInfo.publicKey
@@ -103,8 +104,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   if (selfInfo != null)
                     ListTile(
                       leading: const Icon(Icons.qr_code),
-                      title: const Text('Partilhar o meu contacto'),
-                      subtitle: const Text('Mostra QR Code para partilhar'),
+                      title: Text(context.l10n.settingsShareContact),
+                      subtitle: Text(context.l10n.settingsShareContactDesc),
                       onTap: () => _showOwnQrCode(context, selfInfo),
                     ),
                 ],
@@ -129,7 +130,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Icon(Icons.link, color: theme.colorScheme.primary),
                       const SizedBox(width: 8),
                       Text(
-                        'Ligação',
+                        context.l10n.settingsConnection,
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -138,8 +139,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   const SizedBox(height: 12),
                   ListTile(
-                    title: const Text('Estado'),
-                    subtitle: Text(_connectionStateText(connectionState)),
+                    title: Text(context.l10n.commonStatus),
+                    subtitle: Text(
+                      _connectionStateText(context, connectionState),
+                    ),
                     leading: Icon(
                       connectionState == TransportState.connected
                           ? Icons.check_circle
@@ -152,8 +155,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   if (connectionState == TransportState.connected) ...[
                     ListTile(
-                      title: const Text('Configuração do Rádio'),
-                      subtitle: const Text('LoRa, telemetria e dispositivo'),
+                      title: Text(context.l10n.settingsRadioConfig),
+                      subtitle: Text(context.l10n.settingsRadioConfigDesc),
                       leading: const Icon(Icons.settings_input_antenna),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => context.push('/settings/radio'),
@@ -165,7 +168,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           child: OutlinedButton.icon(
                             onPressed: () => _confirmAndReboot(context),
                             icon: const Icon(Icons.restart_alt),
-                            label: const Text('Reboot'),
+                            label: Text(context.l10n.settingsReboot),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -181,7 +184,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               );
                             },
                             icon: const Icon(Icons.power_settings_new),
-                            label: const Text('Shutdown'),
+                            label: Text(context.l10n.settingsShutdown),
                           ),
                         ),
                       ],
@@ -213,7 +216,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Icon(Icons.info, color: theme.colorScheme.primary),
                       const SizedBox(width: 8),
                       Text(
-                        'Sobre',
+                        context.l10n.settingsAbout,
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -228,14 +231,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                   ListTile(
-                    title: const Text('Versão'),
+                    title: Text(context.l10n.settingsVersion),
                     subtitle: Text(_version.isEmpty ? '…' : _version),
                   ),
-                  const ListTile(
-                    title: Text('Protocolo'),
-                    subtitle: Text('Companion Radio Protocol v3'),
+                  ListTile(
+                    title: Text(context.l10n.settingsProtocol),
+                    subtitle: Text(context.l10n.settingsProtocolName),
                   ),
-                  const ListTile(title: Text('Licença'), subtitle: Text('MIT')),
+                  ListTile(
+                    title: Text(context.l10n.settingsLicense),
+                    subtitle: Text(context.l10n.settingsLicenseMIT),
+                  ),
                 ],
               ),
             ),
@@ -245,19 +251,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  String _connectionStateText(TransportState state) {
-    switch (state) {
-      case TransportState.connected:
-        return 'Ligado';
-      case TransportState.connecting:
-        return 'A ligar...';
-      case TransportState.scanning:
-        return 'A procurar...';
-      case TransportState.error:
-        return 'Erro de ligacao';
-      case TransportState.disconnected:
-        return 'Desligado';
-    }
+  String _connectionStateText(BuildContext context, TransportState state) {
+    return switch (state) {
+      TransportState.connected => context.l10n.settingsConnected,
+      TransportState.connecting => context.l10n.commonConnecting,
+      TransportState.scanning => context.l10n.commonSearching,
+      TransportState.error => context.l10n.settingsConnectionError,
+      TransportState.disconnected => context.l10n.settingsDisconnected,
+    };
   }
 
   Future<void> _confirmAndReboot(BuildContext context) async {
@@ -273,18 +274,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Reiniciar rádio'),
-            content: const Text(
-              'Isto vai reiniciar o firmware e a ligação será interrompida por alguns segundos. Continuar?',
-            ),
+            title: Text(context.l10n.settingsRebootTitle),
+            content: Text(context.l10n.settingsRebootContent),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancelar'),
+                child: Text(context.l10n.commonCancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Reiniciar'),
+                child: Text(context.l10n.settingsReboot),
               ),
             ],
           ),
@@ -295,16 +294,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     try {
       await service.reboot();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Comando de reboot enviado. A aguardar reconexão...'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.settingsRebootSent)));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Falha ao enviar comando de reboot')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.settingsRebootFail)));
     }
   }
 
@@ -345,7 +342,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Fechar'),
+                child: Text(context.l10n.commonClose),
               ),
             ],
           ),
@@ -373,16 +370,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancelar'),
+                child: Text(context.l10n.commonCancel),
               ),
               FilledButton(
                 onPressed: () {
                   final name = controller.text.trim();
                   if (name.isNotEmpty) {
                     ref.read(radioServiceProvider)?.setAdvertName(name);
-                    // Update local state immediately — the radio sends only
-                    // respOk after SET_ADVERT_NAME, not a new SelfInfo, so we
-                    // must refresh the provider ourselves.
                     final current = ref.read(selfInfoProvider);
                     if (current != null) {
                       ref.read(selfInfoProvider.notifier).state = SelfInfo(
@@ -399,7 +393,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   }
                   Navigator.pop(ctx);
                 },
-                child: const Text('Guardar'),
+                child: Text(context.l10n.commonSave),
               ),
             ],
           ),
@@ -438,7 +432,7 @@ class _AppearanceCard extends ConsumerWidget {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Escolher cor'),
+            title: Text(context.l10n.settingsChooseColor),
             content: Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -474,7 +468,7 @@ class _AppearanceCard extends ConsumerWidget {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancelar'),
+                child: Text(AppLocalizations.of(ctx)!.commonCancel),
               ),
             ],
           ),
@@ -539,7 +533,7 @@ class _AppearanceCard extends ConsumerWidget {
                 Icon(Icons.palette, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(
-                  'Aparência',
+                  context.l10n.settingsAppearance,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -548,12 +542,12 @@ class _AppearanceCard extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             colorRow(
-              'Menção própria (@[Você])',
+              context.l10n.settingsSelfMention,
               selfColor,
               (c) => ref.read(selfMentionColorProvider.notifier).setColor(c),
             ),
             colorRow(
-              'Menção de outros (@[Nome])',
+              context.l10n.settingsOtherMention,
               otherColor,
               (c) => ref.read(otherMentionColorProvider.notifier).setColor(c),
             ),
@@ -608,7 +602,7 @@ class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
                 Icon(Icons.notifications, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(
-                  'Notificações',
+                  context.l10n.settingsNotifications,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -619,8 +613,8 @@ class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
 
             // Master enable
             SwitchListTile(
-              title: const Text('Activar notificações'),
-              subtitle: const Text('Mostrar alertas para novas mensagens'),
+              title: Text(context.l10n.settingsEnableNotifications),
+              subtitle: Text(context.l10n.settingsEnableNotificationsDesc),
               value: settings.enabled,
               onChanged: (v) => notifier.update(settings.copyWith(enabled: v)),
             ),
@@ -638,7 +632,7 @@ class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Permissão de notificação não concedida.',
+                        context.l10n.settingsNotificationPermissionDenied,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.primary,
                         ),
@@ -646,7 +640,7 @@ class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
                     ),
                     TextButton(
                       onPressed: _requestPermission,
-                      child: const Text('Permitir'),
+                      child: Text(context.l10n.settingsAllow),
                     ),
                   ],
                 ),
@@ -656,7 +650,7 @@ class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
 
             // Sub-toggles — only enabled when master is on
             SwitchListTile(
-              title: const Text('Mensagens privadas'),
+              title: Text(context.l10n.settingsPrivateMessages),
               subtitle: const Text(
                 'Notificar quando receber uma mensagem direta',
               ),
@@ -668,7 +662,7 @@ class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
                       : null,
             ),
             SwitchListTile(
-              title: const Text('Mensagens de canal'),
+              title: Text(context.l10n.settingsChannelMessages),
               subtitle: const Text('Notificar mensagens em canais'),
               value: settings.enabled && settings.channelMessages,
               onChanged:
@@ -678,7 +672,7 @@ class _NotificationsCardState extends ConsumerState<_NotificationsCard> {
                       : null,
             ),
             SwitchListTile(
-              title: const Text('Apenas em segundo plano'),
+              title: Text(context.l10n.settingsBackgroundOnly),
               subtitle: const Text(
                 'Só notificar quando a app não está em primeiro plano',
               ),
@@ -880,7 +874,9 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Restaurar Chave Privada'),
+            title: Text(
+              AppLocalizations.of(ctx)!.settingsRestorePrivateKeyTitle,
+            ),
             content: const Text(
               'Esta operação vai substituir a chave privada actual do rádio. '
               'O rádio vai reiniciar automaticamente após a importação.\n\n'
@@ -889,12 +885,12 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancelar'),
+                child: Text(AppLocalizations.of(ctx)!.commonCancel),
               ),
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: Colors.red),
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Restaurar'),
+                child: Text(AppLocalizations.of(ctx)!.settingsRestoreToRadio),
               ),
             ],
           ),
@@ -927,7 +923,7 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Apagar cópia de segurança'),
+            title: Text(AppLocalizations.of(ctx)!.settingsDeleteBackupTitle),
             content: const Text(
               'A cópia da chave privada guardada neste dispositivo será eliminada. '
               'O rádio não é afectado.',
@@ -935,12 +931,12 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancelar'),
+                child: Text(AppLocalizations.of(ctx)!.commonCancel),
               ),
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: Colors.red),
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Apagar'),
+                child: Text(AppLocalizations.of(ctx)!.commonDelete),
               ),
             ],
           ),
@@ -972,7 +968,7 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Cópia da Chave Privada',
+                    context.l10n.settingsPrivateKeyCopy,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),

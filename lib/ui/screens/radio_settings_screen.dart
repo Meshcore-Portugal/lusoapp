@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 import 'telemetry_screen.dart';
@@ -76,11 +77,12 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
 
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final l10n = context.l10n;
     final service = ref.read(radioServiceProvider);
     if (service == null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Rádio não ligado')));
+      ).showSnackBar(SnackBar(content: Text(l10n.commonRadioDisconnected)));
       return;
     }
 
@@ -110,7 +112,7 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
     if (mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Configuração guardada')));
+      ).showSnackBar(SnackBar(content: Text(l10n.radioSettingsSaved)));
     }
   }
 
@@ -134,7 +136,7 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Configuração do Rádio')),
+      appBar: AppBar(title: Text(context.l10n.radioSettingsTitle)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -156,7 +158,7 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Dispositivo',
+                          context.l10n.radioSettingsDevice,
                           style: theme.textTheme.titleSmall?.copyWith(
                             color: theme.colorScheme.primary,
                             fontWeight: FontWeight.bold,
@@ -164,14 +166,17 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                         ),
                         const SizedBox(height: 8),
                         if (selfInfo != null)
-                          _InfoRow(label: 'Nome', value: selfInfo.name),
+                          _InfoRow(
+                            label: context.l10n.commonName,
+                            value: selfInfo.name,
+                          ),
                         if (deviceInfo != null) ...[
                           _InfoRow(
-                            label: 'Modelo',
+                            label: context.l10n.radioSettingsModel,
                             value: deviceInfo.model ?? deviceInfo.deviceName,
                           ),
                           _InfoRow(
-                            label: 'Firmware',
+                            label: context.l10n.radioSettingsFirmware,
                             value:
                                 deviceInfo.versionString ??
                                 'v${deviceInfo.firmwareVersion}',
@@ -179,7 +184,7 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                           if (deviceInfo.storageUsed != null &&
                               deviceInfo.storageTotal != null)
                             _InfoRow(
-                              label: 'Armazenamento',
+                              label: context.l10n.radioSettingsStorage,
                               value:
                                   '${deviceInfo.storageUsed} / ${deviceInfo.storageTotal} bytes',
                             ),
@@ -199,7 +204,7 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Parâmetros LoRa',
+                        context.l10n.radioSettingsLoRa,
                         style: theme.textTheme.titleSmall?.copyWith(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.bold,
@@ -210,10 +215,10 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                       // Frequency
                       TextFormField(
                         controller: _freqController,
-                        decoration: const InputDecoration(
-                          labelText: 'Frequência (MHz)',
-                          helperText: 'Ex: 868.1250',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: context.l10n.radioSettingsFrequency,
+                          helperText: context.l10n.radioSettingsFrequencyHint,
+                          border: const OutlineInputBorder(),
                           suffixText: 'MHz',
                         ),
                         keyboardType: const TextInputType.numberWithOptions(
@@ -221,11 +226,11 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                         ),
                         validator: (v) {
                           if (v == null || v.isEmpty) {
-                            return 'Insere a frequência';
+                            return context.l10n.radioSettingsFrequencyRequired;
                           }
                           final d = double.tryParse(v);
                           if (d == null || d < 150 || d > 2500) {
-                            return 'Frequência inválida (150–2500 MHz)';
+                            return context.l10n.radioSettingsFrequencyInvalid;
                           }
                           return null;
                         },
@@ -237,9 +242,9 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                       DropdownButtonFormField<int>(
                         key: ValueKey('bw_$_bandwidthHz'),
                         initialValue: _bandwidthHz,
-                        decoration: const InputDecoration(
-                          labelText: 'Largura de banda',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: context.l10n.radioSettingsBandwidth,
+                          border: const OutlineInputBorder(),
                         ),
                         items:
                             _bandwidths
@@ -259,7 +264,9 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                         validator:
                             (v) =>
                                 v == null
-                                    ? 'Selecciona a largura de banda'
+                                    ? context
+                                        .l10n
+                                        .radioSettingsBandwidthRequired
                                     : null,
                       ),
 
@@ -269,9 +276,9 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                       DropdownButtonFormField<int>(
                         key: ValueKey('sf_$_spreadingFactor'),
                         initialValue: _spreadingFactor,
-                        decoration: const InputDecoration(
-                          labelText: 'Spreading Factor',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: context.l10n.radioSettingsSpreadingFactor,
+                          border: const OutlineInputBorder(),
                         ),
                         items:
                             _spreadingFactors
@@ -291,7 +298,7 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                         validator:
                             (v) =>
                                 v == null
-                                    ? 'Selecciona o spreading factor'
+                                    ? context.l10n.radioSettingsSFRequired
                                     : null,
                       ),
 
@@ -301,9 +308,9 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                       DropdownButtonFormField<int>(
                         key: ValueKey('cr_$_codingRate'),
                         initialValue: _codingRate,
-                        decoration: const InputDecoration(
-                          labelText: 'Coding Rate',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: context.l10n.radioSettingsCodingRate,
+                          border: const OutlineInputBorder(),
                         ),
                         items:
                             _codingRates
@@ -322,7 +329,9 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                         },
                         validator:
                             (v) =>
-                                v == null ? 'Selecciona o coding rate' : null,
+                                v == null
+                                    ? context.l10n.radioSettingsCRRequired
+                                    : null,
                       ),
 
                       const SizedBox(height: 16),
@@ -331,10 +340,10 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                       TextFormField(
                         controller: _txPowerController,
                         decoration: InputDecoration(
-                          labelText: 'Potência TX',
+                          labelText: context.l10n.radioSettingsTxPower,
                           helperText:
                               deviceInfo != null
-                                  ? 'Máx: ${selfInfo?.maxTxPower ?? "?"} dBm'
+                                  ? '${context.l10n.radioSettingsMax} ${selfInfo?.maxTxPower ?? "?"} ${context.l10n.radioSettingsDbm}'
                                   : null,
                           border: const OutlineInputBorder(),
                           suffixText: 'dBm',
@@ -342,11 +351,11 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                         keyboardType: TextInputType.number,
                         validator: (v) {
                           if (v == null || v.isEmpty) {
-                            return 'Insere a potência';
+                            return context.l10n.radioSettingsPowerRequired;
                           }
                           final i = int.tryParse(v);
                           if (i == null || i < 1 || i > 30) {
-                            return 'Potência inválida (1–30 dBm)';
+                            return context.l10n.radioSettingsPowerInvalid;
                           }
                           return null;
                         },
@@ -369,7 +378,9 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                         : const Icon(Icons.save),
-                label: Text(_saving ? 'A guardar...' : 'Guardar'),
+                label: Text(
+                  _saving ? context.l10n.commonSaving : context.l10n.commonSave,
+                ),
               ),
 
               if (config != null) ...[
@@ -385,7 +396,7 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                           }
                           : null,
                   icon: const Icon(Icons.undo),
-                  label: const Text('Repor valores actuais'),
+                  label: Text(context.l10n.radioSettingsResetValues),
                 ),
               ],
 
@@ -396,7 +407,7 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
               // ----- Telemetry section -----
               const SizedBox(height: 32),
               Text(
-                'Telemetria',
+                context.l10n.commonTelemetry,
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -458,7 +469,7 @@ class _ConfigSummaryCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Configuração Activa',
+                  context.l10n.radioSettingsActiveConfig,
                   style: theme.textTheme.labelLarge?.copyWith(
                     color: theme.colorScheme.onPrimaryContainer,
                     fontWeight: FontWeight.bold,
@@ -468,22 +479,25 @@ class _ConfigSummaryCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             _ConfigRow(
-              label: 'Frequência',
+              label: context.l10n.radioSettingsFreqLabel,
               value: '${freqMHz.toStringAsFixed(4)} MHz',
             ),
             _ConfigRow(
-              label: 'Largura de Banda',
+              label: context.l10n.radioSettingsBandwidth,
               value: '${bwKHz % 1 == 0 ? bwKHz.toInt() : bwKHz} kHz',
             ),
             _ConfigRow(
-              label: 'Spreading Factor',
+              label: context.l10n.radioSettingsSpreadingFactor,
               value: 'SF${config.spreadingFactor}',
             ),
             _ConfigRow(
-              label: 'Coding Rate',
+              label: context.l10n.radioSettingsCodingRate,
               value: _crLabel(config.codingRate),
             ),
-            _ConfigRow(label: 'Potência TX', value: '${config.txPowerDbm} dBm'),
+            _ConfigRow(
+              label: context.l10n.radioSettingsTxPower,
+              value: '${config.txPowerDbm} dBm',
+            ),
           ],
         ),
       ),
@@ -593,7 +607,7 @@ class _AdvertAutoAddCard extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Adição automática de contactos',
+                  context.l10n.radioSettingsAutoAddTitle,
                   style: theme.textTheme.titleSmall?.copyWith(
                     color: theme.colorScheme.primary,
                     fontWeight: FontWeight.bold,
@@ -603,8 +617,7 @@ class _AdvertAutoAddCard extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Quando um nó envia um advert e o rádio está em modo manual, '
-              'a app pode adicioná-lo automaticamente à tabela de contactos do rádio.',
+              context.l10n.radioSettingsAutoAddDesc,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -612,25 +625,25 @@ class _AdvertAutoAddCard extends ConsumerWidget {
             const SizedBox(height: 8),
             _AutoAddTile(
               icon: Icons.person,
-              label: 'Companheiro (Chat)',
+              label: context.l10n.radioSettingsAutoAddCompanion,
               value: s.addChat,
               onChanged: n.setChat,
             ),
             _AutoAddTile(
               icon: Icons.cell_tower,
-              label: 'Repetidor',
+              label: context.l10n.radioSettingsAutoAddRepeater,
               value: s.addRepeater,
               onChanged: n.setRepeater,
             ),
             _AutoAddTile(
               icon: Icons.meeting_room,
-              label: 'Sala (Room)',
+              label: context.l10n.radioSettingsAutoAddRoom,
               value: s.addRoom,
               onChanged: n.setRoom,
             ),
             _AutoAddTile(
               icon: Icons.sensors,
-              label: 'Sensor',
+              label: context.l10n.radioSettingsAutoAddSensor,
               value: s.addSensor,
               onChanged: n.setSensor,
             ),

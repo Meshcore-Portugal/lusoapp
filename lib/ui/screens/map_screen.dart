@@ -16,6 +16,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../protocol/models.dart';
+import '../../l10n/l10n.dart';
 import '../../providers/radio_providers.dart';
 
 /// Full-screen map showing all contacts with GPS coordinates and the device's
@@ -126,23 +127,24 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   Future<void> _locateMe() async {
     if (!_locationSupported) return;
+    final l10n = context.l10n;
     setState(() => _loadingLocation = true);
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        _showSnack('Servico de localizacao desactivado');
+        _showSnack(l10n.mapLocationDisabled);
         return;
       }
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          _showSnack('Permissao de localizacao negada');
+          _showSnack(l10n.mapLocationDenied);
           return;
         }
       }
       if (permission == LocationPermission.deniedForever) {
-        _showSnack('Permissao de localizacao negada permanentemente');
+        _showSnack(l10n.mapLocationDeniedPermanently);
         return;
       }
       final pos = await Geolocator.getCurrentPosition(
@@ -156,7 +158,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _mapController.move(pt, _detailZoom);
       }
     } catch (_) {
-      _showSnack('Erro ao obter localizacao GPS');
+      _showSnack(l10n.mapLocationError);
     } finally {
       if (mounted) setState(() => _loadingLocation = false);
     }
@@ -189,6 +191,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   Future<void> _shareMap() async {
     if (_sharing) return;
+    final l10n = context.l10n;
     setState(() => _sharing = true);
     try {
       // Ensure the latest map frame (tiles + polyline + hop markers) is painted
@@ -198,7 +201,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           _mapRepaintKey.currentContext?.findRenderObject()
               as RenderRepaintBoundary?;
       if (boundary == null) {
-        _showSnack('Nao foi possivel capturar o mapa');
+        _showSnack(l10n.mapCaptureError);
         return;
       }
 
@@ -208,7 +211,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final image = await boundary.toImage(pixelRatio: pixelRatio);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) {
-        _showSnack('Falha ao gerar imagem do mapa');
+        _showSnack(l10n.mapImageError);
         return;
       }
       final pngBytes = byteData.buffer.asUint8List();
@@ -225,7 +228,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         ShareParams(files: [XFile(file.path)], subject: 'Mapa MeshCore'),
       );
     } catch (_) {
-      _showSnack('Erro ao partilhar o mapa');
+      _showSnack(l10n.mapShareError);
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
@@ -424,7 +427,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Sem dados GPS. Toca em "Localizar" ou aguarda contactos com coordenadas.',
+                              context.l10n.mapNoGps,
                               style: theme.textTheme.bodySmall,
                             ),
                           ),
@@ -467,7 +470,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               FloatingActionButton.small(
                 heroTag: 'map_share',
                 onPressed: _sharing ? null : _shareMap,
-                tooltip: 'Partilhar mapa',
+                tooltip: context.l10n.mapShareMap,
                 child:
                     _sharing
                         ? const SizedBox(
@@ -482,7 +485,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 FloatingActionButton.small(
                   heroTag: 'map_fit_all',
                   onPressed: () => _fitAll(allPoints),
-                  tooltip: 'Ver todos',
+                  tooltip: context.l10n.mapViewAll,
                   child: const Icon(Icons.fit_screen),
                 ),
                 const SizedBox(height: 8),
@@ -502,8 +505,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         : null,
                 tooltip:
                     selfPos != null
-                        ? 'Centrar na minha posição'
-                        : 'Obter localização GPS',
+                        ? context.l10n.mapCenterMyPosition
+                        : context.l10n.mapGetGps,
                 child:
                     _loadingLocation
                         ? const SizedBox(
@@ -872,7 +875,7 @@ class _ContactInfoSheet extends ConsumerWidget {
               width: double.infinity,
               child: FilledButton.icon(
                 icon: const Icon(Icons.chat),
-                label: const Text('Enviar mensagem'),
+                label: Text(context.l10n.commonSendMessage),
                 onPressed: () {
                   Navigator.pop(context);
                   context.push('/chat/$keyHex');
@@ -1000,7 +1003,7 @@ class _ClusterListSheet extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Text(
-              '${cluster.members.length} nós nesta localização',
+              '${cluster.members.length} ${context.l10n.mapNodesAtLocation}',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
@@ -1191,8 +1194,8 @@ class _TraceResultCardState extends State<_TraceResultCard> {
                     ),
                     label: Text(
                       _expanded
-                          ? 'Minimizar lista'
-                          : 'Mostrar +$hiddenCount hop${hiddenCount == 1 ? '' : 's'}',
+                          ? context.l10n.mapMinimizeList
+                          : '${context.l10n.mapShowMore}$hiddenCount hop${hiddenCount == 1 ? '' : 's'}',
                     ),
                     style: TextButton.styleFrom(
                       visualDensity: VisualDensity.compact,
@@ -1216,7 +1219,7 @@ class _TraceResultCardState extends State<_TraceResultCard> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    'Final: ${widget.result.finalSnrDb.toStringAsFixed(1)} dB',
+                    '${context.l10n.mapFinal} ${widget.result.finalSnrDb.toStringAsFixed(1)} dB',
                     style: widget.theme.textTheme.labelSmall?.copyWith(
                       color: Colors.green.shade600,
                       fontWeight: FontWeight.w600,

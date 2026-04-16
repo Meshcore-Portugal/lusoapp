@@ -10,6 +10,44 @@ final _log = Logger(printer: SimplePrinter(printTime: false));
 
 /// Parses companion protocol responses (Radio → App).
 class CompanionDecoder {
+  /// Decode radio bytes to a Dart string and replace any lone UTF-16
+  /// surrogates with U+FFFD.  WTF-8 sequences (e.g. 0xED 0xA0 0x80 = U+D800)
+  /// survive [utf8.decode] with allowMalformed:true as real lone surrogates,
+  /// which Flutter's TextPainter rejects with "not well-formed UTF-16".
+  static String _decodeRadioString(List<int> bytes) {
+    final s = utf8.decode(bytes, allowMalformed: true);
+    // Fast path: scan once; if no surrogate range found, return as-is.
+    for (var i = 0; i < s.length; i++) {
+      final c = s.codeUnitAt(i);
+      if (c >= 0xD800 && c <= 0xDFFF) {
+        // Slow path: rebuild, replacing every lone surrogate with U+FFFD.
+        final buf = StringBuffer();
+        for (var j = 0; j < s.length; j++) {
+          final u = s.codeUnitAt(j);
+          if (u >= 0xD800 && u <= 0xDBFF) {
+            // High surrogate — valid only when followed by a low surrogate.
+            if (j + 1 < s.length) {
+              final u2 = s.codeUnitAt(j + 1);
+              if (u2 >= 0xDC00 && u2 <= 0xDFFF) {
+                buf.write(s[j]);
+                buf.write(s[j + 1]);
+                j++;
+                continue;
+              }
+            }
+            buf.writeCharCode(0xFFFD);
+          } else if (u >= 0xDC00 && u <= 0xDFFF) {
+            buf.writeCharCode(0xFFFD); // lone low surrogate
+          } else {
+            buf.write(s[j]);
+          }
+        }
+        return buf.toString();
+      }
+    }
+    return s;
+  }
+
   /// Decode a raw response frame payload (after direction + length stripped).
   /// Returns a [CompanionResponse] or null if unrecognized.
   static CompanionResponse? decode(Uint8List payload) {
@@ -141,7 +179,7 @@ class CompanionDecoder {
     final pathLen = data[34];
     // Path is 64 bytes at offset 35..98
     final nameEnd = _findNullTerminator(data, 99, 131);
-    final name = utf8.decode(data.sublist(99, nameEnd), allowMalformed: true);
+    final name = _decodeRadioString(data.sublist(99, nameEnd));
     final lastAdvert = _readUint32LE(data, 131);
     double? lat;
     double? lon;
@@ -197,8 +235,7 @@ class CompanionDecoder {
     String name = '';
     if (data.length > 57) {
       final nameEnd = _findNullTerminator(data, 57, data.length);
-      name =
-          utf8.decode(data.sublist(57, nameEnd), allowMalformed: true).trim();
+      name = _decodeRadioString(data.sublist(57, nameEnd)).trim();
     }
 
     final config = RadioConfig(
@@ -259,7 +296,7 @@ class CompanionDecoder {
 
     final text =
         data.length > textOffset
-            ? utf8.decode(data.sublist(textOffset), allowMalformed: true)
+            ? _decodeRadioString(data.sublist(textOffset))
             : '';
 
     return PrivateMessageResponse(
@@ -301,7 +338,7 @@ class CompanionDecoder {
 
     final text =
         data.length > textOffset
-            ? utf8.decode(data.sublist(textOffset), allowMalformed: true)
+            ? _decodeRadioString(data.sublist(textOffset))
             : '';
 
     return PrivateMessageResponse(
@@ -336,10 +373,7 @@ class CompanionDecoder {
     final channelIdx = data[3];
     final pathLen = data[4];
     final timestamp = _readUint32LE(data, 6);
-    final text =
-        data.length > 10
-            ? utf8.decode(data.sublist(10), allowMalformed: true)
-            : '';
+    final text = data.length > 10 ? _decodeRadioString(data.sublist(10)) : '';
 
     return ChannelMessageResponse(
       ChatMessage(
@@ -369,10 +403,7 @@ class CompanionDecoder {
     final channelIdx = data[0];
     final pathLen = data[1];
     final timestamp = _readUint32LE(data, 3);
-    final text =
-        data.length > 7
-            ? utf8.decode(data.sublist(7), allowMalformed: true)
-            : '';
+    final text = data.length > 7 ? _decodeRadioString(data.sublist(7)) : '';
 
     return ChannelMessageResponse(
       ChatMessage(
@@ -415,16 +446,12 @@ class CompanionDecoder {
       final maxChannels = data[2];
       final blePin = _readUint32LE(data, 3);
       final fwBuildEnd = _findNullTerminator(data, 7, 19);
-      final fwBuild =
-          utf8.decode(data.sublist(7, fwBuildEnd), allowMalformed: true).trim();
+      final fwBuild = _decodeRadioString(data.sublist(7, fwBuildEnd)).trim();
       final modelEnd = _findNullTerminator(data, 19, 59);
-      final model =
-          utf8.decode(data.sublist(19, modelEnd), allowMalformed: true).trim();
+      final model = _decodeRadioString(data.sublist(19, modelEnd)).trim();
       final versionEnd = _findNullTerminator(data, 59, 79);
       final versionStr =
-          utf8
-              .decode(data.sublist(59, versionEnd), allowMalformed: true)
-              .trim();
+          _decodeRadioString(data.sublist(59, versionEnd)).trim();
 
       return DeviceInfoResponse(
         DeviceInfo(
@@ -443,7 +470,7 @@ class CompanionDecoder {
 
     // Fallback for older firmware versions
     final nameEnd = _findNullTerminator(data, 1, data.length);
-    final name = utf8.decode(data.sublist(1, nameEnd), allowMalformed: true);
+    final name = _decodeRadioString(data.sublist(1, nameEnd));
     return DeviceInfoResponse(
       DeviceInfo(
         firmwareVersion: version,
@@ -463,8 +490,7 @@ class CompanionDecoder {
 
     final nameMaxEnd = data.length >= 33 ? 33 : data.length;
     final nameEnd = _findNullTerminator(data, 1, nameMaxEnd);
-    final name =
-        utf8.decode(data.sublist(1, nameEnd), allowMalformed: true).trim();
+    final name = _decodeRadioString(data.sublist(1, nameEnd)).trim();
 
     Uint8List? secret;
     if (data.length >= 49) {
@@ -487,7 +513,7 @@ class CompanionDecoder {
     }
     final type = data[32];
     final nameEnd = _findNullTerminator(data, 33, data.length);
-    final name = utf8.decode(data.sublist(33, nameEnd), allowMalformed: true);
+    final name = _decodeRadioString(data.sublist(33, nameEnd));
     return AdvertPush(pubKey, type, name.trim(), isNew: isNew);
   }
 

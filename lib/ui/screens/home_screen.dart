@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../l10n/l10n.dart';
 import '../../providers/radio_providers.dart';
 import '../../transport/radio_transport.dart';
 import '../theme.dart';
@@ -25,11 +26,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   static const _tabs = ['/channels', '/contacts', '/map', '/apps', '/settings'];
 
-  /// Map of known app sub-routes to their display titles.
-  static const _appSubTitles = {
-    '/apps/plan333': 'Plano 3-3-3',
-    '/apps/telemetry': 'Telemetria',
-  };
+  /// Returns the display title for known app sub-routes.
+  String? _appSubTitle(BuildContext context, String path) {
+    return switch (path) {
+      '/apps/plan333' => context.l10n.appsPlano333Title,
+      '/apps/telemetry' => context.l10n.appsTelemetryTitle,
+      _ => null,
+    };
+  }
 
   /// Returns the tab index whose prefix matches [path].
   static int _tabIndexForPath(String path) {
@@ -60,7 +64,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     // When inside an apps sub-page, show a back arrow and the app's name.
-    final appSubTitle = _appSubTitles[currentPath];
+    final appSubTitle = _appSubTitle(context, currentPath);
     final isAppsSubPage = appSubTitle != null;
 
     return BackButtonListener(
@@ -74,7 +78,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             isAppsSubPage
                 ? IconButton(
                   icon: const Icon(Icons.arrow_back),
-                  tooltip: 'Voltar',
+                  tooltip: context.l10n.commonBack,
                   onPressed: () {
                     if (context.canPop()) {
                       context.pop();
@@ -157,7 +161,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               child: const Icon(Icons.forum),
             ),
-            label: 'Canais',
+            label: context.l10n.navChannels,
           ),
           NavigationDestination(
             icon: Badge(
@@ -174,22 +178,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               child: const Icon(Icons.contacts),
             ),
-            label: 'Contactos',
+            label: context.l10n.navContacts,
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.map_outlined),
-            selectedIcon: Icon(Icons.map),
-            label: 'Mapa',
+          NavigationDestination(
+            icon: const Icon(Icons.map_outlined),
+            selectedIcon: const Icon(Icons.map),
+            label: context.l10n.navMap,
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.apps_outlined),
-            selectedIcon: Icon(Icons.apps),
-            label: 'Apps',
+          NavigationDestination(
+            icon: const Icon(Icons.apps_outlined),
+            selectedIcon: const Icon(Icons.apps),
+            label: context.l10n.navApps,
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: 'Definições',
+          NavigationDestination(
+            icon: const Icon(Icons.settings_outlined),
+            selectedIcon: const Icon(Icons.settings),
+            label: context.l10n.navSettings,
           ),
         ],
       ),
@@ -257,16 +261,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         context: context,
         builder:
             (ctx) => AlertDialog(
-              title: const Text('Desligar rádio?'),
-              content: const Text('A ligação ao rádio será terminada.'),
+              title: Text(context.l10n.homeDisconnectTitle),
+              content: Text(context.l10n.homeDisconnectContent),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Cancelar'),
+                  child: Text(context.l10n.commonCancel),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Desligar'),
+                  child: Text(context.l10n.homeDisconnect),
                 ),
               ],
             ),
