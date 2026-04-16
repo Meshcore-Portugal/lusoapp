@@ -73,7 +73,7 @@ class AppsScreen extends StatelessWidget {
 
   void _launch(BuildContext context, _AppEntry app) {
     if (app.route != null) {
-      context.go(app.route!);
+      context.push(app.route!);
     } else {
       // QR scanner is a modal that returns the scanned value.
       Navigator.of(context).push<String>(

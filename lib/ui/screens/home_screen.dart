@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -18,6 +21,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
   bool _showVolts = false;
+  bool _exitDialogOpen = false;
 
   static const _tabs = ['/channels', '/contacts', '/map', '/apps', '/settings'];
 
@@ -59,14 +63,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final appSubTitle = _appSubTitles[currentPath];
     final isAppsSubPage = appSubTitle != null;
 
-    return Scaffold(
-      appBar: AppBar(
+    return BackButtonListener(
+      onBackButtonPressed: () async {
+        _handleBack(context);
+        return true;
+      },
+      child: Scaffold(
+        appBar: AppBar(
         leading:
             isAppsSubPage
                 ? IconButton(
                   icon: const Icon(Icons.arrow_back),
                   tooltip: 'Voltar',
-                  onPressed: () => context.go('/apps'),
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go('/apps');
+                    }
+                  },
                 )
                 : null,
         title:
@@ -178,7 +193,59 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
+      ),
     );
+  }
+
+  void _handleBack(BuildContext context) {
+    final currentPath = GoRouterState.of(context).uri.path;
+    final isRootTab = _tabs.contains(currentPath);
+    if (isRootTab) {
+      if (currentPath == _tabs[0]) {
+        unawaited(_confirmExit(context));
+      } else {
+        context.go(_tabs[0]);
+        setState(() => _currentIndex = 0);
+      }
+      return;
+    }
+    final router = GoRouter.of(context);
+    if (router.canPop()) {
+      router.pop();
+    } else {
+      context.go(_tabs[0]);
+      setState(() => _currentIndex = 0);
+    }
+  }
+
+  Future<void> _confirmExit(BuildContext context) async {
+    if (_exitDialogOpen) return;
+    _exitDialogOpen = true;
+    bool? shouldExit;
+    try {
+      shouldExit = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Sair da LusoAPP?'),
+          content: const Text(
+            'A ligação ao rádio será terminada e a aplicação encerrada.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Sair'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      _exitDialogOpen = false;
+    }
+    if (shouldExit == true) await SystemNavigator.pop();
   }
 
   Future<void> _onConnectionIconTap(
