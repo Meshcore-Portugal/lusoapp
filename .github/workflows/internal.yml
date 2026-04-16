@@ -186,5 +186,5 @@ jobs:
           files: |
             release-assets/*.apk
             release-assets/*.aab
-# release-assets/*-web.zip
+            release-assets/*-web.zip
 # release-assets/*-ios.ipa
