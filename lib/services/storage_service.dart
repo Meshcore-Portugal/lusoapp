@@ -240,16 +240,13 @@ class StorageService {
   }
 
   // ---------------------------------------------------------------------------
-  // Favorites (app-side, not stored on radio)
+  // Favorites — legacy app-local set. Superseded by the radio's contact
+  // `flags` byte (bit 0). These helpers remain only for one-shot migration
+  // of pre-fix data; see `_migrateLegacyFavorites` in radio_providers.dart.
   // ---------------------------------------------------------------------------
 
-  Future<void> saveFavorites(Set<String> keyHexSet) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_keyFavorites, jsonEncode(keyHexSet.toList()));
-    } catch (_) {}
-  }
-
+  /// Reads the legacy app-local favourites set (hex public keys). Returns an
+  /// empty set after migration has run.
   Future<Set<String>> loadFavorites() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -260,6 +257,15 @@ class StorageService {
     } catch (_) {
       return {};
     }
+  }
+
+  /// Removes the legacy favourites key once migration has pushed the bits
+  /// to the radio.
+  Future<void> clearFavorites() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keyFavorites);
+    } catch (_) {}
   }
 
   // ---------------------------------------------------------------------------
