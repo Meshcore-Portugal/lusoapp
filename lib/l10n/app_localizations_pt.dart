@@ -250,6 +250,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get homeDisconnect => 'Desligar';
 
   @override
+  String get homeExitTitle => 'Sair da LusoAPP?';
+
+  @override
+  String get homeExitContent =>
+      'A ligação ao rádio será terminada e a aplicação encerrada.';
+
+  @override
+  String get homeExit => 'Sair';
+
+  @override
   String get settingsIdentity => 'Identidade';
 
   @override

@@ -580,6 +580,24 @@ abstract class AppLocalizations {
   /// **'Desligar'**
   String get homeDisconnect;
 
+  /// No description provided for @homeExitTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sair da LusoAPP?'**
+  String get homeExitTitle;
+
+  /// No description provided for @homeExitContent.
+  ///
+  /// In pt, this message translates to:
+  /// **'A ligação ao rádio será terminada e a aplicação encerrada.'**
+  String get homeExitContent;
+
+  /// No description provided for @homeExit.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sair'**
+  String get homeExit;
+
   /// No description provided for @settingsIdentity.
   ///
   /// In pt, this message translates to:

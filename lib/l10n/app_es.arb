@@ -84,6 +84,10 @@
   "homeDisconnectContent": "La conexión con la radio será terminada",
   "homeDisconnect": "Desconectar",
 
+  "homeExitTitle": "¿Salir de LusoAPP?",
+  "homeExitContent": "La conexión con la radio será terminada y la aplicación se cerrará.",
+  "homeExit": "Salir",
+
   "settingsIdentity": "Identidad",
   "settingsPublicKey": "Clave pública",
   "settingsCopyPublicKey": "Copiar clave pública",

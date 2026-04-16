@@ -249,6 +249,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeDisconnect => 'Disconnect';
 
   @override
+  String get homeExitTitle => 'Exit LusoAPP?';
+
+  @override
+  String get homeExitContent =>
+      'The radio connection will be terminated and the app will close.';
+
+  @override
+  String get homeExit => 'Exit';
+
+  @override
   String get settingsIdentity => 'Identity';
 
   @override

@@ -232,18 +232,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         context: context,
         builder:
             (ctx) => AlertDialog(
-              title: const Text('Sair da LusoAPP?'),
-              content: const Text(
-                'A ligação ao rádio será terminada e a aplicação encerrada.',
-              ),
+              title: Text(context.l10n.homeExitTitle),
+              content: Text(context.l10n.homeExitContent),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Cancelar'),
+                  child: Text(context.l10n.commonCancel),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Sair'),
+                  child: Text(context.l10n.homeExit),
                 ),
               ],
             ),
