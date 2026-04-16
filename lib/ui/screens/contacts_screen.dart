@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 import '../theme.dart';
@@ -35,6 +36,8 @@ class ContactsScreen extends ConsumerStatefulWidget {
 class _ContactsScreenState extends ConsumerState<ContactsScreen> {
   final _searchCtrl = TextEditingController();
   String _query = '';
+  bool _multiSelectMode = false;
+  final Set<String> _selectedContactKeys = <String>{};
 
   @override
   void initState() {
@@ -50,7 +53,131 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     super.dispose();
   }
 
-  /// Returns the first 6 bytes of [key] as a lowercase hex string.
+  void _toggleSelection(String keyHex) {
+    setState(() {
+      if (_selectedContactKeys.contains(keyHex)) {
+        _selectedContactKeys.remove(keyHex);
+        if (_selectedContactKeys.isEmpty) {
+          _multiSelectMode = false;
+        }
+      } else {
+        _selectedContactKeys.add(keyHex);
+        _multiSelectMode = true;
+      }
+    });
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _selectedContactKeys.clear();
+      _multiSelectMode = false;
+    });
+  }
+
+  void _enterMultiSelectMode() {
+    setState(() {
+      _multiSelectMode = true;
+      _selectedContactKeys.clear();
+    });
+  }
+
+  Future<void> _confirmBulkDelete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(context.l10n.contactsRemoveTitle),
+            content: Text(
+              'Remover ${_selectedContactKeys.length} contacto(s)?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text(context.l10n.commonCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(ctx).colorScheme.error,
+                ),
+                child: Text(context.l10n.commonRemove),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed != true) return;
+
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+
+    // Find contacts matching the selected keys
+    final contacts = ref.read(contactsProvider);
+    final contactsToDelete = <Contact>[];
+    for (final contact in contacts) {
+      final keyHex =
+          contact.publicKey
+              .map((b) => b.toRadixString(16).padLeft(2, '0'))
+              .join();
+      if (_selectedContactKeys.contains(keyHex)) {
+        contactsToDelete.add(contact);
+      }
+    }
+
+    if (!context.mounted) return;
+
+    try {
+      int deletedCount = 0;
+      int errorCount = 0;
+
+      // Remove locally first
+      for (final contact in contactsToDelete) {
+        ref.read(contactsProvider.notifier).remove(contact.publicKey);
+      }
+
+      // Send delete commands to radio
+      for (final contact in contactsToDelete) {
+        try {
+          final respFuture = service.responses
+              .firstWhere((r) => r is OkResponse || r is ErrorResponse)
+              .timeout(const Duration(seconds: 5));
+
+          await service.removeContact(contact.publicKey);
+          final resp = await respFuture;
+
+          if (resp is OkResponse) {
+            deletedCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (_) {
+          errorCount++;
+        }
+      }
+
+      if (!context.mounted) return;
+
+      // Show results
+      final message =
+          errorCount > 0
+              ? 'Removidos $deletedCount contacto(s), $errorCount erro(s)'
+              : 'Removidos $deletedCount contacto(s)';
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+
+      // Clear selection and re-sync
+      _clearSelection();
+      await service.requestContacts();
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro ao remover contactos')),
+      );
+    }
+  }
+
   static String _hex6(Uint8List key) {
     final n = key.length < 6 ? key.length : 6;
     return key
@@ -128,9 +255,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
           ),
         );
       case ContactSort.ouvidoRecentemente:
-        filtered.sort(
-          (a, b) => _bestTs(b).compareTo(_bestTs(a)),
-        );
+        filtered.sort((a, b) => _bestTs(b).compareTo(_bestTs(a)));
       case ContactSort.ultimaMensagem:
         filtered.sort((a, b) {
           final aMsg = lastMsgTs[_hex6(a.publicKey)] ?? 0;
@@ -148,6 +273,38 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
       children: [
         Column(
           children: [
+            // Multi-select toolbar
+            if (_multiSelectMode)
+              Container(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${_selectedContactKeys.length} selecionado(s)',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          tooltip: context.l10n.contactsRemoveSelected,
+                          onPressed: () => _confirmBulkDelete(context, ref),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          tooltip: context.l10n.contactsCancelSelection,
+                          onPressed: _clearSelection,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             // Filter chips bar
             ContactFilterBar(
               filter: filter,
@@ -172,7 +329,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                       controller: _searchCtrl,
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
-                        hintText: 'Pesquisar contactos...',
+                        hintText: context.l10n.contactsSearchHint,
                         prefixIcon: const Icon(Icons.search, size: 20),
                         suffixIcon:
                             _query.isNotEmpty
@@ -197,7 +354,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                   // Advert button — always visible
                   PopupMenuButton<_AdvertType>(
                     icon: const Icon(Icons.broadcast_on_personal),
-                    tooltip: 'Enviar Anúncio',
+                    tooltip: context.l10n.contactsSendAdvert,
                     onSelected: (type) {
                       final svc = ref.read(radioServiceProvider);
                       switch (type) {
@@ -209,20 +366,20 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                     },
                     itemBuilder:
                         (_) => [
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: _AdvertType.zeroHop,
                             child: ListTile(
-                              leading: Icon(Icons.wifi_tethering),
-                              title: Text('Anúncio · Zero Hop'),
+                              leading: const Icon(Icons.wifi_tethering),
+                              title: Text(context.l10n.contactsAdvertZeroHop),
                               contentPadding: EdgeInsets.zero,
                               dense: true,
                             ),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: _AdvertType.flood,
                             child: ListTile(
-                              leading: Icon(Icons.broadcast_on_home),
-                              title: Text('Anúncio · Flood'),
+                              leading: const Icon(Icons.broadcast_on_home),
+                              title: Text(context.l10n.contactsAdvertFlood),
                               contentPadding: EdgeInsets.zero,
                               dense: true,
                             ),
@@ -237,22 +394,57 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                               ? Theme.of(context).colorScheme.primary
                               : null,
                     ),
-                    tooltip: 'Ordenar',
+                    tooltip: context.l10n.contactsSort,
                     initialValue: sort,
-                    onSelected: (s) => ref.read(contactSortProvider.notifier).set(s),
+                    onSelected:
+                        (s) => ref.read(contactSortProvider.notifier).set(s),
                     itemBuilder:
                         (_) => [
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: ContactSort.nome,
-                            child: Text('Nome (A-Z)'),
+                            child: Text(context.l10n.contactsSortNameAZ),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: ContactSort.ouvidoRecentemente,
-                            child: Text('Ouvido recentemente'),
+                            child: Text(context.l10n.contactsSortLastHeard),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: ContactSort.ultimaMensagem,
-                            child: Text('Última mensagem'),
+                            child: Text(context.l10n.contactsSortLastMessage),
+                          ),
+                        ],
+                  ),
+                  PopupMenuButton<_ContactsToolbarAction>(
+                    icon: const Icon(Icons.more_vert),
+                    tooltip: context.l10n.contactsMoreOptions,
+                    onSelected: (action) {
+                      switch (action) {
+                        case _ContactsToolbarAction.discover:
+                          context.push('/discover');
+                        case _ContactsToolbarAction.multiSelect:
+                          _enterMultiSelectMode();
+                      }
+                    },
+                    itemBuilder:
+                        (_) => [
+                          PopupMenuItem(
+                            value: _ContactsToolbarAction.discover,
+                            child: ListTile(
+                              leading: const Icon(Icons.explore),
+                              title: Text(context.l10n.contactsDiscover),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: _ContactsToolbarAction.multiSelect,
+                            enabled: !_multiSelectMode,
+                            child: ListTile(
+                              leading: const Icon(Icons.checklist),
+                              title: Text(context.l10n.contactsMultiSelect),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
                           ),
                         ],
                   ),
@@ -274,9 +466,29 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                         child: ListView.builder(
                           padding: const EdgeInsets.only(bottom: 80),
                           itemCount: filtered.length,
-                          itemBuilder:
-                              (context, i) =>
-                                  _ContactTile(contact: filtered[i]),
+                          itemBuilder: (context, i) {
+                            final contact = filtered[i];
+                            final keyHex =
+                                contact.publicKey
+                                    .map(
+                                      (b) =>
+                                          b.toRadixString(16).padLeft(2, '0'),
+                                    )
+                                    .join();
+                            final isSelected = _selectedContactKeys.contains(
+                              keyHex,
+                            );
+                            return _ContactTile(
+                              contact: contact,
+                              isMultiSelectMode: _multiSelectMode,
+                              isSelected: isSelected,
+                              onSelected:
+                                  _multiSelectMode
+                                      ? () => _toggleSelection(keyHex)
+                                      : null,
+                              onLongPress: null,
+                            );
+                          },
                         ),
                       ),
             ),
@@ -308,7 +520,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                     ),
               );
             },
-            tooltip: 'Adicionar contacto',
+            tooltip: context.l10n.contactsAddContact,
             child: const Icon(Icons.person_add),
           ),
         ),
@@ -350,22 +562,42 @@ class ContactFilterBar extends StatelessWidget {
       child: Row(
         spacing: 8,
         children: [
-          _chip(ContactFilter.todos, 'Todos', Icons.people, counts.todos),
-          _chip(ContactFilter.favoritos, 'Favoritos', Icons.star, counts.favoritos),
+          _chip(
+            ContactFilter.todos,
+            context.l10n.contactsAll,
+            Icons.people,
+            counts.todos,
+          ),
+          _chip(
+            ContactFilter.favoritos,
+            context.l10n.contactsFavorites,
+            Icons.star,
+            counts.favoritos,
+          ),
           _chip(
             ContactFilter.companheiros,
-            'Companheiros',
+            context.l10n.contactsCompanions,
             Icons.person,
             counts.companheiros,
           ),
           _chip(
             ContactFilter.repetidores,
-            'Repetidores',
+            context.l10n.contactsRepeaters,
             Icons.cell_tower,
             counts.repetidores,
           ),
-          _chip(ContactFilter.salas, 'Salas', Icons.meeting_room, counts.salas),
-          _chip(ContactFilter.sensores, 'Sensores', Icons.sensors, counts.sensores),
+          _chip(
+            ContactFilter.salas,
+            context.l10n.contactsTypeRoom,
+            Icons.meeting_room,
+            counts.salas,
+          ),
+          _chip(
+            ContactFilter.sensores,
+            context.l10n.contactsSensors,
+            Icons.sensors,
+            counts.sensores,
+          ),
         ],
       ),
     );
@@ -395,12 +627,30 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final (icon, msg) = switch (filter) {
-      ContactFilter.companheiros => (Icons.person_off, 'Sem companheiros na rede'),
-      ContactFilter.repetidores => (Icons.cell_tower, 'Sem repetidores na rede'),
-      ContactFilter.salas => (Icons.meeting_room, 'Sem salas na rede'),
-      ContactFilter.sensores => (Icons.sensors_off, 'Sem sensores na rede'),
-      ContactFilter.todos => (Icons.contacts_outlined, 'Sem contactos'),
-      ContactFilter.favoritos => (Icons.star_border, 'Sem favoritos'),
+      ContactFilter.companheiros => (
+        Icons.person_off,
+        context.l10n.contactsEmptyCompanions,
+      ),
+      ContactFilter.repetidores => (
+        Icons.cell_tower,
+        context.l10n.contactsEmptyRepeaters,
+      ),
+      ContactFilter.salas => (
+        Icons.meeting_room,
+        context.l10n.contactsEmptyRooms,
+      ),
+      ContactFilter.sensores => (
+        Icons.sensors_off,
+        context.l10n.contactsEmptySensors,
+      ),
+      ContactFilter.todos => (
+        Icons.contacts_outlined,
+        context.l10n.contactsEmpty,
+      ),
+      ContactFilter.favoritos => (
+        Icons.star_border,
+        context.l10n.contactsEmptyFavorites,
+      ),
     };
 
     return Center(
@@ -421,7 +671,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Os contactos aparecem quando o radio os descobre',
+            context.l10n.contactsEmptyHint,
             style: theme.textTheme.bodySmall,
           ),
         ],
@@ -436,13 +686,26 @@ class _EmptyState extends StatelessWidget {
 
 enum _AdvertType { zeroHop, flood }
 
+enum _ContactsToolbarAction { discover, multiSelect }
+
 // ---------------------------------------------------------------------------
 // Contact tile
 // ---------------------------------------------------------------------------
 
 class _ContactTile extends ConsumerWidget {
-  const _ContactTile({required this.contact});
+  const _ContactTile({
+    required this.contact,
+    this.isMultiSelectMode = false,
+    this.isSelected = false,
+    this.onSelected,
+    this.onLongPress,
+  });
+
   final Contact contact;
+  final bool isMultiSelectMode;
+  final bool isSelected;
+  final VoidCallback? onSelected;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -475,19 +738,29 @@ class _ContactTile extends ConsumerWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      color:
+          isSelected && isMultiSelectMode
+              ? Theme.of(context).colorScheme.primaryContainer
+              : null,
       child: ListTile(
-        leading: Badge(
-          isLabelVisible: unreadCount > 0,
-          label: Text(unreadCount > 99 ? '99+' : '$unreadCount'),
-          child: CircleAvatar(
-            backgroundColor: _avatarColor(contact).withAlpha(40),
-            child: Icon(
-              _avatarIcon(contact),
-              color: _avatarColor(contact),
-              size: 20,
-            ),
-          ),
-        ),
+        leading:
+            isMultiSelectMode
+                ? Checkbox(
+                  value: isSelected,
+                  onChanged: (_) => onSelected?.call(),
+                )
+                : Badge(
+                  isLabelVisible: unreadCount > 0,
+                  label: Text(unreadCount > 99 ? '99+' : '$unreadCount'),
+                  child: CircleAvatar(
+                    backgroundColor: _avatarColor(contact).withAlpha(40),
+                    child: Icon(
+                      _avatarIcon(contact),
+                      color: _avatarColor(contact),
+                      size: 20,
+                    ),
+                  ),
+                ),
         title: Text(
           contact.displayName,
           style: TextStyle(
@@ -505,12 +778,18 @@ class _ContactTile extends ConsumerWidget {
                 ? const Icon(Icons.star, color: Colors.amber, size: 20)
                 : null,
         onTap:
-            contact.isChat
-                ? () => context.push('/chat/$keyHex')
-                : contact.isRoom
-                ? () => context.push('/room/$keyHex')
-                : null,
-        onLongPress: () => _showOptionsSheet(context, ref, isFavorite, keyHex),
+            isMultiSelectMode
+                ? () => onSelected?.call()
+                : (contact.isChat
+                    ? () => context.push('/chat/$keyHex')
+                    : contact.isRoom
+                    ? () => context.push('/room/$keyHex')
+                    : null),
+        onLongPress:
+            isMultiSelectMode
+                ? null
+                : onLongPress ??
+                    (() => _showOptionsSheet(context, ref, isFavorite, keyHex)),
       ),
     );
   }
@@ -525,7 +804,7 @@ class _ContactTile extends ConsumerWidget {
       builder: (ctx) {
         final theme = Theme.of(ctx);
         return AlertDialog(
-          title: const Text('Renomear contacto'),
+          title: Text(context.l10n.contactsRenameTitle),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -542,9 +821,9 @@ class _ContactTile extends ConsumerWidget {
                 controller: ctrl,
                 autofocus: true,
                 textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Nome personalizado',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: context.l10n.contactsCustomName,
+                  border: const OutlineInputBorder(),
                 ),
               ),
             ],
@@ -552,7 +831,7 @@ class _ContactTile extends ConsumerWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar'),
+              child: Text(context.l10n.commonCancel),
             ),
             if (hasCustom)
               TextButton(
@@ -563,7 +842,7 @@ class _ContactTile extends ConsumerWidget {
                   Navigator.pop(ctx);
                 },
                 child: Text(
-                  'Limpar',
+                  context.l10n.commonClear,
                   style: TextStyle(color: theme.colorScheme.error),
                 ),
               ),
@@ -580,7 +859,7 @@ class _ContactTile extends ConsumerWidget {
                     );
                 Navigator.pop(ctx);
               },
-              child: const Text('Guardar'),
+              child: Text(context.l10n.commonSave),
             ),
           ],
         );
@@ -654,19 +933,21 @@ class _ContactTile extends ConsumerWidget {
         await service.requestContacts();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${contact.displayName} guardado no rádio'),
+            content: Text(
+              context.l10n.contactsSavedToRadio(contact.displayName),
+            ),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro ao guardar contacto no rádio')),
+          SnackBar(content: Text(context.l10n.contactsSaveToRadioError)),
         );
       }
     } catch (_) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Timeout: rádio não respondeu')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.contactsSaveTimeout)));
     }
   }
 
@@ -686,7 +967,9 @@ class _ContactTile extends ConsumerWidget {
         service == null ||
         service.contacts.any(
           (c) =>
-              c.publicKey.map((b) => b.toRadixString(16).padLeft(2, '0')).join() ==
+              c.publicKey
+                  .map((b) => b.toRadixString(16).padLeft(2, '0'))
+                  .join() ==
               keyHex,
         );
 
@@ -742,8 +1025,8 @@ class _ContactTile extends ConsumerWidget {
                 if (!isOnRadio)
                   ListTile(
                     leading: const Icon(Icons.save_outlined),
-                    title: const Text('Guardar no rádio'),
-                    subtitle: const Text('Este contacto foi ouvido mas não está guardado no rádio'),
+                    title: Text(context.l10n.contactsSaveToRadioTitle),
+                    subtitle: Text(context.l10n.contactsNotSavedHint),
                     onTap: () {
                       Navigator.pop(ctx);
                       _saveToRadio(context, ref);
@@ -757,8 +1040,8 @@ class _ContactTile extends ConsumerWidget {
                   ),
                   title: Text(
                     isFavorite
-                        ? 'Remover dos favoritos'
-                        : 'Adicionar aos favoritos',
+                        ? context.l10n.contactsRemoveFavorites
+                        : context.l10n.contactsAddFavorites,
                   ),
                   onTap: () {
                     ref.read(favoritesProvider.notifier).toggle(keyHex);
@@ -768,7 +1051,7 @@ class _ContactTile extends ConsumerWidget {
                 // QR
                 ListTile(
                   leading: const Icon(Icons.qr_code),
-                  title: const Text('Partilhar via QR'),
+                  title: Text(context.l10n.contactsShareQR),
                   onTap: () {
                     Navigator.pop(ctx);
                     _showContactQrCode(context);
@@ -777,7 +1060,7 @@ class _ContactTile extends ConsumerWidget {
                 // Rename
                 ListTile(
                   leading: const Icon(Icons.edit_outlined),
-                  title: const Text('Renomear'),
+                  title: Text(context.l10n.commonRename),
                   onTap: () {
                     Navigator.pop(ctx);
                     _showRenameDialog(context, ref);
@@ -787,7 +1070,7 @@ class _ContactTile extends ConsumerWidget {
                 if (contact.isChat)
                   ListTile(
                     leading: const Icon(Icons.chat),
-                    title: const Text('Mensagem privada'),
+                    title: Text(context.l10n.contactsPrivateMessage),
                     onTap: () {
                       Navigator.pop(ctx);
                       context.push('/chat/$keyHex');
@@ -796,7 +1079,7 @@ class _ContactTile extends ConsumerWidget {
                 if (contact.isRoom)
                   ListTile(
                     leading: const Icon(Icons.meeting_room),
-                    title: const Text('Entrar na sala'),
+                    title: Text(context.l10n.contactsJoinRoom),
                     onTap: () {
                       Navigator.pop(ctx);
                       context.push('/room/$keyHex');
@@ -805,7 +1088,7 @@ class _ContactTile extends ConsumerWidget {
                 if (contact.isRepeater)
                   ListTile(
                     leading: const Icon(Icons.admin_panel_settings),
-                    title: const Text('Admin remoto'),
+                    title: Text(context.l10n.contactsRemoteAdmin),
                     onTap: () {
                       Navigator.pop(ctx);
                       _showAdminSheet(context, ref);
@@ -814,9 +1097,9 @@ class _ContactTile extends ConsumerWidget {
                 // Path management — available for all node types
                 ListTile(
                   leading: const Icon(Icons.route),
-                  title: const Text('Gerir caminho'),
+                  title: Text(context.l10n.contactsManagePath),
                   subtitle: Text(
-                    'Caminho actual: ${contactPathLabel(contact.pathLen)}',
+                    '${context.l10n.contactsCurrentPath} ${contactPathLabel(contact.pathLen)}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withAlpha(130),
                     ),
@@ -834,7 +1117,7 @@ class _ContactTile extends ConsumerWidget {
                     color: theme.colorScheme.error,
                   ),
                   title: Text(
-                    'Remover contacto',
+                    context.l10n.contactsRemoveContact,
                     style: TextStyle(color: theme.colorScheme.error),
                   ),
                   onTap: () {
@@ -856,31 +1139,59 @@ class _ContactTile extends ConsumerWidget {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Remover contacto'),
+            title: Text(context.l10n.contactsRemoveContact),
             content: Text(
-              'Remover "${contact.displayName}" da lista de contactos?',
+              'Remover "${contact.displayName}" ${context.l10n.contactsRemoveFromListSuffix}',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancelar'),
+                child: Text(context.l10n.commonCancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
                 style: FilledButton.styleFrom(
                   backgroundColor: Theme.of(ctx).colorScheme.error,
                 ),
-                child: const Text('Remover'),
+                child: Text(context.l10n.commonRemove),
               ),
             ],
           ),
     );
     if (confirmed == true) {
       final service = ref.read(radioServiceProvider);
+      // Remove locally first so advert-cached contacts disappear immediately.
+      ref.read(contactsProvider.notifier).remove(contact.publicKey);
+
       if (service == null) return;
-      await service.removeContact(contact.publicKey);
-      await Future.delayed(const Duration(milliseconds: 300));
-      await service.requestContacts();
+
+      try {
+        final respFuture = service.responses
+            .firstWhere((r) => r is OkResponse || r is ErrorResponse)
+            .timeout(const Duration(seconds: 5));
+
+        await service.removeContact(contact.publicKey);
+        final resp = await respFuture;
+
+        if (!context.mounted) return;
+        if (resp is ErrorResponse) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Erro ao remover no rádio (código ${resp.errorCode})',
+              ),
+            ),
+          );
+        }
+      } catch (_) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.contactsRemoveTimeout)),
+        );
+      } finally {
+        // Always re-sync from the radio so local and radio tables converge.
+        await service.requestContacts();
+      }
     }
   }
 
@@ -933,7 +1244,6 @@ class _ContactTile extends ConsumerWidget {
     if (diff.inHours < 24) return '${diff.inHours}h atrás';
     return '${diff.inDays}d atrás';
   }
-
 }
 
 // ---------------------------------------------------------------------------
@@ -1075,7 +1385,10 @@ class _AddContactSheetState extends State<_AddContactSheet> {
             ),
           ),
           const SizedBox(height: 16),
-          Text('Adicionar contacto', style: theme.textTheme.titleLarge),
+          Text(
+            context.l10n.contactsAddContact,
+            style: theme.textTheme.titleLarge,
+          ),
           const SizedBox(height: 4),
           Text(
             'Envie um anúncio para que outros nós o descubram automaticamente, ou adicione manualmente através da chave pública.',
@@ -1092,7 +1405,7 @@ class _AddContactSheetState extends State<_AddContactSheet> {
               Navigator.of(context).pop();
             },
             icon: const Icon(Icons.broadcast_on_home),
-            label: const Text('Enviar Anúncio (descoberta automática)'),
+            label: Text(context.l10n.contactsSendAdvertAuto),
           ),
           const SizedBox(height: 8),
 
@@ -1100,19 +1413,19 @@ class _AddContactSheetState extends State<_AddContactSheet> {
           OutlinedButton.icon(
             onPressed: _scanQr,
             icon: const Icon(Icons.qr_code_scanner),
-            label: const Text('Ler QR Code'),
+            label: Text(context.l10n.contactsReadQR),
           ),
 
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Row(
               children: [
-                Expanded(child: Divider()),
+                const Expanded(child: Divider()),
                 Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Text('ou adicionar manualmente'),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(context.l10n.contactsOrManual),
                 ),
-                Expanded(child: Divider()),
+                const Expanded(child: Divider()),
               ],
             ),
           ),
@@ -1121,7 +1434,7 @@ class _AddContactSheetState extends State<_AddContactSheet> {
           TextField(
             controller: _pubKeyCtrl,
             decoration: InputDecoration(
-              labelText: 'Chave pública (hex, 64 chars)',
+              labelText: context.l10n.contactsPublicKeyLabel,
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.vpn_key_outlined),
               errorText: _pubKeyError,
@@ -1134,7 +1447,7 @@ class _AddContactSheetState extends State<_AddContactSheet> {
           TextField(
             controller: _nameCtrl,
             decoration: InputDecoration(
-              labelText: 'Nome de exibição',
+              labelText: context.l10n.contactsDisplayName,
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.badge_outlined),
               errorText: _nameError,
@@ -1201,17 +1514,26 @@ class _TypeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = selected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withAlpha(80);
+    final color =
+        selected
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurface.withAlpha(80);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
         decoration: BoxDecoration(
-          color: selected ? theme.colorScheme.primary.withAlpha(30) : Colors.transparent,
+          color:
+              selected
+                  ? theme.colorScheme.primary.withAlpha(30)
+                  : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
+            color:
+                selected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outlineVariant,
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -1459,239 +1781,241 @@ class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
       padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottom),
       child: SingleChildScrollView(
         child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Handle
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.onSurface.withAlpha(40),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(Icons.cell_tower, color: AppTheme.primary, size: 22),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Admin: ${widget.contact.name.isNotEmpty ? widget.contact.name : widget.contact.shortId}',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'ID: ${widget.contact.shortId}  |  Saltos: ${widget.contact.pathLen}',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const Divider(height: 20),
-
-          if (!loggedIn) ...[
-            Text(
-              'Autenticação',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _passCtrl,
-              obscureText: _obscure,
-              decoration: InputDecoration(
-                labelText: 'Palavra-passe (opcional)',
-                hintText: 'Deixar em branco se sem palavra-passe',
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.lock_outline),
-                errorText: _loginError,
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscure ? Icons.visibility : Icons.visibility_off,
-                  ),
-                  onPressed: () => setState(() => _obscure = !_obscure),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurface.withAlpha(40),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
-            const SizedBox(height: 10),
-            FilledButton.icon(
-              onPressed: _waiting ? null : _login,
-              icon:
-                  _waiting
-                      ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                      : const Icon(Icons.login),
-              label: Text(_waiting ? 'A ligar...' : 'Entrar'),
-            ),
-          ] else ...[
-            // ── Auth status row ──────────────────────────────────────
+            const SizedBox(height: 12),
             Row(
               children: [
-                const Icon(Icons.check_circle, color: Colors.green, size: 18),
-                const SizedBox(width: 6),
-                Text(
-                  'Autenticado',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.green,
-                    fontWeight: FontWeight.bold,
+                const Icon(Icons.cell_tower, color: AppTheme.primary, size: 22),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Admin: ${widget.contact.name.isNotEmpty ? widget.contact.name : widget.contact.shortId}',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const Spacer(),
-                OutlinedButton.icon(
-                  onPressed: _pendingCommand ? null : _requestStatus,
-                  icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Estado'),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-
-            // ── Pending indicator ─────────────────────────────────────
-            if (_pendingCommand) ...[
-              Row(
-                children: [
-                  const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'A enviar: $_pendingLabel...',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-            ],
-
-            // ── Last CLI response ─────────────────────────────────────
-            if (_lastResponse != null) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.terminal,
-                      size: 14,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _lastResponse!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-
-            // ── Remote actions ────────────────────────────────────────
-            const Divider(height: 20),
+            const SizedBox(height: 4),
             Text(
-              'Acções Remotas',
-              style: theme.textTheme.labelMedium?.copyWith(
+              'ID: ${widget.contact.shortId}  |  Saltos: ${widget.contact.pathLen}',
+              style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 4),
-            _AdminTile(
-              icon: Icons.broadcast_on_home,
-              title: 'Anúncio Flood',
-              subtitle: 'Força o nó a enviar um anúncio flood',
-              enabled: !_pendingCommand,
-              onTap: () => _sendAdminCommand('advert', 'Anúncio Flood'),
-            ),
-            _AdminTile(
-              icon: Icons.wifi_tethering,
-              title: 'Anúncio Zero-Hop',
-              subtitle: 'Anúncio só para vizinhos directos',
-              enabled: !_pendingCommand,
-              onTap: () =>
-                  _sendAdminCommand('advert.zerohop', 'Anúncio Zero-Hop'),
-            ),
-            _AdminTile(
-              icon: Icons.schedule,
-              title: 'Sincronizar Relógio',
-              subtitle: 'Envia o timestamp actual para o nó',
-              enabled: !_pendingCommand,
-              onTap: () => _sendAdminCommand('clock sync', 'Sync Clock'),
-            ),
-            _AdminTile(
-              icon: Icons.system_update_alt,
-              title: 'Iniciar OTA',
-              subtitle: 'Inicia actualização OTA — NRF DFU / ESP32',
-              enabled: !_pendingCommand,
-              onTap: () async {
-                final ok = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Confirmar OTA'),
-                    content: const Text(
-                      'O rádio vai entrar em modo de actualização OTA e ficará '
-                      'temporariamente inacessível.\n\n'
-                      'Tens a certeza?',
+            const Divider(height: 20),
+
+            if (!loggedIn) ...[
+              Text(
+                'Autenticação',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _passCtrl,
+                obscureText: _obscure,
+                decoration: InputDecoration(
+                  labelText: 'Palavra-passe (opcional)',
+                  hintText: 'Deixar em branco se sem palavra-passe',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  errorText: _loginError,
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscure ? Icons.visibility : Icons.visibility_off,
                     ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('Cancelar'),
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                onPressed: _waiting ? null : _login,
+                icon:
+                    _waiting
+                        ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Icon(Icons.login),
+                label: Text(_waiting ? 'A ligar...' : 'Entrar'),
+              ),
+            ] else ...[
+              // ── Auth status row ──────────────────────────────────────
+              Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Autenticado',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  OutlinedButton.icon(
+                    onPressed: _pendingCommand ? null : _requestStatus,
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('Estado'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // ── Pending indicator ─────────────────────────────────────
+              if (_pendingCommand) ...[
+                Row(
+                  children: [
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'A enviar: $_pendingLabel...',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
+
+              // ── Last CLI response ─────────────────────────────────────
+              if (_lastResponse != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.terminal,
+                        size: 14,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.orange,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _lastResponse!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontFamily: 'monospace',
+                          ),
                         ),
-                        child: const Text('Iniciar OTA'),
                       ),
                     ],
                   ),
-                );
-                if (ok == true) await _sendAdminCommand('start ota', 'OTA');
-              },
-            ),
+                ),
+                const SizedBox(height: 8),
+              ],
 
-            // ── Stats ─────────────────────────────────────────────────
-            if (stats != null) ...[
+              // ── Remote actions ────────────────────────────────────────
               const Divider(height: 20),
-              _StatsCard(stats: stats, theme: theme),
-            ] else ...[
-              const SizedBox(height: 4),
               Text(
-                'Prima "Estado" para obter as estatísticas do repetidor.',
-                style: theme.textTheme.bodySmall?.copyWith(
+                'Acções Remotas',
+                style: theme.textTheme.labelMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
+              const SizedBox(height: 4),
+              _AdminTile(
+                icon: Icons.broadcast_on_home,
+                title: 'Anúncio Flood',
+                subtitle: 'Força o nó a enviar um anúncio flood',
+                enabled: !_pendingCommand,
+                onTap: () => _sendAdminCommand('advert', 'Anúncio Flood'),
+              ),
+              _AdminTile(
+                icon: Icons.wifi_tethering,
+                title: 'Anúncio Zero-Hop',
+                subtitle: 'Anúncio só para vizinhos directos',
+                enabled: !_pendingCommand,
+                onTap:
+                    () =>
+                        _sendAdminCommand('advert.zerohop', 'Anúncio Zero-Hop'),
+              ),
+              _AdminTile(
+                icon: Icons.schedule,
+                title: 'Sincronizar Relógio',
+                subtitle: 'Envia o timestamp actual para o nó',
+                enabled: !_pendingCommand,
+                onTap: () => _sendAdminCommand('clock sync', 'Sync Clock'),
+              ),
+              _AdminTile(
+                icon: Icons.system_update_alt,
+                title: 'Iniciar OTA',
+                subtitle: 'Inicia actualização OTA — NRF DFU / ESP32',
+                enabled: !_pendingCommand,
+                onTap: () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder:
+                        (ctx) => AlertDialog(
+                          title: Text(context.l10n.contactsConfirmOTATitle),
+                          content: const Text(
+                            'O rádio vai entrar em modo de actualização OTA e ficará '
+                            'temporariamente inacessível.\n\n'
+                            'Tens a certeza?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancelar'),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                              ),
+                              child: const Text('Iniciar OTA'),
+                            ),
+                          ],
+                        ),
+                  );
+                  if (ok == true) await _sendAdminCommand('start ota', 'OTA');
+                },
+              ),
+
+              // ── Stats ─────────────────────────────────────────────────
+              if (stats != null) ...[
+                const Divider(height: 20),
+                _StatsCard(stats: stats, theme: theme),
+              ] else ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Prima "Estado" para obter as estatísticas do repetidor.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ],
           ],
-        ],
         ),
       ),
     );
@@ -1726,9 +2050,10 @@ class _AdminTile extends StatelessWidget {
       leading: Icon(
         icon,
         size: 22,
-        color: enabled
-            ? theme.colorScheme.primary
-            : theme.colorScheme.onSurface.withAlpha(60),
+        color:
+            enabled
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurface.withAlpha(60),
       ),
       title: Text(
         title,
@@ -1959,7 +2284,7 @@ class _ContactQrDialogState extends State<_ContactQrDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Fechar'),
+          child: Text(context.l10n.commonClose),
         ),
         TextButton.icon(
           onPressed: _sharingText ? null : _shareText,
@@ -1971,7 +2296,7 @@ class _ContactQrDialogState extends State<_ContactQrDialog> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                   : const Icon(Icons.text_fields),
-          label: const Text('Partilhar texto'),
+          label: Text(context.l10n.channelsShareText),
         ),
         FilledButton.icon(
           onPressed: _sharing ? null : _shareQr,
@@ -1983,7 +2308,7 @@ class _ContactQrDialogState extends State<_ContactQrDialog> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                   : const Icon(Icons.share),
-          label: const Text('Partilhar QR'),
+          label: Text(context.l10n.channelsShareQR),
         ),
       ],
     );

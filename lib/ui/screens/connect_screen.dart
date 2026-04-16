@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../l10n/l10n.dart';
 import '../../providers/radio_providers.dart';
 import '../../services/storage_service.dart';
 import '../../transport/transport.dart';
@@ -17,7 +18,7 @@ import '../theme.dart';
 // ---------------------------------------------------------------------------
 // Temporary event badge — set to false to remove.
 // ---------------------------------------------------------------------------
-const _showSummitEdition = true;
+const _showSummitEdition = false;
 
 // ---------------------------------------------------------------------------
 // Composite model — a discovered device paired with its connection type.
@@ -109,11 +110,11 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       barrierDismissible: false,
       builder:
           (ctx) => AlertDialog(
-            title: const Row(
+            title: Row(
               children: [
-                Icon(Icons.bluetooth_disabled),
-                SizedBox(width: 10),
-                Flexible(child: Text('Bluetooth desligado')),
+                const Icon(Icons.bluetooth_disabled),
+                const SizedBox(width: 10),
+                Flexible(child: Text(context.l10n.connectBluetoothOff)),
               ],
             ),
             content: const Text(
@@ -122,11 +123,11 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Não'),
+                child: Text(context.l10n.commonNo),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Activar'),
+                child: Text(context.l10n.connectBluetoothEnable),
               ),
             ],
           ),
@@ -142,9 +143,9 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
         } on FlutterBluePlusException catch (_) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Activação do Bluetooth recusada.'),
-                duration: Duration(seconds: 3),
+              SnackBar(
+                content: Text(context.l10n.connectBluetoothDeniedMessage),
+                duration: const Duration(seconds: 3),
               ),
             );
           }
@@ -313,7 +314,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       setState(() => _connectingTarget = null);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Falha ao ligar ao dispositivo'),
+          content: Text(context.l10n.connectFailTitle),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -362,7 +363,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       setState(() => _connectingTarget = null);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Falha ao ligar ao último dispositivo'),
+          content: Text(context.l10n.connectLastFailTitle),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -499,7 +500,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                           padding: const EdgeInsets.only(bottom: 8),
                           child: TextButton.icon(
                             icon: const Icon(Icons.wifi_off, size: 18),
-                            label: const Text('Continuar offline'),
+                            label: Text(context.l10n.connectContinueOffline),
                             onPressed: () => context.go('/channels'),
                           ),
                         ),
@@ -747,76 +748,79 @@ class _ConnectingCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 200),
-                          child: Builder(builder: (context) {
-                            final live =
-                                i == 2 ? contactCount : channelCount;
-                            final cached =
-                                i == 2
-                                    ? cachedContactCount
-                                    : cachedChannelCount;
-                            final newCount = (live - cached).clamp(0, live);
-                            final badgeColor =
-                                (done
-                                        ? theme.colorScheme.primary
-                                        : theme.colorScheme.primaryContainer)
-                                    .withAlpha(40);
-                            final borderColor =
-                                done
-                                    ? theme.colorScheme.primary.withAlpha(120)
-                                    : theme.colorScheme.primary.withAlpha(80);
-                            final baseStyle =
-                                theme.textTheme.labelSmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 10,
-                                );
-                            return Container(
-                              key: ValueKey('${i}_$live'),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 1,
-                              ),
-                              decoration: BoxDecoration(
-                                color: badgeColor,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: borderColor,
-                                  width: 0.8,
+                          child: Builder(
+                            builder: (context) {
+                              final live = i == 2 ? contactCount : channelCount;
+                              final cached =
+                                  i == 2
+                                      ? cachedContactCount
+                                      : cachedChannelCount;
+                              final newCount = (live - cached).clamp(0, live);
+                              final badgeColor = (done
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.primaryContainer)
+                                  .withAlpha(40);
+                              final borderColor =
+                                  done
+                                      ? theme.colorScheme.primary.withAlpha(120)
+                                      : theme.colorScheme.primary.withAlpha(80);
+                              final baseStyle = theme.textTheme.labelSmall
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 10,
+                                  );
+                              return Container(
+                                key: ValueKey('${i}_$live'),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1,
                                 ),
-                              ),
-                              child:
-                                  cached > 0 && newCount > 0
-                                      ? Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            '$cached',
-                                            style: baseStyle?.copyWith(
-                                              color: theme
-                                                  .colorScheme.onSurface
-                                                  .withAlpha(110),
+                                decoration: BoxDecoration(
+                                  color: badgeColor,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: borderColor,
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child:
+                                    cached > 0 && newCount > 0
+                                        ? Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              '$cached',
+                                              style: baseStyle?.copyWith(
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurface
+                                                    .withAlpha(110),
+                                              ),
                                             ),
-                                          ),
-                                          Text(
-                                            ' +$newCount',
-                                            style: baseStyle?.copyWith(
-                                              color: theme.colorScheme.primary,
+                                            Text(
+                                              ' +$newCount',
+                                              style: baseStyle?.copyWith(
+                                                color:
+                                                    theme.colorScheme.primary,
+                                              ),
                                             ),
+                                          ],
+                                        )
+                                        : Text(
+                                          '$live',
+                                          style: baseStyle?.copyWith(
+                                            color:
+                                                done
+                                                    ? theme.colorScheme.primary
+                                                    : theme
+                                                        .colorScheme
+                                                        .onSurface
+                                                        .withAlpha(160),
                                           ),
-                                        ],
-                                      )
-                                      : Text(
-                                        '$live',
-                                        style: baseStyle?.copyWith(
-                                          color:
-                                              done
-                                                  ? theme.colorScheme.primary
-                                                  : theme
-                                                      .colorScheme.onSurface
-                                                      .withAlpha(160),
                                         ),
-                                      ),
-                            );
-                          }),
+                              );
+                            },
+                          ),
                         ),
                       ],
                     ],

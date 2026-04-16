@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 import '../widgets/path_sheet.dart';
@@ -255,20 +256,20 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
                         }
                       },
                       itemBuilder:
-                          (_) => const [
+                          (_) => [
                             PopupMenuItem(
                               value: 'trace',
                               child: ListTile(
-                                leading: Icon(Icons.route),
-                                title: Text('Traçar rota'),
+                                leading: const Icon(Icons.route),
+                                title: Text(context.l10n.privateTraceRoute),
                                 dense: true,
                               ),
                             ),
                             PopupMenuItem(
                               value: 'path',
                               child: ListTile(
-                                leading: Icon(Icons.alt_route),
-                                title: Text('Gerir caminho'),
+                                leading: const Icon(Icons.alt_route),
+                                title: Text(context.l10n.privateManagePath),
                                 dense: true,
                               ),
                             ),
@@ -313,14 +314,14 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Sem mensagens',
+                          context.l10n.privateNoMessages,
                           style: theme.textTheme.bodyLarge?.copyWith(
                             color: theme.colorScheme.onSurface.withAlpha(120),
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Envie a primeira mensagem!',
+                          context.l10n.privateSendFirstMessage,
                           style: theme.textTheme.bodySmall,
                         ),
                       ],
@@ -365,7 +366,9 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
         _ChatInputBar(
           controller: _textController,
           onSend: _sendMessage,
-          hintText: 'Mensagem para ${contact?.name ?? "contacto"}...',
+          hintText: context.l10n.privateMessageTo(
+            contact?.name ?? context.l10n.commonContact,
+          ),
           replyTo: _replyingTo,
           onCancelReply:
               _replyingTo != null
@@ -453,9 +456,9 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     if (pathBytes == null) {
       setState(() => _waitingForTrace = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Não foi possível descobrir a rota — tente novamente'),
-          duration: Duration(seconds: 3),
+        SnackBar(
+          content: Text(context.l10n.privateRouteFailed),
+          duration: const Duration(seconds: 3),
         ),
       );
       return;
@@ -469,9 +472,9 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
       if (mounted && _waitingForTrace) {
         setState(() => _waitingForTrace = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Sem resposta à rota — tente novamente'),
-            duration: Duration(seconds: 3),
+          SnackBar(
+            content: Text(context.l10n.privateRouteNoResponse),
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -724,7 +727,7 @@ class _PrivateMessageBubble extends StatelessWidget {
                 if (!msg.isOutgoing && onReply != null)
                   ListTile(
                     leading: const Icon(Icons.reply),
-                    title: const Text('Responder'),
+                    title: Text(context.l10n.commonReply),
                     onTap: () {
                       Navigator.pop(context);
                       onReply!();
@@ -732,21 +735,21 @@ class _PrivateMessageBubble extends StatelessWidget {
                   ),
                 ListTile(
                   leading: const Icon(Icons.copy),
-                  title: const Text('Copiar texto'),
+                  title: Text(context.l10n.commonCopyText),
                   onTap: () {
                     Clipboard.setData(ClipboardData(text: msg.text));
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Texto copiado'),
-                        duration: Duration(seconds: 1),
+                      SnackBar(
+                        content: Text(context.l10n.commonMessageCopied),
+                        duration: const Duration(seconds: 1),
                       ),
                     );
                   },
                 ),
                 ListTile(
                   leading: const Icon(Icons.info_outline),
-                  title: const Text('Detalhes'),
+                  title: Text(context.l10n.chatMsgDetails),
                   onTap: () {
                     Navigator.pop(context);
                     _showMsgDetails(context, msg, theme);
@@ -1491,7 +1494,7 @@ class _TraceResultSheet extends StatelessWidget {
               color: Colors.green.shade600,
               size: 20,
             ),
-            title: const Text('Recebido no rádio'),
+            title: Text(context.l10n.privateReceivedOnRadio),
             trailing: Text(
               '${result.finalSnrDb.toStringAsFixed(1)} dB',
               style: theme.textTheme.labelLarge?.copyWith(

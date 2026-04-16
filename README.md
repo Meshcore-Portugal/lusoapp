@@ -44,12 +44,12 @@ flutter build apk --release
 
 ### Supported Platforms
 
-| Platform | Transport | Status |
-|----------|-----------|--------|
+| Platform | Transport    | Status         |
+| -------- | ------------ | -------------- |
 | Android  | BLE + Serial | Primary target |
-| iOS      | BLE | Planned |
-| Windows  | Serial | Planned |
-| Linux    | Serial | Planned |
+| iOS      | BLE          | Planned        |
+| Windows  | Serial       | Planned        |
+| Linux    | Serial       | Planned        |
 
 ## Architecture
 
@@ -106,6 +106,94 @@ Users are responsible for compliance with ANACOM regulations and amateur radio l
 ## Contributing
 
 Contributions are welcome! Please see the [ROADMAP.md](ROADMAP.md) for planned features and the project direction.
+
+## Translations
+
+The app uses Flutter's built-in `flutter_localizations` / `intl` ARB pipeline.
+
+### File layout
+
+```
+lib/l10n/
+├── app_pt.arb                  ← Template (source of truth, Portuguese PT)
+├── app_en.arb                  ← English translation
+├── app_es.arb                  ← Spanish translation
+├── app_localizations.dart      ← Generated — do NOT edit by hand
+├── app_localizations_pt.dart   ← Generated
+├── app_localizations_en.dart   ← Generated
+├── app_localizations_es.dart   ← Generated
+└── l10n.dart                   ← BuildContext extension: context.l10n.<key>
+```
+
+Configuration lives in `l10n.yaml` (project root):
+
+```yaml
+arb-dir: lib/l10n
+template-arb-file: app_pt.arb   # PT is the template locale
+output-localization-file: app_localizations.dart
+output-dir: lib/l10n
+nullable-getter: false
+```
+
+### How to add or change a string
+
+1. **Edit `lib/l10n/app_pt.arb`** — add the new key and its Portuguese value.  
+   Keys follow the naming convention `<screenOrGroup><PascalCaseName>`, e.g. `commonSave`, `navChannels`, `settingsTitle`.
+
+   ```json
+   "myNewKey": "Texto em português",
+   "@myNewKey": {}
+   ```
+
+2. **Repeat for every other ARB file** (`app_en.arb`, `app_es.arb`, …) adding the translated text for each locale.
+
+3. **Regenerate the Dart classes:**
+
+   ```bash
+   flutter gen-l10n
+   ```
+
+   This regenerates `app_localizations.dart` and all `app_localizations_<locale>.dart` files.  
+   Never edit those files manually — they are overwritten on every run.
+
+4. **Use the string in code:**
+
+   ```dart
+   import '../../l10n/l10n.dart';
+
+   // Inside a Widget build method:
+   Text(context.l10n.myNewKey)
+   ```
+
+### How to add a new language
+
+1. Create `lib/l10n/app_<locale>.arb` — copy `app_en.arb` as a starting point and translate all values.
+2. Run `flutter gen-l10n` — the new locale is picked up automatically.
+3. No changes to `pubspec.yaml` or `main.dart` are needed; `AppLocalizations.supportedLocales` is generated from the ARB files.
+
+### Placeholders and plurals
+
+Flutter ARB supports ICU message syntax. Example with a parameter:
+
+```json
+"unreadCount": "{count} mensagens não lidas",
+"@unreadCount": {
+  "placeholders": {
+    "count": { "type": "int" }
+  }
+}
+```
+
+Usage: `context.l10n.unreadCount(42)`
+
+### Scripts helper
+
+```powershell
+# Regenerate translations (run from project root)
+flutter gen-l10n
+```
+
+---
 
 ## License
 

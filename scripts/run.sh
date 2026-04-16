@@ -48,6 +48,12 @@ cmd_gen() {
     flutter pub run build_runner build --delete-conflicting-outputs
 }
 
+cmd_l10n() {
+    log "Generating localizations (flutter gen-l10n)..."
+    flutter gen-l10n
+    log "Localization files updated in lib/l10n/"
+}
+
 cmd_test() {
     log "Running tests..."
     flutter test --reporter expanded
@@ -173,6 +179,7 @@ case "$COMMAND" in
     clean)      cmd_clean ;;
     get)        cmd_get ;;
     gen)        cmd_gen ;;
+    l10n)       cmd_l10n ;;
     analyze)    cmd_analyze ;;
     doctor)     cmd_doctor ;;
     setup)      cmd_setup ;;
@@ -199,6 +206,7 @@ case "$COMMAND" in
         echo "  clean        Clean build artifacts"
         echo "  get          Get/update dependencies"
         echo "  gen          Run code generation (build_runner)"
+  echo "  l10n         Regenerate localization Dart files from ARB (flutter gen-l10n)"
         echo "  doctor       Check Flutter environment"
         exit 1
         ;;

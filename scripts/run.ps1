@@ -68,6 +68,12 @@ function Invoke-Gen {
     flutter pub run build_runner build --delete-conflicting-outputs
 }
 
+function Invoke-L10n {
+    Log "Generating localizations (flutter gen-l10n)..."
+    flutter gen-l10n
+    Log "Localization files updated in lib/l10n/"
+}
+
 function Invoke-Test {
     Log "Running tests..."
     flutter test --reporter expanded
@@ -172,6 +178,7 @@ function Show-Help {
     Write-Host "  clean          Clean build artifacts"
     Write-Host "  get            Get/update dependencies"
     Write-Host "  gen            Run code generation (build_runner)"
+  Write-Host "  l10n           Regenerate localization Dart files from ARB (flutter gen-l10n)"
     Write-Host "  devices        List connected devices"
     Write-Host "  doctor         Check Flutter environment"
     Write-Host ""
@@ -208,6 +215,7 @@ try {
         "clean"            { Invoke-Clean }
         "get"              { Invoke-Get }
         "gen"              { Invoke-Gen }
+        "l10n"             { Invoke-L10n }
         "analyze"          { Invoke-Analyze }
         "doctor"           { Invoke-Doctor }
         "setup"            { Invoke-Setup }

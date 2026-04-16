@@ -1,7 +1,7 @@
 name: lusoapp
 description: "MeshCore Companion App - MeshCore Portugal"
 publish_to: "none"
-version: 0.4.0+5
+version: 0.4.1+7
 
 environment:
   sdk: ^3.7.0
@@ -92,6 +92,7 @@ dependency_overrides:
 
 flutter:
   uses-material-design: true
+  generate: true
 
   assets:
     - assets/images/

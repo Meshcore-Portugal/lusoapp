@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../l10n/l10n.dart';
 import '../../providers/radio_providers.dart';
 import '../../transport/radio_transport.dart';
 import '../theme.dart';
@@ -18,14 +22,19 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
   bool _showVolts = false;
+  bool _exitDialogOpen = false;
 
   static const _tabs = ['/channels', '/contacts', '/map', '/apps', '/settings'];
 
-  /// Map of known app sub-routes to their display titles.
-  static const _appSubTitles = {
-    '/apps/plan333': 'Plano 3-3-3',
-    '/apps/telemetry': 'Telemetria',
-  };
+  /// Returns the display title for known app sub-routes.
+  String? _appSubTitle(BuildContext context, String path) {
+    return switch (path) {
+      '/apps/plan333' => context.l10n.appsPlano333Title,
+      '/apps/telemetry' => context.l10n.appsTelemetryTitle,
+      '/apps/rxlog' => context.l10n.appsRxLogTitle,
+      _ => null,
+    };
+  }
 
   /// Returns the tab index whose prefix matches [path].
   static int _tabIndexForPath(String path) {
@@ -56,129 +65,193 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     // When inside an apps sub-page, show a back arrow and the app's name.
-    final appSubTitle = _appSubTitles[currentPath];
+    final appSubTitle = _appSubTitle(context, currentPath);
     final isAppsSubPage = appSubTitle != null;
 
-    return Scaffold(
-      appBar: AppBar(
-        leading:
-            isAppsSubPage
-                ? IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  tooltip: 'Voltar',
-                  onPressed: () => context.go('/apps'),
-                )
-                : null,
-        title:
-            isAppsSubPage
-                ? Text(appSubTitle)
-                : Row(
-                  children: [
-                    Icon(
-                      Icons.cell_tower,
-                      color: theme.colorScheme.primary,
-                      size: 24,
+    return BackButtonListener(
+      onBackButtonPressed: () async {
+        _handleBack(context);
+        return true;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading:
+              isAppsSubPage
+                  ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: context.l10n.commonBack,
+                    onPressed: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/apps');
+                      }
+                    },
+                  )
+                  : null,
+          title:
+              isAppsSubPage
+                  ? Text(appSubTitle)
+                  : Row(
+                    children: [
+                      Icon(
+                        Icons.cell_tower,
+                        color: theme.colorScheme.primary,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(selfInfo?.name ?? 'LusoAPP'),
+                    ],
+                  ),
+          actions: [
+            // Battery indicator — tap to toggle % / voltage
+            if (batteryMv > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: GestureDetector(
+                  onTap: () => setState(() => _showVolts = !_showVolts),
+                  child: Chip(
+                    avatar: Icon(
+                      _batteryIcon(batteryMv),
+                      size: 18,
+                      color: _batteryColor(batteryMv),
                     ),
-                    const SizedBox(width: 8),
-                    Text(selfInfo?.name ?? 'LusoAPP'),
-                  ],
-                ),
-        actions: [
-          // Battery indicator — tap to toggle % / voltage
-          if (batteryMv > 0)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: GestureDetector(
-                onTap: () => setState(() => _showVolts = !_showVolts),
-                child: Chip(
-                  avatar: Icon(
-                    _batteryIcon(batteryMv),
-                    size: 18,
-                    color: _batteryColor(batteryMv),
-                  ),
-                  label: Text(
-                    _showVolts
-                        ? '${(batteryMv / 1000).toStringAsFixed(3)}V'
-                        : '${_batteryPercent(batteryMv)}%',
+                    label: Text(
+                      _showVolts
+                          ? '${(batteryMv / 1000).toStringAsFixed(3)}V'
+                          : '${_batteryPercent(batteryMv)}%',
+                    ),
                   ),
                 ),
               ),
-            ),
-          // Connection indicator — tap to connect / disconnect
-          IconButton(
-            icon: Icon(
-              connectionState == TransportState.connected
-                  ? Icons.link
-                  : Icons.link_off,
-              color:
-                  connectionState == TransportState.connected
-                      ? Colors.green
-                      : Colors.red,
-            ),
-            onPressed: () => _onConnectionIconTap(context, connectionState),
-          ),
-        ],
-      ),
-      body: widget.child,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() => _currentIndex = index);
-          context.go(_tabs[index]);
-        },
-        destinations: [
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: unread.totalChannels > 0,
-              label: Text(
-                unread.totalChannels > 99 ? '99+' : '${unread.totalChannels}',
+            // Connection indicator — tap to connect / disconnect
+            IconButton(
+              icon: Icon(
+                connectionState == TransportState.connected
+                    ? Icons.link
+                    : Icons.link_off,
+                color:
+                    connectionState == TransportState.connected
+                        ? Colors.green
+                        : Colors.red,
               ),
-              child: const Icon(Icons.forum_outlined),
+              onPressed: () => _onConnectionIconTap(context, connectionState),
             ),
-            selectedIcon: Badge(
-              isLabelVisible: unread.totalChannels > 0,
-              label: Text(
-                unread.totalChannels > 99 ? '99+' : '${unread.totalChannels}',
+          ],
+        ),
+        body: widget.child,
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (index) {
+            setState(() => _currentIndex = index);
+            context.go(_tabs[index]);
+          },
+          destinations: [
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: unread.totalChannels > 0,
+                label: Text(
+                  unread.totalChannels > 99 ? '99+' : '${unread.totalChannels}',
+                ),
+                child: const Icon(Icons.forum_outlined),
               ),
-              child: const Icon(Icons.forum),
-            ),
-            label: 'Canais',
-          ),
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: unread.totalContacts > 0,
-              label: Text(
-                unread.totalContacts > 99 ? '99+' : '${unread.totalContacts}',
+              selectedIcon: Badge(
+                isLabelVisible: unread.totalChannels > 0,
+                label: Text(
+                  unread.totalChannels > 99 ? '99+' : '${unread.totalChannels}',
+                ),
+                child: const Icon(Icons.forum),
               ),
-              child: const Icon(Icons.contacts_outlined),
+              label: context.l10n.navChannels,
             ),
-            selectedIcon: Badge(
-              isLabelVisible: unread.totalContacts > 0,
-              label: Text(
-                unread.totalContacts > 99 ? '99+' : '${unread.totalContacts}',
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: unread.totalContacts > 0,
+                label: Text(
+                  unread.totalContacts > 99 ? '99+' : '${unread.totalContacts}',
+                ),
+                child: const Icon(Icons.contacts_outlined),
               ),
-              child: const Icon(Icons.contacts),
+              selectedIcon: Badge(
+                isLabelVisible: unread.totalContacts > 0,
+                label: Text(
+                  unread.totalContacts > 99 ? '99+' : '${unread.totalContacts}',
+                ),
+                child: const Icon(Icons.contacts),
+              ),
+              label: context.l10n.navContacts,
             ),
-            label: 'Contactos',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.map_outlined),
-            selectedIcon: Icon(Icons.map),
-            label: 'Mapa',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.apps_outlined),
-            selectedIcon: Icon(Icons.apps),
-            label: 'Apps',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: 'Definições',
-          ),
-        ],
+            NavigationDestination(
+              icon: const Icon(Icons.map_outlined),
+              selectedIcon: const Icon(Icons.map),
+              label: context.l10n.navMap,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.apps_outlined),
+              selectedIcon: const Icon(Icons.apps),
+              label: context.l10n.navApps,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.settings_outlined),
+              selectedIcon: const Icon(Icons.settings),
+              label: context.l10n.navSettings,
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  void _handleBack(BuildContext context) {
+    final currentPath = GoRouterState.of(context).uri.path;
+    final isRootTab = _tabs.contains(currentPath);
+    if (isRootTab) {
+      if (currentPath == _tabs[0]) {
+        unawaited(_confirmExit(context));
+      } else {
+        context.go(_tabs[0]);
+        setState(() => _currentIndex = 0);
+      }
+      return;
+    }
+    final router = GoRouter.of(context);
+    if (router.canPop()) {
+      router.pop();
+    } else {
+      context.go(_tabs[0]);
+      setState(() => _currentIndex = 0);
+    }
+  }
+
+  Future<void> _confirmExit(BuildContext context) async {
+    if (_exitDialogOpen) return;
+    _exitDialogOpen = true;
+    bool? shouldExit;
+    try {
+      shouldExit = await showDialog<bool>(
+        context: context,
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Sair da LusoAPP?'),
+              content: const Text(
+                'A ligação ao rádio será terminada e a aplicação encerrada.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Sair'),
+                ),
+              ],
+            ),
+      );
+    } finally {
+      _exitDialogOpen = false;
+    }
+    if (shouldExit == true) await SystemNavigator.pop();
   }
 
   Future<void> _onConnectionIconTap(
@@ -190,16 +263,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         context: context,
         builder:
             (ctx) => AlertDialog(
-              title: const Text('Desligar rádio?'),
-              content: const Text('A ligação ao rádio será terminada.'),
+              title: Text(context.l10n.homeDisconnectTitle),
+              content: Text(context.l10n.homeDisconnectContent),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Cancelar'),
+                  child: Text(context.l10n.commonCancel),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Desligar'),
+                  child: Text(context.l10n.homeDisconnect),
                 ),
               ],
             ),
@@ -213,8 +286,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   int _batteryPercent(int mv) {
-    // LiPo curve: 4200 mV = 100%, 3200 mV = 0%
-    return (((mv.clamp(3200, 4200) - 3200) / 1000) * 100).round();
+    // LiPo curve: matches MeshCore firmware defaults (3000–4200 mV)
+    return (((mv.clamp(3000, 4200) - 3000) / 1200) * 100).round();
   }
 
   IconData _batteryIcon(int mv) {

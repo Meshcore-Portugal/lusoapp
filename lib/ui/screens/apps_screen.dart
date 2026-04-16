@@ -11,14 +11,14 @@ class AppsScreen extends StatelessWidget {
   const AppsScreen({super.key});
 
   static const _apps = [
-    _AppEntry(
-      id: 'event',
-      title: 'Summit Edition',
-      subtitle: 'Programa do Evento',
-      icon: Icons.event_note,
-      color: Color(0xFFFF8C00),
-      route: '/apps/event',
-    ),
+    // _AppEntry(
+    //   id: 'event',
+    //   title: 'Summit Edition',
+    //   subtitle: 'Programa do Evento',
+    //   icon: Icons.event_note,
+    //   color: Color(0xFFFF8C00),
+    //   route: '/apps/event',
+    // ),
     _AppEntry(
       id: 'plan333',
       title: 'Plano 3-3-3',
@@ -34,6 +34,14 @@ class AppsScreen extends StatelessWidget {
       icon: Icons.analytics_outlined,
       color: Color(0xFF14B8A6),
       route: '/apps/telemetry',
+    ),
+    _AppEntry(
+      id: 'rxlog',
+      title: 'RX Log',
+      subtitle: 'Captura e exporta PCAP',
+      icon: Icons.radar,
+      color: Color(0xFF4F46E5),
+      route: '/apps/rxlog',
     ),
     _AppEntry(
       id: 'qr',
@@ -73,7 +81,7 @@ class AppsScreen extends StatelessWidget {
 
   void _launch(BuildContext context, _AppEntry app) {
     if (app.route != null) {
-      context.go(app.route!);
+      context.push(app.route!);
     } else {
       // QR scanner is a modal that returns the scanned value.
       Navigator.of(context).push<String>(

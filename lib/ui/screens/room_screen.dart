@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 import '../theme.dart';
@@ -253,7 +254,9 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
           _ChatInputBar(
             controller: _textCtrl,
             onSend: _sendMessage,
-            hintText: 'Mensagem para ${contact?.displayName ?? 'sala'}...',
+            hintText: context.l10n.roomMessageHint(
+              contact?.displayName ?? context.l10n.commonRoom,
+            ),
             replyTo: _replyingTo,
             onCancelReply:
                 _replyingTo != null
@@ -298,7 +301,7 @@ class _RoomHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  contact?.displayName ?? 'Sala',
+                  contact?.displayName ?? context.l10n.commonRoom,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -362,7 +365,7 @@ class _JoinBody extends StatelessWidget {
           Text(
             contact != null
                 ? 'Entrar em "${contact!.displayName}"'
-                : 'Entrar na sala',
+                : context.l10n.roomJoinTitle,
             style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,
             ),
@@ -370,8 +373,7 @@ class _JoinBody extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Esta sala pode requerer uma palavra-passe. '
-            'Deixe em branco se for pública.',
+            context.l10n.roomJoinInstruction,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurface.withAlpha(160),
             ),
@@ -382,11 +384,11 @@ class _JoinBody extends StatelessWidget {
             controller: passCtrl,
             obscureText: obscurePass,
             decoration: InputDecoration(
-              labelText: 'Palavra-passe (opcional)',
-              hintText: 'Deixar em branco se sem palavra-passe',
+              labelText: context.l10n.roomPasswordLabel,
+              hintText: context.l10n.roomPasswordHint,
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.lock_outline),
-              errorText: failed ? 'Falhou — verifique a palavra-passe' : null,
+              errorText: failed ? context.l10n.roomJoinFailed : null,
               suffixIcon: IconButton(
                 icon: Icon(
                   obscurePass ? Icons.visibility : Icons.visibility_off,
@@ -408,13 +410,14 @@ class _JoinBody extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                     : const Icon(Icons.login),
-            label: Text(joining ? 'A ligar...' : 'Entrar na sala'),
+            label: Text(
+              joining ? context.l10n.roomJoining : context.l10n.roomJoinTitle,
+            ),
           ),
           if (failed) ...[
             const SizedBox(height: 12),
             Text(
-              'Não foi possível entrar na sala. '
-              'Verifique a palavra-passe e tente novamente.',
+              context.l10n.roomJoinError,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.error,
               ),
@@ -460,14 +463,14 @@ class _ChatBody extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Sem mensagens',
+              context.l10n.commonNoMessages,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onSurface.withAlpha(120),
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              'Envie a primeira mensagem!',
+              context.l10n.commonSendFirstMessage,
               style: theme.textTheme.bodySmall,
             ),
           ],
@@ -531,7 +534,7 @@ class _RoomMessageBubble extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 2),
                 child: Text(
-                  '[${message.senderName ?? 'Sala'}]',
+                  '[${message.senderName ?? context.l10n.roomReplyStrip}]',
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.primary,
                     fontWeight: FontWeight.bold,
@@ -659,14 +662,14 @@ class _ChatInputBar extends StatelessWidget {
   const _ChatInputBar({
     required this.controller,
     required this.onSend,
-    this.hintText = 'Escreva uma mensagem...',
+    this.hintText,
     this.replyTo,
     this.onCancelReply,
   });
 
   final TextEditingController controller;
   final VoidCallback onSend;
-  final String hintText;
+  final String? hintText;
   final ChatMessage? replyTo;
   final VoidCallback? onCancelReply;
 
@@ -697,7 +700,7 @@ class _ChatInputBar extends StatelessWidget {
                   child: TextField(
                     controller: controller,
                     decoration: InputDecoration(
-                      hintText: hintText,
+                      hintText: hintText ?? context.l10n.roomMessageFallback,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                       ),

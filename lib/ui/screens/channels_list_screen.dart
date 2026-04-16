@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 import 'qr_scanner_screen.dart';
@@ -240,7 +241,7 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen> {
           child: FloatingActionButton(
             heroTag: 'channels_fab',
             onPressed: openTypePicker,
-            tooltip: 'Adicionar canal',
+            tooltip: context.l10n.commonAdd,
             child: const Icon(Icons.add),
           ),
         ),
@@ -586,10 +587,10 @@ class _CreateChannelSheetState extends State<_CreateChannelSheet> {
 
             // Slot selector
             InputDecorator(
-              decoration: const InputDecoration(
-                labelText: 'Posição do canal',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(
+              decoration: InputDecoration(
+                labelText: context.l10n.channelsSlotPosition,
+                border: const OutlineInputBorder(),
+                contentPadding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 8,
                 ),
@@ -602,7 +603,9 @@ class _CreateChannelSheetState extends State<_CreateChannelSheet> {
                     final inUse = widget.usedIndices.contains(i);
                     return DropdownMenuItem(
                       value: i,
-                      child: Text('Canal $i${inUse ? " (em uso)" : ""}'),
+                      child: Text(
+                        '${context.l10n.channelsSlot} $i${inUse ? " (${context.l10n.channelsSlotInUse})" : ""}',
+                      ),
                     );
                   }),
                   onChanged: (v) => setState(() => _selectedIndex = v!),
@@ -615,8 +618,8 @@ class _CreateChannelSheetState extends State<_CreateChannelSheet> {
             TextField(
               controller: _nameCtrl,
               decoration: InputDecoration(
-                labelText: _nameLabelForType(widget.type),
-                hintText: _nameHintForType(widget.type),
+                labelText: _nameLabelForType(context, widget.type),
+                hintText: _nameHintForType(context, widget.type),
                 border: const OutlineInputBorder(),
                 prefixIcon:
                     widget.type == _ChannelType.hashtag
@@ -638,8 +641,8 @@ class _CreateChannelSheetState extends State<_CreateChannelSheet> {
               TextField(
                 controller: _secretCtrl,
                 decoration: InputDecoration(
-                  labelText: 'Chave secreta (32 caracteres hex)',
-                  hintText: 'ex: 8b3387e9c5cdea6ac9e5edbaa115cd72',
+                  labelText: context.l10n.channelsSecretKey,
+                  hintText: context.l10n.channelsSecretKeyHint,
                   border: const OutlineInputBorder(),
                   prefixIcon: const Icon(Icons.key),
                   errorText: _secretError,
@@ -653,8 +656,8 @@ class _CreateChannelSheetState extends State<_CreateChannelSheet> {
             if (widget.type != _ChannelType.privateJoin &&
                 keyHex.isNotEmpty) ...[
               _KeyInfoCard(
-                label: _keyLabelForType(widget.type),
-                info: _keyInfoForType(widget.type),
+                label: _keyLabelForType(context, widget.type),
+                info: _keyInfoForType(context, widget.type),
                 secretHex: keyHex,
                 onRegenerate:
                     widget.type == _ChannelType.privateCreate
@@ -708,32 +711,29 @@ class _CreateChannelSheetState extends State<_CreateChannelSheet> {
       'Introduza a chave secreta de um canal privado existente.',
   };
 
-  static String _nameLabelForType(_ChannelType t) => switch (t) {
-    _ChannelType.hashtag => 'Nome do hashtag (sem #)',
-    _ => 'Nome do canal',
+  String _nameLabelForType(BuildContext context, _ChannelType t) => switch (t) {
+    _ChannelType.hashtag => context.l10n.channelsHashtagName,
+    _ => context.l10n.channelsChannelName,
   };
 
-  static String _nameHintForType(_ChannelType t) => switch (t) {
-    _ChannelType.hashtag => 'ex: meshcore  →  canal #meshcore',
-    _ChannelType.publicChannel => 'ex: Geral',
-    _ChannelType.privateCreate => 'ex: A Minha Rede',
-    _ChannelType.privateJoin => 'Nome do canal',
+  String _nameHintForType(BuildContext context, _ChannelType t) => switch (t) {
+    _ChannelType.hashtag => context.l10n.channelsHashtagHint,
+    _ChannelType.publicChannel => context.l10n.channelsNameHintGeneral,
+    _ChannelType.privateCreate => context.l10n.channelsNameHintPrivate,
+    _ChannelType.privateJoin => context.l10n.channelsChannelName,
   };
 
-  static String _keyLabelForType(_ChannelType t) => switch (t) {
-    _ChannelType.publicChannel => 'Chave pública conhecida',
-    _ChannelType.hashtag => 'Chave derivada do hashtag',
-    _ChannelType.privateCreate => 'Chave gerada aleatoriamente',
+  String _keyLabelForType(BuildContext context, _ChannelType t) => switch (t) {
+    _ChannelType.publicChannel => context.l10n.channelsPublicKey,
+    _ChannelType.hashtag => context.l10n.channelsDerivedKey,
+    _ChannelType.privateCreate => context.l10n.channelsRandomKey,
     _ChannelType.privateJoin => '',
   };
 
-  static String _keyInfoForType(_ChannelType t) => switch (t) {
-    _ChannelType.publicChannel =>
-      'Esta chave é pública e igual em todos os dispositivos MeshCore.',
-    _ChannelType.hashtag =>
-      'Qualquer pessoa que entre no mesmo hashtag terá esta chave automaticamente.',
-    _ChannelType.privateCreate =>
-      'Guarde esta chave ou partilhe o QR Code para convidar outros.',
+  String _keyInfoForType(BuildContext context, _ChannelType t) => switch (t) {
+    _ChannelType.publicChannel => context.l10n.channelsPublicKeyInfo,
+    _ChannelType.hashtag => context.l10n.channelsHashtagKeyInfo,
+    _ChannelType.privateCreate => context.l10n.channelsRandomKeyInfo,
     _ChannelType.privateJoin => '',
   };
 }
@@ -782,7 +782,7 @@ class _KeyInfoCard extends StatelessWidget {
               if (onRegenerate != null)
                 IconButton(
                   icon: const Icon(Icons.casino_outlined, size: 18),
-                  tooltip: 'Regenerar chave',
+                  tooltip: context.l10n.channelsRegenerateKey,
                   onPressed: onRegenerate,
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
@@ -793,13 +793,13 @@ class _KeyInfoCard extends StatelessWidget {
                 ),
               IconButton(
                 icon: const Icon(Icons.copy, size: 16),
-                tooltip: 'Copiar chave',
+                tooltip: context.l10n.commonCopy,
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: secretHex));
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Chave copiada'),
-                      duration: Duration(seconds: 2),
+                    SnackBar(
+                      content: Text(context.l10n.commonMessageCopied),
+                      duration: const Duration(seconds: 2),
                     ),
                   );
                 },
@@ -913,7 +913,7 @@ class _EditChannelSheetState extends State<_EditChannelSheet> {
               color: Theme.of(ctx).colorScheme.error,
               size: 40,
             ),
-            title: const Text('Remover Canal Público?'),
+            title: Text(context.l10n.channelsRemovePublicTitle),
             content: const Text(
               'Está prestes a remover o Canal Público.\n\n'
               'Este é o canal principal partilhado por toda a comunidade MeshCore. '
@@ -923,21 +923,21 @@ class _EditChannelSheetState extends State<_EditChannelSheet> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancelar'),
+                child: Text(context.l10n.commonCancel),
               ),
               FilledButton(
                 style: FilledButton.styleFrom(
                   backgroundColor: Theme.of(ctx).colorScheme.error,
                 ),
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Remover mesmo assim'),
+                child: Text(context.l10n.channelsRemoveAnyway),
               ),
             ],
           );
         }
 
         return AlertDialog(
-          title: const Text('Remover canal'),
+          title: Text(context.l10n.channelsRemoveTitle),
           content: Text(
             'Tem a certeza que quer remover "${widget.channel.name}"?\n\n'
             'Esta acção não pode ser desfeita. Para recuperar o canal terá de conhecer a chave secreta.',
@@ -945,14 +945,14 @@ class _EditChannelSheetState extends State<_EditChannelSheet> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar'),
+              child: Text(context.l10n.commonCancel),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: Theme.of(ctx).colorScheme.error,
               ),
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Remover'),
+              child: Text(context.l10n.commonRemove),
             ),
           ],
         );
@@ -1022,7 +1022,7 @@ class _EditChannelSheetState extends State<_EditChannelSheet> {
             TextField(
               controller: _nameCtrl,
               decoration: InputDecoration(
-                labelText: 'Nome do canal',
+                labelText: context.l10n.channelsChannelName,
                 border: const OutlineInputBorder(),
                 prefixIcon: const Icon(Icons.label_outline),
                 errorText: _nameError,
@@ -1045,7 +1045,7 @@ class _EditChannelSheetState extends State<_EditChannelSheet> {
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 icon: const Icon(Icons.qr_code),
-                label: const Text('Mostrar QR Code do canal'),
+                label: Text(context.l10n.channelsShowQR),
                 onPressed: () => _showQrCode(context),
               ),
             ],
@@ -1126,10 +1126,10 @@ class _FilterBar extends StatelessWidget {
       child: Row(
         spacing: 8,
         children: [
-          _chip(_Filter.todos, 'Todos', Icons.forum, totalCount),
+          _chip(_Filter.todos, context.l10n.commonAll, Icons.forum, totalCount),
           _chip(
             _Filter.naoLidos,
-            'Não lidos',
+            context.l10n.commonUnread,
             Icons.mark_chat_unread,
             unreadCount,
           ),
@@ -1172,21 +1172,21 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Sem canais',
+            context.l10n.channelsEmpty,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: theme.colorScheme.onSurface.withAlpha(120),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Os canais configurados no rádio aparecem aqui',
+            context.l10n.channelsEmptyHint,
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 24),
           FilledButton.icon(
             onPressed: onRefresh,
             icon: const Icon(Icons.refresh),
-            label: const Text('Actualizar Canais'),
+            label: Text(context.l10n.channelsRefresh),
           ),
         ],
       ),
@@ -1212,21 +1212,21 @@ class _NoUnreadState extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Tudo lido',
+            context.l10n.channelsAllRead,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: theme.colorScheme.onSurface.withAlpha(120),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Sem mensagens não lidas nos canais',
+            context.l10n.channelsAllReadHint,
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 24),
           TextButton.icon(
             onPressed: onClearFilter,
             icon: const Icon(Icons.list),
-            label: const Text('Ver todos os canais'),
+            label: Text(context.l10n.channelsSeeAll),
           ),
         ],
       ),
@@ -1305,7 +1305,7 @@ class _ChannelTile extends ConsumerWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      _previewText(lastMessage),
+                      _previewText(context, lastMessage),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -1325,7 +1325,7 @@ class _ChannelTile extends ConsumerWidget {
               // Options button
               IconButton(
                 icon: const Icon(Icons.more_vert, size: 18),
-                tooltip: 'Opções do canal',
+                tooltip: context.l10n.channelsOptionsFabTooltip,
                 onPressed: onEdit,
                 visualDensity: VisualDensity.compact,
               ),
@@ -1337,7 +1337,7 @@ class _ChannelTile extends ConsumerWidget {
                 children: [
                   if (lastMessage != null)
                     Text(
-                      _formatTimestamp(lastMessage.timestamp),
+                      _formatTimestamp(context, lastMessage.timestamp),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color:
                             hasUnread
@@ -1364,20 +1364,21 @@ class _ChannelTile extends ConsumerWidget {
     );
   }
 
-  String _previewText(ChatMessage? msg) {
-    if (msg == null) return 'Sem mensagens';
-    if (msg.isOutgoing) return 'Eu: ${msg.text}';
+  String _previewText(BuildContext context, ChatMessage? msg) {
+    if (msg == null) return context.l10n.commonNoMessages;
+    final l10n = context.l10n;
+    if (msg.isOutgoing) return '${l10n.commonSentByMe}: ${msg.text}';
     if (msg.senderName != null && msg.senderName!.isNotEmpty) {
       return '${msg.senderName}: ${msg.text}';
     }
     return msg.text;
   }
 
-  String _formatTimestamp(int ts) {
+  String _formatTimestamp(BuildContext context, int ts) {
     final dt = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
     final now = DateTime.now();
     final diff = now.difference(dt);
-    if (diff.inMinutes < 1) return 'Agora';
+    if (diff.inMinutes < 1) return context.l10n.telemetryNow;
     if (diff.inMinutes < 60) return '${diff.inMinutes}m';
     if (diff.inHours < 24) return '${diff.inHours}h';
     if (diff.inDays < 7) return '${diff.inDays}d';
@@ -1450,7 +1451,7 @@ class _ChannelQrDialogState extends State<_ChannelQrDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AlertDialog(
-      title: const Text('QR Code do canal'),
+      title: Text(context.l10n.channelsQRTitle),
       content: SizedBox(
         width: 260,
         child: Column(
@@ -1481,7 +1482,7 @@ class _ChannelQrDialogState extends State<_ChannelQrDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Fechar'),
+          child: Text(context.l10n.commonClose),
         ),
         TextButton.icon(
           onPressed: _sharingText ? null : _shareText,
@@ -1493,7 +1494,7 @@ class _ChannelQrDialogState extends State<_ChannelQrDialog> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                   : const Icon(Icons.text_fields),
-          label: const Text('Partilhar texto'),
+          label: Text(context.l10n.channelsShareText),
         ),
         FilledButton.icon(
           onPressed: _sharing ? null : _shareQr,
@@ -1505,7 +1506,7 @@ class _ChannelQrDialogState extends State<_ChannelQrDialog> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                   : const Icon(Icons.share),
-          label: const Text('Partilhar QR'),
+          label: Text(context.l10n.channelsShareQR),
         ),
       ],
     );

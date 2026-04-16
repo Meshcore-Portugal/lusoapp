@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../l10n/l10n.dart';
 import '../../providers/radio_providers.dart';
 import '../../services/plan333_service.dart';
 import '../../transport/radio_transport.dart';
@@ -27,6 +28,10 @@ class Plan333Screen extends ConsumerStatefulWidget {
 class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
   late Timer _ticker;
   DateTime _now = DateTime.now();
+
+  // Debug-only: simulated clock is kept in a provider (not local state) so it
+  // survives navigation away from and back to this screen.
+  DateTime get _effectiveNow => ref.read(plan333DebugNowProvider) ?? _now;
 
   // Station-name / city / locality controllers (used in config card)
   final _nameCtrl = TextEditingController();
@@ -79,10 +84,12 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
     final connState = ref.watch(connectionProvider);
     final cbEnabled = ref.watch(plan333EnabledProvider);
     final qslLogCount = ref.watch(qslLogProvider).length;
+    final debugNow = ref.watch(plan333DebugNowProvider);
+    final effectiveNow = debugNow ?? _now;
 
-    final meshActive = Plan333Service.isMeshEventActive(_now);
-    final qslActive = Plan333Service.isMeshQslActive(_now);
-    final nextMesh = Plan333Service.nextMeshEvent(_now);
+    final meshActive = Plan333Service.isMeshEventActive(effectiveNow);
+    final qslActive = Plan333Service.isMeshQslActive(effectiveNow);
+    final nextMesh = Plan333Service.nextMeshEvent(effectiveNow);
 
     final radioConnected = connState == TransportState.connected;
 
@@ -93,7 +100,7 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
         children: [
           // ── 1. Mesh 3-3-3 status (PRIMARY) ──────────────────────────────
           _MeshStatusCard(
-            now: _now,
+            now: effectiveNow,
             meshActive: meshActive,
             qslActive: qslActive,
             nextMesh: nextMesh,
@@ -103,8 +110,20 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
             radioConnected: radioConnected,
             onSendCq:
                 () => ref.read(plan333AutoSendProvider.notifier).sendManualCq(),
+            onAbort:
+                () => ref.read(plan333AutoSendProvider.notifier).abortSession(),
           ),
           const SizedBox(height: 16),
+
+          if (kDebugMode) ...[
+            _DebugAutomationCard(
+              debugNow: ref.watch(plan333DebugNowProvider),
+              onSimulate: (dt) {
+                ref.read(plan333DebugNowProvider.notifier).state = dt;
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // ── 2. Configuração ──────────────────────────────────────────────
           _ConfigCard(
@@ -162,6 +181,7 @@ class _MeshStatusCard extends StatelessWidget {
     required this.qslLogCount,
     required this.radioConnected,
     required this.onSendCq,
+    required this.onAbort,
   });
 
   final DateTime now;
@@ -173,6 +193,7 @@ class _MeshStatusCard extends StatelessWidget {
   final int qslLogCount;
   final bool radioConnected;
   final VoidCallback onSendCq;
+  final VoidCallback onAbort;
 
   @override
   Widget build(BuildContext context) {
@@ -199,7 +220,7 @@ class _MeshStatusCard extends StatelessWidget {
                 Icon(Icons.hub, color: accent, size: 22),
                 const SizedBox(width: 8),
                 Text(
-                  'MESH 3-3-3',
+                  context.l10n.plan333CardTitle,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: accent,
@@ -208,10 +229,10 @@ class _MeshStatusCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 if (meshActive)
-                  const Flexible(
+                  Flexible(
                     child: _Pill(
-                      label: '● EVENTO ACTIVO',
-                      color: Color(0xFF00E676),
+                      label: context.l10n.plan333EventActive,
+                      color: const Color(0xFF00E676),
                     ),
                   )
                 else
@@ -231,13 +252,13 @@ class _MeshStatusCard extends StatelessWidget {
               Row(
                 children: [
                   _PhaseChip(
-                    label: 'CQ 21:00–22:00',
+                    label: context.l10n.plan333PhaseCQ,
                     active: !qslActive,
                     color: const Color(0xFF00E676),
                   ),
                   const SizedBox(width: 8),
                   _PhaseChip(
-                    label: 'QSL 21:30–22:00',
+                    label: context.l10n.plan333PhaseQSL,
                     active: qslActive,
                     color: const Color(0xFF40C4FF),
                   ),
@@ -249,7 +270,7 @@ class _MeshStatusCard extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    'CQ enviados:',
+                    context.l10n.plan333CqSent,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -273,7 +294,7 @@ class _MeshStatusCard extends StatelessWidget {
                   }),
                   if (autoState.lastCqTime != null)
                     Text(
-                      '(último: ${_fmtTime(autoState.lastCqTime!)})',
+                      '${context.l10n.plan333LastSent} ${_fmtTime(autoState.lastCqTime!)})',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -287,7 +308,7 @@ class _MeshStatusCard extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      'QSL enviados:',
+                      context.l10n.plan333QslSent,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -303,7 +324,7 @@ class _MeshStatusCard extends StatelessWidget {
                     if (autoState.lastQslTime != null) ...[
                       const SizedBox(width: 8),
                       Text(
-                        '(último: ${_fmtTime(autoState.lastQslTime!)})',
+                        '${context.l10n.plan333LastSent} ${_fmtTime(autoState.lastQslTime!)})',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -311,7 +332,7 @@ class _MeshStatusCard extends StatelessWidget {
                     ],
                     if (qslLogCount == 0)
                       Text(
-                        '  sem QSLs no log',
+                        '  ${context.l10n.plan333NoQslLog}',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -328,6 +349,53 @@ class _MeshStatusCard extends StatelessWidget {
                 radioConnected: radioConnected,
                 onTap: onSendCq,
               ),
+              const SizedBox(height: 8),
+
+              // Abort / aborted indicator
+              if (autoState.aborted)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.errorContainer.withAlpha(140),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.block,
+                        size: 16,
+                        color: theme.colorScheme.error,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          context.l10n.plan333AbortedMessage,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (config.autoSendCq && meshActive)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: onAbort,
+                    icon: const Icon(Icons.stop_circle_outlined, size: 16),
+                    label: Text(context.l10n.plan333AbortAutoSend),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: theme.colorScheme.error,
+                      side: BorderSide(color: theme.colorScheme.error),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
             ] else ...[
               // Countdown to next event
               Row(
@@ -354,7 +422,7 @@ class _MeshStatusCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Sábados 21:00–22:00  •  CQ Presenças MeshCore',
+                context.l10n.plan333EventSchedule,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -375,7 +443,7 @@ class _MeshStatusCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'Relatório em ${Plan333Service.reportUrl}',
+                    '${context.l10n.plan333ReportPrefix} ${Plan333Service.reportUrl}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -436,16 +504,16 @@ class _SendButton extends StatelessWidget {
 
     if (allSent) {
       color = const Color(0xFF00E676);
-      label = '✓  3 CQs enviados';
+      label = context.l10n.plan333AllSent;
     } else if (!config.isConfigured) {
       color = Colors.grey;
-      label = 'Configure os dados primeiro';
+      label = context.l10n.plan333ConfigureFirst;
     } else if (!radioConnected) {
       color = AppTheme.primary;
-      label = 'Rádio desligado — não é possível enviar';
+      label = context.l10n.plan333RadioOff;
     } else {
       color = const Color(0xFF00E676);
-      label = 'ENVIAR CQ  (${autoState.cqSentCount + 1}/3)';
+      label = context.l10n.plan333SendCqButton(autoState.cqSentCount + 1);
     }
 
     return SizedBox(
@@ -458,6 +526,234 @@ class _SendButton extends StatelessWidget {
           backgroundColor: canSend ? color.withAlpha(200) : null,
           foregroundColor: canSend ? Colors.black87 : null,
           padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// Debug automation test card (debug builds only)
+// ============================================================================
+
+class _DebugAutomationCard extends ConsumerWidget {
+  const _DebugAutomationCard({
+    required this.debugNow,
+    required this.onSimulate,
+  });
+
+  /// Currently active simulated time, or null when real clock is in use.
+  final DateTime? debugNow;
+
+  /// Called with a new simulated DateTime to freeze the screen display,
+  /// or null to restore the real clock.
+  final void Function(DateTime?) onSimulate;
+
+  static DateTime _nextSaturdayAt(int hour, int minute) {
+    final now = DateTime.now();
+    var d = DateTime(now.year, now.month, now.day, hour, minute);
+    if (d.isBefore(now)) d = d.add(const Duration(days: 1));
+    while (d.weekday != DateTime.saturday) {
+      d = d.add(const Duration(days: 1));
+    }
+    return d;
+  }
+
+  static String _hm(DateTime d) =>
+      '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+  /// Sets the screen simulated time AND triggers one automation pass at that
+  /// time so sent-counters advance exactly as they would in production.
+  void _activate(
+    BuildContext context,
+    WidgetRef ref,
+    DateTime sim,
+    String label,
+  ) {
+    onSimulate(sim);
+    ref.read(plan333AutoSendProvider.notifier).debugRunAutomationAt(sim);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Debug: a simular $label  (${_hm(sim)})'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final autoState = ref.watch(plan333AutoSendProvider);
+    final isSimulating = debugNow != null;
+
+    // Pre-compute preset DateTimes (next Saturday at each slot).
+    final cq1 = _nextSaturdayAt(21, 3);
+    final cq2 = _nextSaturdayAt(21, 23);
+    final cq3 = _nextSaturdayAt(21, 43);
+    final qslPhase = _nextSaturdayAt(21, 35);
+
+    bool isActive(DateTime candidate) =>
+        debugNow != null &&
+        debugNow!.hour == candidate.hour &&
+        debugNow!.minute == candidate.minute;
+
+    final cardColor =
+        isSimulating
+            ? theme.colorScheme.errorContainer.withAlpha(180)
+            : theme.colorScheme.secondaryContainer.withAlpha(140);
+
+    return Card(
+      color: cardColor,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header ────────────────────────────────────────────────────
+            Row(
+              children: [
+                Icon(
+                  isSimulating ? Icons.schedule : Icons.bug_report_outlined,
+                  color:
+                      isSimulating
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.primary,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isSimulating
+                        ? 'DEBUG  ·  A simular ${_hm(debugNow!)}'
+                        : 'Debug: Simular Evento 3-3-3',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: isSimulating ? theme.colorScheme.error : null,
+                    ),
+                  ),
+                ),
+                if (isSimulating)
+                  TextButton(
+                    onPressed: () => onSimulate(null),
+                    child: const Text('Hora real'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              isSimulating
+                  ? 'Ecrã e automação usam a hora simulada. Prima «Hora real» para repor.'
+                  : 'Seleciona uma janela para simular o ecrã do evento e disparar a automação.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // ── Phase preset buttons ───────────────────────────────────────
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _DebugPhaseButton(
+                  label: 'CQ slot 1\n${_hm(cq1)}',
+                  active: isActive(cq1),
+                  color: const Color(0xFF00E676),
+                  onTap: () => _activate(context, ref, cq1, 'CQ slot 1'),
+                ),
+                _DebugPhaseButton(
+                  label: 'CQ slot 2\n${_hm(cq2)}',
+                  active: isActive(cq2),
+                  color: const Color(0xFF00E676),
+                  onTap: () => _activate(context, ref, cq2, 'CQ slot 2'),
+                ),
+                _DebugPhaseButton(
+                  label: 'CQ slot 3\n${_hm(cq3)}',
+                  active: isActive(cq3),
+                  color: const Color(0xFF00E676),
+                  onTap: () => _activate(context, ref, cq3, 'CQ slot 3'),
+                ),
+                _DebugPhaseButton(
+                  label: 'QSL fase\n${_hm(qslPhase)}',
+                  active: isActive(qslPhase),
+                  color: const Color(0xFF40C4FF),
+                  onTap: () => _activate(context, ref, qslPhase, 'QSL fase'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // ── Automation state + reset ──────────────────────────────────
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Automação: CQ ${autoState.cqSentCount}/3  ·  QSL ${autoState.qslSentCount}'
+                    '${autoState.lastCqTime != null ? '  · último CQ ${_hm(autoState.lastCqTime!)}' : ''}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed:
+                      () =>
+                          ref
+                              .read(plan333AutoSendProvider.notifier)
+                              .debugResetAutomationState(),
+                  icon: const Icon(Icons.restart_alt, size: 15),
+                  label: const Text('Reset'),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Tappable animated chip used inside _DebugAutomationCard.
+class _DebugPhaseButton extends StatelessWidget {
+  const _DebugPhaseButton({
+    required this.label,
+    required this.active,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool active;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: active ? color.withAlpha(55) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: active ? color : color.withAlpha(80),
+            width: active ? 1.5 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: active ? color : color.withAlpha(180),
+            fontSize: 12,
+            fontWeight: active ? FontWeight.bold : FontWeight.normal,
+          ),
         ),
       ),
     );
@@ -504,7 +800,7 @@ class _ConfigCard extends StatelessWidget {
                 Icon(Icons.settings, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(
-                  'Configuração do Evento',
+                  context.l10n.plan333ConfigTitle,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -517,7 +813,7 @@ class _ConfigCard extends StatelessWidget {
                       minimumSize: const Size(80, 32),
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                     ),
-                    child: const Text('Guardar'),
+                    child: Text(context.l10n.commonSave),
                   ),
               ],
             ),
@@ -526,9 +822,9 @@ class _ConfigCard extends StatelessWidget {
             // Station name
             TextField(
               controller: nameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Nome de estação *',
-                hintText: 'Ex: Mike 05',
+              decoration: InputDecoration(
+                labelText: context.l10n.plan333StationName,
+                hintText: context.l10n.plan333StationNameHint,
               ),
               onChanged: (_) => onDirty(),
             ),
@@ -540,9 +836,9 @@ class _ConfigCard extends StatelessWidget {
                 Expanded(
                   child: TextField(
                     controller: cityCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Cidade *',
-                      hintText: 'Ex: Lisboa',
+                    decoration: InputDecoration(
+                      labelText: context.l10n.plan333City,
+                      hintText: context.l10n.plan333CityHint,
                     ),
                     onChanged: (_) => onDirty(),
                   ),
@@ -551,9 +847,9 @@ class _ConfigCard extends StatelessWidget {
                 Expanded(
                   child: TextField(
                     controller: localityCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Localidade',
-                      hintText: 'Ex: Olaias',
+                    decoration: InputDecoration(
+                      labelText: context.l10n.plan333Locality,
+                      hintText: context.l10n.plan333LocalityHint,
                     ),
                     onChanged: (_) => onDirty(),
                   ),
@@ -565,10 +861,8 @@ class _ConfigCard extends StatelessWidget {
             // Auto-send toggle
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Envio automático de CQ e QSL'),
-              subtitle: const Text(
-                'CQ: até 3 mensagens (21:00–22:00)  •  QSL: confirma cada estação recebida (21:30–22:00)',
-              ),
+              title: Text(context.l10n.plan333AutoSend),
+              subtitle: Text(context.l10n.plan333AutoSendDesc),
               value: config.autoSendCq,
               onChanged: onAutoSendChanged,
             ),
@@ -577,7 +871,7 @@ class _ConfigCard extends StatelessWidget {
             if (config.isConfigured) ...[
               const Divider(height: 16),
               Text(
-                'Mensagem CQ:',
+                context.l10n.plan333CqMessageLabel,
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -606,7 +900,7 @@ class _FormatsCard extends StatelessWidget {
     final cq =
         config.isConfigured
             ? config.cqMessage
-            : 'CQ Plano 333, [Nome], [Cidade], [Localidade]';
+            : context.l10n.plan333FormatCqTemplate;
 
     return Card(
       child: Padding(
@@ -622,7 +916,7 @@ class _FormatsCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Formatos de Mensagem',
+                  context.l10n.plan333FormatTitle,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -633,17 +927,15 @@ class _FormatsCard extends StatelessWidget {
 
             // CQ format (filled from config if available)
             _PhraseRow(
-              label: 'Presença (CQ)',
-              phase: 'MeshCore 21:00–22:00',
+              label: context.l10n.plan333FormatPresence,
+              phase: context.l10n.plan333FormatPresencePhase,
               phrase: cq,
             ),
             const Divider(height: 20),
-            const _PhraseRow(
-              label: 'QSL (confirmação)',
-              phase: 'Opcional 21:30–22:00',
-              phrase:
-                  'QSL, [Nome estação recebida], [N] hops, [local]\n'
-                  'Ex: QSL, Daytona, 5 hops, Tomar',
+            _PhraseRow(
+              label: context.l10n.plan333FormatQSL,
+              phase: context.l10n.plan333FormatQSLPhase,
+              phrase: context.l10n.plan333FormatQSLTemplate,
             ),
             // const Divider(height: 20),
 
@@ -702,7 +994,7 @@ class _MeshCoreChannelCard extends ConsumerWidget {
       child: OutlinedButton.icon(
         onPressed: () => _showSheet(context),
         icon: const Icon(Icons.lock_outline, size: 18),
-        label: const Text('Configurar Canal MeshCore  (#plano333)'),
+        label: Text(context.l10n.plan333ConfigureChannel),
         style: OutlinedButton.styleFrom(
           foregroundColor: theme.colorScheme.primary,
           side: BorderSide(color: theme.colorScheme.primary.withAlpha(120)),
@@ -727,6 +1019,7 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
   bool _resultOk = false;
 
   Future<void> _configure() async {
+    final l10n = context.l10n;
     final service = ref.read(radioServiceProvider);
     final channels = ref.read(channelsProvider);
     final config = ref.read(plan333ConfigProvider);
@@ -757,7 +1050,7 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
       await service.requestChannel(slot);
 
       // Auto-update the event channel index in config.
-      if (config.meshChannelIndex != slot) {
+      if (config.meshChannelIndex != slot && mounted) {
         await ref
             .read(plan333ConfigProvider.notifier)
             .update(config.copyWith(meshChannelIndex: slot));
@@ -767,7 +1060,7 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
         setState(() {
           _loading = false;
           _resultOk = true;
-          _resultMessage = 'Canal #plano333 adicionado no slot $slot';
+          _resultMessage = l10n.plan333ChannelAdded(slot);
         });
       }
     } catch (e) {
@@ -814,7 +1107,7 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
               Icon(Icons.lock_outline, color: theme.colorScheme.primary),
               const SizedBox(width: 8),
               Text(
-                'Canal MeshCore  #plano333',
+                context.l10n.plan333ChannelSheetTitle,
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -823,7 +1116,7 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Adiciona o canal ao rádio ligado ou consulte os dados manualmente.',
+            context.l10n.plan333ChannelSheetDesc,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -851,12 +1144,12 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
                       ),
               label: Text(
                 !isConnected
-                    ? 'Rádio não ligado'
+                    ? context.l10n.commonRadioDisconnected
                     : _loading
-                    ? 'A configurar...'
+                    ? context.l10n.commonConfiguring
                     : alreadySet
-                    ? 'Re-configurar no Rádio'
-                    : 'Adicionar ao Rádio',
+                    ? context.l10n.commonReconfigRadio
+                    : context.l10n.commonAdd2Radio,
               ),
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -919,9 +1212,9 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
                 const ClipboardData(text: Plan333Service.reportUrl),
               );
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('URL do relatório copiado'),
-                  duration: Duration(seconds: 2),
+                SnackBar(
+                  content: Text(context.l10n.commonReportUrlCopied),
+                  duration: const Duration(seconds: 2),
                 ),
               );
             },
@@ -937,7 +1230,7 @@ class _ChannelSetupSheetState extends ConsumerState<_ChannelSetupSheet> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Relatório: ${Plan333Service.reportUrl}',
+                      '${context.l10n.commonReport} ${Plan333Service.reportUrl}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.primary,
                         decoration: TextDecoration.underline,
@@ -1043,7 +1336,7 @@ class _NotificationsCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Alertas Mesh 3-3-3',
+                  context.l10n.plan333Alerts,
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -1052,16 +1345,14 @@ class _NotificationsCard extends StatelessWidget {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Lembrete do evento de sábado'),
-              subtitle: const Text(
-                'Alertas 10 e 5 min antes do Mesh 3-3-3 (Sábados 21:00)',
-              ),
+              title: Text(context.l10n.plan333AlertToggle),
+              subtitle: Text(context.l10n.plan333AlertDesc),
               value: enabled,
               onChanged: onChanged,
             ),
             if (enabled)
               Text(
-                'Alertas ativos às 20:50 e 20:55.',
+                context.l10n.plan333AlertsActive,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -1099,7 +1390,7 @@ class _QslCard extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Estações Ouvidas',
+                    context.l10n.plan333StationsHeard,
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -1119,13 +1410,13 @@ class _QslCard extends ConsumerWidget {
                     // Share button
                     IconButton(
                       icon: const Icon(Icons.share_outlined),
-                      tooltip: 'Partilhar log',
+                      tooltip: context.l10n.plan333ShareLog,
                       onPressed: () => _share(log, config),
                     ),
                     // Clear button
                     IconButton(
                       icon: const Icon(Icons.delete_outline),
-                      tooltip: 'Limpar log',
+                      tooltip: context.l10n.plan333ClearLog,
                       onPressed: () => _confirmClear(context, ref),
                     ),
                   ],
@@ -1160,7 +1451,7 @@ class _QslCard extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Text(
-                  'Nenhuma estação ouvida ainda. Os CQs recebidos no canal aparecem aqui automaticamente.',
+                  context.l10n.plan333NoStationsYet,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -1200,8 +1491,8 @@ class _QslCard extends ConsumerWidget {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Limpar QSL?'),
-            content: const Text('Todos os QSL registados serão apagados.'),
+            title: Text(context.l10n.plan333ClearQslTitle),
+            content: Text(context.l10n.plan333ClearQslContent),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -1338,7 +1629,7 @@ class _AddQslDialogState extends State<_AddQslDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Adicionar QSL'),
+      title: Text(context.l10n.plan333AddQslTitle),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1347,9 +1638,9 @@ class _AddQslDialogState extends State<_AddQslDialog> {
               controller: _stationCtrl,
               autofocus: true,
               textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(
-                labelText: 'Estação *',
-                hintText: 'ex: Daytona',
+              decoration: InputDecoration(
+                labelText: context.l10n.plan333StationLabel,
+                hintText: context.l10n.plan333StationHint,
               ),
             ),
             const SizedBox(height: 12),
@@ -1373,15 +1664,17 @@ class _AddQslDialogState extends State<_AddQslDialog> {
             TextField(
               controller: _locationCtrl,
               textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Localização',
-                hintText: 'ex: Tomar',
+              decoration: InputDecoration(
+                labelText: context.l10n.plan333LocationLabel,
+                hintText: context.l10n.plan333LocationHint,
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _notesCtrl,
-              decoration: const InputDecoration(labelText: 'Notas (opcional)'),
+              decoration: InputDecoration(
+                labelText: context.l10n.plan333NotesLabel,
+              ),
             ),
           ],
         ),

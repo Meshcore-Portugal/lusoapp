@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 
@@ -204,21 +205,21 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
               if (channelMessages.isNotEmpty)
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert, size: 20),
-                  tooltip: 'Opções do canal',
+                  tooltip: context.l10n.chatMenuOptions,
                   onSelected: (value) async {
                     if (value == 'clear') {
                       final confirm = await showDialog<bool>(
                         context: context,
                         builder:
                             (ctx) => AlertDialog(
-                              title: const Text('Limpar histórico'),
+                              title: Text(context.l10n.commonClearHistory),
                               content: const Text(
                                 'Apagar todas as mensagens deste canal? Esta ação não pode ser revertida.',
                               ),
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.pop(ctx, false),
-                                  child: const Text('Cancelar'),
+                                  child: Text(context.l10n.commonCancel),
                                 ),
                                 FilledButton(
                                   style: FilledButton.styleFrom(
@@ -226,7 +227,7 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
                                     foregroundColor: theme.colorScheme.onError,
                                   ),
                                   onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text('Apagar'),
+                                  child: Text(context.l10n.commonDelete),
                                 ),
                               ],
                             ),
@@ -248,7 +249,7 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
                               color: theme.colorScheme.error,
                             ),
                             title: Text(
-                              'Limpar histórico',
+                              context.l10n.commonClearHistory,
                               style: TextStyle(color: theme.colorScheme.error),
                             ),
                             contentPadding: EdgeInsets.zero,
@@ -277,7 +278,7 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Sem mensagens neste canal',
+                          context.l10n.chatNoMessages,
                           style: theme.textTheme.bodyLarge?.copyWith(
                             color: theme.colorScheme.onSurface.withAlpha(120),
                           ),
@@ -322,7 +323,7 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
         _ChatInputBar(
           controller: _textController,
           onSend: _sendMessage,
-          hintText: 'Mensagem para o canal...',
+          hintText: context.l10n.chatInputHint,
           replyTo: _replyingTo,
           onCancelReply:
               _replyingTo != null
@@ -480,8 +481,8 @@ class _HeardBadgeState extends State<_HeardBadge> {
         heard
             ? '${widget.count} Repetidor${widget.count > 1 ? 'es' : ''}'
             : showSent
-            ? 'Enviada'
-            : 'A propagar...';
+            ? context.l10n.commonSent
+            : context.l10n.commonPropagating;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -760,6 +761,7 @@ class _MessageBubble extends ConsumerWidget {
   /// Incoming:        [via RelayName +1]
   /// Fallback (no 0x88 data): plain "N saltos" text, not tappable.
   static Widget _buildPathLine({
+    required BuildContext context,
     required ThemeData theme,
     required Color subtleColor,
     required bool isOutgoing,
@@ -845,7 +847,7 @@ class _MessageBubble extends ConsumerWidget {
                 ),
               )
             else
-              Text('Direto', style: labelStyle),
+              Text(context.l10n.commonDirect, style: labelStyle),
             if (extraPaths > 0) ...[
               const SizedBox(width: 5),
               Container(
@@ -949,7 +951,7 @@ class _MessageBubble extends ConsumerWidget {
                   const SizedBox(height: 20),
                   FilledButton.icon(
                     icon: const Icon(Icons.add_circle_outline),
-                    label: const Text('Criar e entrar no canal'),
+                    label: Text(context.l10n.chatCreateJoinChannel),
                     onPressed: () async {
                       final service = ref.read(radioServiceProvider);
                       if (service == null) return;
@@ -1017,7 +1019,7 @@ class _MessageBubble extends ConsumerWidget {
                   const SizedBox(height: 8),
                   OutlinedButton(
                     onPressed: () => Navigator.pop(sheetCtx),
-                    child: const Text('Cancelar'),
+                    child: Text(context.l10n.commonCancel),
                   ),
                 ],
               ),
@@ -1067,7 +1069,7 @@ class _MessageBubble extends ConsumerWidget {
                   if (!msg.isOutgoing && onReply != null)
                     ListTile(
                       leading: const Icon(Icons.reply),
-                      title: const Text('Responder'),
+                      title: Text(context.l10n.commonReply),
                       onTap: () {
                         Navigator.pop(context);
                         onReply!();
@@ -1075,14 +1077,14 @@ class _MessageBubble extends ConsumerWidget {
                     ),
                   ListTile(
                     leading: const Icon(Icons.copy),
-                    title: const Text('Copiar texto'),
+                    title: Text(context.l10n.commonCopyText),
                     onTap: () {
                       Clipboard.setData(ClipboardData(text: msg.text));
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Texto copiado'),
-                          duration: Duration(seconds: 1),
+                        SnackBar(
+                          content: Text(context.l10n.commonMessageCopied),
+                          duration: const Duration(seconds: 1),
                         ),
                       );
                     },
@@ -1090,7 +1092,7 @@ class _MessageBubble extends ConsumerWidget {
                   if (msg.packetHashHex != null)
                     ListTile(
                       leading: const Icon(Icons.call_merge),
-                      title: const Text('Ver caminhos da mensagem'),
+                      title: Text(context.l10n.chatPathLabel),
                       subtitle: Text(
                         msg.isOutgoing
                             ? 'Ouvida ${msg.heardCount} ${msg.heardCount == 1 ? 'vez' : 'vezes'} por repetidores'
@@ -1105,7 +1107,7 @@ class _MessageBubble extends ConsumerWidget {
                   if (msg.pathLen != null || msg.snr != null)
                     ListTile(
                       leading: const Icon(Icons.info_outline),
-                      title: const Text('Detalhes'),
+                      title: Text(context.l10n.chatMsgDetails),
                       onTap: () {
                         Navigator.pop(context);
                         _showMsgDetails(context, msg, theme);
@@ -1277,6 +1279,7 @@ class _MessageBubble extends ConsumerWidget {
                       Builder(
                         builder: (_) {
                           final line = _buildPathLine(
+                            context: context,
                             theme: theme,
                             subtleColor: theme.colorScheme.onPrimaryContainer
                                 .withAlpha(160),
@@ -1414,6 +1417,7 @@ class _MessageBubble extends ConsumerWidget {
                       Builder(
                         builder: (_) {
                           final line = _buildPathLine(
+                            context: context,
                             theme: theme,
                             subtleColor: theme.colorScheme.onSurface.withAlpha(
                               110,
@@ -2239,7 +2243,7 @@ class _MessagePathsSheet extends ConsumerWidget {
                               width: double.infinity,
                               child: OutlinedButton.icon(
                                 icon: const Icon(Icons.map_outlined, size: 18),
-                                label: const Text('Ver no mapa'),
+                                label: Text(context.l10n.chatViewOnMap),
                                 onPressed: () {
                                   ref.read(traceResultProvider.notifier).state =
                                       _buildTraceResult(path, contacts);

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../protocol/cayenne_lpp.dart';
 import '../../protocol/companion_decoder.dart';
+import '../../l10n/l10n.dart';
 import '../../providers/radio_providers.dart';
 
 /// Telemetry dashboard — battery history chart, CayenneLPP sensor readings,
@@ -27,8 +28,8 @@ class TelemetryScreen extends ConsumerWidget {
       padding: const EdgeInsets.all(16),
       children: [
         // ---- Battery section ----
-        const _SectionHeader(
-          label: 'Bateria',
+        _SectionHeader(
+          label: context.l10n.telemetryBattery,
           icon: Icons.battery_charging_full,
         ),
         const SizedBox(height: 8),
@@ -40,8 +41,8 @@ class TelemetryScreen extends ConsumerWidget {
         const SizedBox(height: 20),
 
         // ---- Network stats section ----
-        const _SectionHeader(
-          label: 'Estatísticas da Rede',
+        _SectionHeader(
+          label: context.l10n.telemetryNetStats,
           icon: Icons.bar_chart,
         ),
         const SizedBox(height: 8),
@@ -49,12 +50,15 @@ class TelemetryScreen extends ConsumerWidget {
         const SizedBox(height: 20),
 
         // ---- Radio core stats section ----
-        const _SectionHeader(label: 'Rádio — Estado', icon: Icons.memory),
+        _SectionHeader(
+          label: context.l10n.telemetryRadioState,
+          icon: Icons.memory,
+        ),
         const SizedBox(height: 8),
         if (statsCore == null)
           _EmptyHint(
             icon: Icons.hourglass_empty,
-            message: 'A aguardar estatísticas do rádio...',
+            message: context.l10n.telemetryRadioWaiting,
             theme: theme,
           )
         else
@@ -62,12 +66,15 @@ class TelemetryScreen extends ConsumerWidget {
         const SizedBox(height: 20),
 
         // ---- Radio RF stats section ----
-        const _SectionHeader(label: 'Rádio — RF', icon: Icons.cell_tower),
+        _SectionHeader(
+          label: context.l10n.telemetryRadioRF,
+          icon: Icons.cell_tower,
+        ),
         const SizedBox(height: 8),
         if (statsRadio == null)
           _EmptyHint(
             icon: Icons.hourglass_empty,
-            message: 'A aguardar estatísticas de RF...',
+            message: context.l10n.telemetryRFWaiting,
             theme: theme,
           )
         else
@@ -75,15 +82,15 @@ class TelemetryScreen extends ConsumerWidget {
         const SizedBox(height: 20),
 
         // ---- Packet counters section ----
-        const _SectionHeader(
-          label: 'Rádio — Contadores de Pacotes',
+        _SectionHeader(
+          label: context.l10n.telemetryPacketCounters,
           icon: Icons.swap_horiz,
         ),
         const SizedBox(height: 8),
         if (statsPackets == null)
           _EmptyHint(
             icon: Icons.hourglass_empty,
-            message: 'A aguardar contadores de pacotes...',
+            message: context.l10n.telemetryCountersWaiting,
             theme: theme,
           )
         else
@@ -91,15 +98,15 @@ class TelemetryScreen extends ConsumerWidget {
         const SizedBox(height: 20),
 
         // ---- CayenneLPP sensor readings ----
-        const _SectionHeader(
-          label: 'Sensores (Telemetria)',
+        _SectionHeader(
+          label: context.l10n.telemetrySensors,
           icon: Icons.sensors,
         ),
         const SizedBox(height: 8),
         if (telemetry.isEmpty)
           _EmptyHint(
             icon: Icons.sensors_off,
-            message: 'Nenhuma telemetria recebida.',
+            message: context.l10n.telemetryNoData,
             theme: theme,
           )
         else
@@ -158,7 +165,7 @@ class _BatteryCard extends StatelessWidget {
                     Text(
                       currentMv > 0
                           ? '${_batteryPercent(currentMv)}%'
-                          : 'Sem dados',
+                          : context.l10n.commonNoData,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -168,7 +175,7 @@ class _BatteryCard extends StatelessWidget {
                 const Spacer(),
                 if (hasData)
                   Text(
-                    '${history.length} amostras',
+                    '${history.length} ${context.l10n.telemetrySamplesSuffix}',
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -194,7 +201,7 @@ class _BatteryCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'Agora',
+                    context.l10n.telemetryNow,
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -205,7 +212,7 @@ class _BatteryCard extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'O histórico aparece após a primeira leitura de bateria.',
+                  context.l10n.telemetryHistoryHint,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -374,7 +381,7 @@ class _NetworkStatsCard extends StatelessWidget {
             _StatCell(
               icon: Icons.arrow_downward,
               color: Colors.green.shade600,
-              label: 'RX',
+              label: context.l10n.telemetryRX,
               value: '${stats.rxMessages}',
               theme: theme,
             ),
@@ -382,7 +389,7 @@ class _NetworkStatsCard extends StatelessWidget {
             _StatCell(
               icon: Icons.arrow_upward,
               color: theme.colorScheme.primary,
-              label: 'TX',
+              label: context.l10n.telemetryTX,
               value: '${stats.txMessages}',
               theme: theme,
             ),
@@ -390,7 +397,7 @@ class _NetworkStatsCard extends StatelessWidget {
             _StatCell(
               icon: Icons.error_outline,
               color: Colors.red.shade600,
-              label: 'Erros',
+              label: context.l10n.telemetryErrors,
               value: '${stats.errors}',
               theme: theme,
             ),
@@ -398,7 +405,7 @@ class _NetworkStatsCard extends StatelessWidget {
             _StatCell(
               icon: Icons.cell_tower,
               color: Colors.orange.shade700,
-              label: 'Ouvidos',
+              label: context.l10n.telemetryHeard,
               value: '${stats.heardNodes}',
               theme: theme,
             ),
@@ -480,7 +487,7 @@ class _TelemetryEntryCard extends StatelessWidget {
                 const Icon(Icons.sensors, size: 16),
                 const SizedBox(width: 6),
                 Text(
-                  'Telemetria — $timeStr',
+                  '${context.l10n.telemetryCardPrefix} $timeStr',
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -573,7 +580,7 @@ class _RadioCoreStatsCard extends StatelessWidget {
                 _StatCell(
                   icon: Icons.battery_charging_full,
                   color: Colors.green.shade600,
-                  label: 'Bateria',
+                  label: context.l10n.telemetryBattery,
                   value: '$volts V',
                   theme: theme,
                 ),
@@ -581,7 +588,7 @@ class _RadioCoreStatsCard extends StatelessWidget {
                 _StatCell(
                   icon: Icons.timer_outlined,
                   color: theme.colorScheme.primary,
-                  label: 'Uptime',
+                  label: context.l10n.telemetryUptime,
                   value: uptime,
                   theme: theme,
                 ),
@@ -589,7 +596,7 @@ class _RadioCoreStatsCard extends StatelessWidget {
                 _StatCell(
                   icon: Icons.inbox,
                   color: theme.colorScheme.secondary,
-                  label: 'Fila TX',
+                  label: context.l10n.telemetryTxQueue,
                   value: '${stats.queueLen}',
                   theme: theme,
                 ),
@@ -606,7 +613,7 @@ class _RadioCoreStatsCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    'Erros: 0x${stats.errors.toRadixString(16).padLeft(4, '0').toUpperCase()}',
+                    '${context.l10n.telemetryErrorsPrefix} 0x${stats.errors.toRadixString(16).padLeft(4, '0').toUpperCase()}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: Colors.orange.shade700,
                     ),
@@ -657,7 +664,7 @@ class _RadioRfStatsCard extends StatelessWidget {
                 _StatCell(
                   icon: Icons.signal_cellular_alt,
                   color: _rssiColor(stats.lastRssi, theme),
-                  label: 'RSSI',
+                  label: context.l10n.telemetryRSSI,
                   value: '${stats.lastRssi} dBm',
                   theme: theme,
                 ),
@@ -665,7 +672,7 @@ class _RadioRfStatsCard extends StatelessWidget {
                 _StatCell(
                   icon: Icons.noise_aware,
                   color: theme.colorScheme.onSurfaceVariant,
-                  label: 'Ruído',
+                  label: context.l10n.telemetryNoise,
                   value: '${stats.noiseFloor} dBm',
                   theme: theme,
                 ),
@@ -673,7 +680,7 @@ class _RadioRfStatsCard extends StatelessWidget {
                 _StatCell(
                   icon: Icons.show_chart,
                   color: _snrColor(stats.lastSnrDb, theme),
-                  label: 'SNR',
+                  label: context.l10n.telemetrySNR,
                   value: '$snr dB',
                   theme: theme,
                 ),
@@ -686,7 +693,7 @@ class _RadioRfStatsCard extends StatelessWidget {
                 _StatCell(
                   icon: Icons.upload_outlined,
                   color: theme.colorScheme.primary,
-                  label: 'Airtime TX',
+                  label: context.l10n.telemetryAirtimeTX,
                   value: txAir,
                   theme: theme,
                 ),
@@ -694,7 +701,7 @@ class _RadioRfStatsCard extends StatelessWidget {
                 _StatCell(
                   icon: Icons.download_outlined,
                   color: Colors.green.shade600,
-                  label: 'Airtime RX',
+                  label: context.l10n.telemetryAirtimeRX,
                   value: rxAir,
                   theme: theme,
                 ),
@@ -750,7 +757,7 @@ class _RadioPacketStatsCard extends StatelessWidget {
                 _StatCell(
                   icon: Icons.arrow_downward,
                   color: Colors.green.shade600,
-                  label: 'RX Total',
+                  label: context.l10n.telemetryRXTotal,
                   value: '${stats.recv}',
                   theme: theme,
                 ),
@@ -758,7 +765,7 @@ class _RadioPacketStatsCard extends StatelessWidget {
                 _StatCell(
                   icon: Icons.arrow_upward,
                   color: theme.colorScheme.primary,
-                  label: 'TX Total',
+                  label: context.l10n.telemetryTXTotal,
                   value: '${stats.sent}',
                   theme: theme,
                 ),
@@ -767,7 +774,7 @@ class _RadioPacketStatsCard extends StatelessWidget {
                   _StatCell(
                     icon: Icons.error_outline,
                     color: Colors.red.shade600,
-                    label: 'Erros RX',
+                    label: context.l10n.telemetryErrorsRX,
                     value: '${stats.recvErrors}',
                     theme: theme,
                   ),
@@ -781,7 +788,7 @@ class _RadioPacketStatsCard extends StatelessWidget {
                 _StatCell(
                   icon: Icons.waves,
                   color: theme.colorScheme.secondary,
-                  label: 'Flood TX',
+                  label: context.l10n.telemetryFloodTX,
                   value: '${stats.floodTx}',
                   theme: theme,
                 ),
@@ -789,7 +796,7 @@ class _RadioPacketStatsCard extends StatelessWidget {
                 _StatCell(
                   icon: Icons.waves,
                   color: Colors.teal.shade600,
-                  label: 'Flood RX',
+                  label: context.l10n.telemetryFloodRX,
                   value: '${stats.floodRx}',
                   theme: theme,
                 ),
@@ -797,7 +804,7 @@ class _RadioPacketStatsCard extends StatelessWidget {
                 _StatCell(
                   icon: Icons.alt_route,
                   color: Colors.indigo.shade400,
-                  label: 'Direto TX',
+                  label: context.l10n.telemetryDirectTX,
                   value: '${stats.directTx}',
                   theme: theme,
                 ),
@@ -805,7 +812,7 @@ class _RadioPacketStatsCard extends StatelessWidget {
                 _StatCell(
                   icon: Icons.alt_route,
                   color: Colors.cyan.shade600,
-                  label: 'Direto RX',
+                  label: context.l10n.telemetryDirectRX,
                   value: '${stats.directRx}',
                   theme: theme,
                 ),

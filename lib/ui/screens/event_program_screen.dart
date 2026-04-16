@@ -3,15 +3,13 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../providers/radio_providers.dart';
 
 // ---------------------------------------------------------------------------
 // Event data — edit here or flip _showEventProgram in connect_screen.dart
 // ---------------------------------------------------------------------------
 
-const _eventDate = 'Abril 2026';
-const _eventTitle = 'Tech Summit 2026';
-const _eventSubtitle = 'MeshCore Portugal';
 const _accentColor = Color(0xFFFF8C00); // matches badge colour
 
 class _Slot {
@@ -141,7 +139,7 @@ class EventProgramScreen extends ConsumerWidget {
                 children: [
                   _SectionHeader(
                     icon: Icons.wb_sunny_outlined,
-                    label: 'Manhã',
+                    label: context.l10n.eventMorning,
                     theme: theme,
                   ),
                   const SizedBox(height: 8),
@@ -149,7 +147,7 @@ class EventProgramScreen extends ConsumerWidget {
                   const SizedBox(height: 24),
                   _SectionHeader(
                     icon: Icons.wb_twilight,
-                    label: 'Tarde',
+                    label: context.l10n.eventAfternoon,
                     theme: theme,
                   ),
                   const SizedBox(height: 8),
@@ -157,7 +155,7 @@ class EventProgramScreen extends ConsumerWidget {
                   const SizedBox(height: 28),
                   _SectionHeader(
                     icon: Icons.build_outlined,
-                    label: 'Workshops (sala paralela)',
+                    label: context.l10n.eventWorkshops,
                     theme: theme,
                   ),
                   const SizedBox(height: 12),
@@ -216,8 +214,8 @@ class _ChannelBannerState extends State<_ChannelBanner> {
           Expanded(
             child: Text(
               widget.noFreeSlot
-                  ? 'Sem slots de canal disponíveis para adicionar #techsummit2026.'
-                  : 'Canal #techsummit2026 não encontrado no rádio.',
+                  ? context.l10n.eventChannelNoSlots
+                  : context.l10n.eventChannelNotFound,
               style: widget.theme.textTheme.bodySmall?.copyWith(
                 color: widget.theme.colorScheme.onSurface,
               ),
@@ -241,7 +239,7 @@ class _ChannelBannerState extends State<_ChannelBanner> {
                     await widget.onAdd();
                     if (mounted) setState(() => _loading = false);
                   },
-                  child: const Text('Adicionar'),
+                  child: Text(context.l10n.eventAddChannel),
                 ),
           ],
         ],
@@ -309,7 +307,7 @@ class _HeaderBanner extends StatelessWidget {
                         border: Border.all(color: _accentColor.withAlpha(80)),
                       ),
                       child: Text(
-                        _eventTitle.toUpperCase(),
+                        context.l10n.eventSummitTitle.toUpperCase(),
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: _accentColor,
                           fontWeight: FontWeight.w800,
@@ -319,7 +317,7 @@ class _HeaderBanner extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      _eventSubtitle,
+                      context.l10n.eventSummitSubtitle,
                       style: theme.textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: theme.colorScheme.onSurface,
@@ -327,7 +325,7 @@ class _HeaderBanner extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Programa do Evento  ·  $_eventDate',
+                      '${context.l10n.eventTitle}  ·  ${context.l10n.eventDateLabel}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),

@@ -15,6 +15,8 @@ import 'screens/room_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/event_program_screen.dart';
 import 'screens/telemetry_screen.dart';
+import 'screens/discover_contacts_screen.dart';
+import 'screens/rx_log_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -42,6 +44,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/contacts',
             builder: (context, state) => const ContactsScreen(),
           ),
+          GoRoute(
+            path: '/discover',
+            builder: (context, state) => const DiscoverContactsScreen(),
+          ),
           GoRoute(path: '/map', builder: (context, state) => const MapScreen()),
           GoRoute(
             path: '/apps',
@@ -54,6 +60,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/apps/telemetry',
             builder: (context, state) => const TelemetryScreen(),
+          ),
+          GoRoute(
+            path: '/apps/rxlog',
+            builder: (context, state) => const RxLogScreen(),
           ),
           GoRoute(
             path: '/apps/event',
