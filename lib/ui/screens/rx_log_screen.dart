@@ -43,13 +43,13 @@ class RxLogScreen extends ConsumerWidget {
                 onPressed:
                     entries.isEmpty ? null : () => _confirmClear(context, ref),
               ),
-              TextButton.icon(
+              IconButton(
+                tooltip: context.l10n.rxLogExportPcap,
+                icon: const Icon(Icons.share_outlined, size: 20),
                 onPressed:
                     entries.isEmpty
                         ? null
                         : () => _exportPcapng(context, entries),
-                icon: const Icon(Icons.share_outlined, size: 16),
-                label: Text(context.l10n.rxLogExportPcap),
               ),
             ],
           ),
