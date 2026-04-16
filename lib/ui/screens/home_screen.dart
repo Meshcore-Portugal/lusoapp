@@ -286,8 +286,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   int _batteryPercent(int mv) {
-    // LiPo curve: 4200 mV = 100%, 3200 mV = 0%
-    return (((mv.clamp(3200, 4200) - 3200) / 1000) * 100).round();
+    // LiPo curve: matches MeshCore firmware defaults (3000–4200 mV)
+    return (((mv.clamp(3000, 4200) - 3000) / 1200) * 100).round();
   }
 
   IconData _batteryIcon(int mv) {
