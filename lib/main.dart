@@ -70,7 +70,6 @@ class _McAppPtState extends ConsumerState<McAppPt> {
     await NotificationService.instance.init();
     if (mounted) {
       await ref.read(notificationSettingsProvider.notifier).loadFromStorage();
-      await ref.read(favoritesProvider.notifier).loadFromStorage();
       await ref.read(plan333EnabledProvider.notifier).loadFromStorage();
       await ref.read(plan333ConfigProvider.notifier).loadFromStorage();
       await ref.read(qslLogProvider.notifier).loadFromStorage();

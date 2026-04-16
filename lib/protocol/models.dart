@@ -89,6 +89,37 @@ class Contact extends Equatable {
   bool get isRoom => type == 0x03;
   bool get isSensor => type == 0x04;
 
+  /// Bit 0 (LSB, mask 0x01) of [flags] is the 'favourite' flag on the radio
+  /// firmware. See MeshCore `examples/companion_radio/MyMesh.cpp` where the
+  /// telemetry permission lookup does `uint8_t cp = contact.flags >> 1;`
+  /// with the comment: "LSB used as 'favourite' bit (so only use upper bits)".
+  /// The whole [flags] byte is round-tripped unchanged through RESP_CONTACT /
+  /// CMD_ADD_UPDATE_CONTACT, so toggling bit 0 on the app side is authoritative.
+  static const int _flagFavoriteMask = 0x01;
+
+  /// True when this contact is marked as a favourite on the radio.
+  bool get isFavorite => (flags & _flagFavoriteMask) != 0;
+
+  /// Returns a copy of this contact with bit 0 of [flags] set to [value].
+  /// All other bits (permissions encoded in the upper bits) are preserved.
+  Contact withFavorite(bool value) {
+    final newFlags =
+        value ? (flags | _flagFavoriteMask) : (flags & ~_flagFavoriteMask);
+    if (newFlags == flags) return this;
+    return Contact(
+      publicKey: publicKey,
+      type: type,
+      flags: newFlags,
+      pathLen: pathLen,
+      name: name,
+      lastAdvertTimestamp: lastAdvertTimestamp,
+      latitude: latitude,
+      longitude: longitude,
+      lastModified: lastModified,
+      customName: customName,
+    );
+  }
+
   @override
   List<Object?> get props => [publicKey, type, name, customName];
 

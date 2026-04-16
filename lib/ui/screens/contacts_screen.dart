@@ -64,23 +64,13 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     final filter = ref.watch(contactFilterProvider);
     final sort = ref.watch(contactSortProvider);
     final contacts = ref.watch(contactsProvider);
-    final favorites = ref.watch(favoritesProvider);
     final messages = ref.watch(messagesProvider);
 
     final chatContacts = contacts.where((c) => c.isChat).toList();
     final repeaters = contacts.where((c) => c.isRepeater).toList();
     final rooms = contacts.where((c) => c.isRoom).toList();
     final sensors = contacts.where((c) => c.isSensor).toList();
-    final favoriteContacts =
-        contacts
-            .where(
-              (c) => favorites.contains(
-                c.publicKey
-                    .map((b) => b.toRadixString(16).padLeft(2, '0'))
-                    .join(),
-              ),
-            )
-            .toList();
+    final favoriteContacts = contacts.where((c) => c.isFavorite).toList();
 
     List<Contact> filtered;
     switch (filter) {
@@ -466,9 +456,7 @@ class _ContactTile extends ConsumerWidget {
             )
             : 0;
 
-    final isFavorite = ref.watch(
-      favoritesProvider.select((s) => s.contains(keyHex)),
-    );
+    final isFavorite = contact.isFavorite;
 
     final ts = _bestTs(contact);
     final lastSeen = ts > 0 ? _formatTimestamp(ts) : 'Nunca';
@@ -640,6 +628,19 @@ class _ContactTile extends ConsumerWidget {
     }
   }
 
+  /// Flip the favourite bit on [contact] and push the updated flags byte to
+  /// the radio. Optimistically updates the local contact list so the UI
+  /// reflects the change immediately — the radio's OkResponse is not awaited.
+  void _toggleFavorite(WidgetRef ref) {
+    final updated = contact.withFavorite(!contact.isFavorite);
+    ref
+        .read(contactsProvider.notifier)
+        .setFavorite(contact.publicKey, updated.isFavorite);
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+    unawaited(service.addUpdateContact(updated).catchError((_) {}));
+  }
+
   Future<void> _saveToRadio(BuildContext context, WidgetRef ref) async {
     final service = ref.read(radioServiceProvider);
     if (service == null) return;
@@ -761,8 +762,8 @@ class _ContactTile extends ConsumerWidget {
                         : 'Adicionar aos favoritos',
                   ),
                   onTap: () {
-                    ref.read(favoritesProvider.notifier).toggle(keyHex);
                     Navigator.pop(ctx);
+                    _toggleFavorite(ref);
                   },
                 ),
                 // QR
