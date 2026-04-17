@@ -20,7 +20,8 @@ plugins {
 android {
     namespace = "pt.meshcore.lusoapp"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // NDK r28+ compiles 16 KB ELF-aligned .so files by default (Google Play requirement since Nov 2025)
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
@@ -66,6 +67,14 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
             isMinifyEnabled = true
+        }
+    }
+
+    // AGP 8.5.1+ with useLegacyPackaging=false produces uncompressed .so files
+    // zip-aligned at 16 KB boundaries — required by Google Play for 16 KB page size support.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
         }
     }
 }
