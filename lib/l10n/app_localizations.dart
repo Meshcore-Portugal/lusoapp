@@ -652,6 +652,18 @@ abstract class AppLocalizations {
   /// **'Desligado'**
   String get settingsDisconnected;
 
+  /// No description provided for @settingsAutoReconnect.
+  ///
+  /// In pt, this message translates to:
+  /// **'Reconexão automática'**
+  String get settingsAutoReconnect;
+
+  /// No description provided for @settingsAutoReconnectDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Reconecta automaticamente quando a ligação é perdida'**
+  String get settingsAutoReconnectDesc;
+
   /// No description provided for @settingsRadioConfig.
   ///
   /// In pt, this message translates to:

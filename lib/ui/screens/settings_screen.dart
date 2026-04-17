@@ -36,6 +36,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final selfInfo = ref.watch(selfInfoProvider);
     final connectionState = ref.watch(connectionProvider);
+    final autoReconnect = ref.watch(autoReconnectProvider);
     final theme = Theme.of(context);
 
     return SingleChildScrollView(
@@ -152,6 +153,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ? Colors.green
                               : Colors.red,
                     ),
+                  ),
+                  SwitchListTile(
+                    title: Text(context.l10n.settingsAutoReconnect),
+                    subtitle: Text(context.l10n.settingsAutoReconnectDesc),
+                    secondary: const Icon(Icons.autorenew),
+                    value: autoReconnect,
+                    onChanged:
+                        (v) => ref.read(autoReconnectProvider.notifier).set(v),
                   ),
                   if (connectionState == TransportState.connected) ...[
                     ListTile(

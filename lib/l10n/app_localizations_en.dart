@@ -286,6 +286,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsDisconnected => 'Disconnected';
 
   @override
+  String get settingsAutoReconnect => 'Auto-reconnect';
+
+  @override
+  String get settingsAutoReconnectDesc =>
+      'Automatically reconnect when the connection is lost';
+
+  @override
   String get settingsRadioConfig => 'Radio Configuration';
 
   @override

@@ -287,6 +287,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get settingsDisconnected => 'Desligado';
 
   @override
+  String get settingsAutoReconnect => 'Reconexão automática';
+
+  @override
+  String get settingsAutoReconnectDesc =>
+      'Reconecta automaticamente quando a ligação é perdida';
+
+  @override
   String get settingsRadioConfig => 'Configuração do Rádio';
 
   @override

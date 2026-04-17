@@ -97,6 +97,8 @@
   "settingsConnected": "Conectado",
   "settingsConnectionError": "Error de conexión",
   "settingsDisconnected": "Desconectado",
+  "settingsAutoReconnect": "Reconexión automática",
+  "settingsAutoReconnectDesc": "Reconectar automáticamente cuando se pierde la conexión",
   "settingsRadioConfig": "Configuración de Radio",
   "settingsRadioConfigDesc": "LoRa, telemetría y dispositivo",
   "settingsReboot": "Reiniciar",

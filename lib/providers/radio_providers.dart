@@ -55,6 +55,9 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   StreamSubscription<CompanionResponse>? _responseSub;
   Timer? _batteryPollTimer;
 
+  /// Set to true in [disconnect] to abort any in-progress reconnect loop.
+  bool _reconnectCancelled = false;
+
   void _setStep(int step, String label) {
     _ref.read(connectionProgressProvider.notifier).state = step;
     _ref.read(connectionStepProvider.notifier).state = label;
@@ -151,6 +154,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   }
 
   Future<void> disconnect() async {
+    _reconnectCancelled = true;
     _batteryPollTimer?.cancel();
     _batteryPollTimer = null;
     await _connectionLostSub?.cancel();
@@ -215,7 +219,12 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     });
   }
 
-  /// Subscribe to unexpected connection loss and attempt one auto-reconnect.
+  /// Subscribe to unexpected connection loss and attempt auto-reconnect with
+  /// exponential back-off (2 s → 4 s → 8 s → 16 s → 30 s, then 30 s forever)
+  /// until the connection is restored or the user calls [disconnect].
+  ///
+  /// When the [autoReconnectProvider] setting is off the connection simply
+  /// transitions to [TransportState.disconnected] with no retry attempt.
   void _setupAutoReconnect(
     RadioService service,
     Future<bool> Function() reconnector,
@@ -223,14 +232,55 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     _connectionLostSub?.cancel();
     _connectionLostSub = service.connectionLost.listen((_) async {
       if (state != TransportState.connected) return;
+
+      _batteryPollTimer?.cancel();
+      _batteryPollTimer = null;
       _ref.read(radioServiceProvider.notifier).state = null;
-      _setStep(0, 'Conexão perdida. A reconectar...');
-      state = TransportState.connecting;
-      await Future.delayed(const Duration(seconds: 2));
-      final ok = await reconnector();
-      if (!ok) {
+      _reconnectCancelled = false;
+
+      // If the user has disabled auto-reconnect, just go to disconnected.
+      if (!_ref.read(autoReconnectProvider)) {
+        state = TransportState.disconnected;
+        _setStep(0, '');
+        _pushWidget();
+        return;
+      }
+
+      const backoffSeconds = [2, 4, 8, 16, 30];
+      var attempt = 0;
+
+      while (!_reconnectCancelled) {
+        final delaySec =
+            attempt < backoffSeconds.length
+                ? backoffSeconds[attempt]
+                : backoffSeconds.last;
+        _setStep(
+          0,
+          'Ligação perdida. A reconectar em ${delaySec}s... (tentativa ${attempt + 1})',
+        );
+        state = TransportState.connecting;
+        _pushWidget();
+
+        await Future.delayed(Duration(seconds: delaySec));
+        if (_reconnectCancelled) break;
+
+        // User may have toggled the setting off while we were waiting.
+        if (!_ref.read(autoReconnectProvider)) break;
+
+        attempt++;
+        _setStep(0, 'A reconectar... (tentativa $attempt)');
+
+        final ok = await reconnector();
+        // reconnector sets state = connected and installs a fresh listener.
+        if (ok) return;
+        if (_reconnectCancelled) break;
+      }
+
+      // Reconnect loop ended without success.
+      if (!_reconnectCancelled) {
         state = TransportState.error;
         _setStep(0, 'Reconexão falhou.');
+        _pushWidget();
       }
     });
   }
@@ -1388,6 +1438,34 @@ final notificationSettingsProvider =
       (ref) => NotificationSettingsNotifier(),
     );
 
+// ---------------------------------------------------------------------------
+// Auto-reconnect setting
+// ---------------------------------------------------------------------------
+
+class AutoReconnectNotifier extends StateNotifier<bool> {
+  AutoReconnectNotifier() : super(true) {
+    _load();
+  }
+
+  static const _key = 'auto_reconnect';
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = prefs.getBool(_key) ?? true;
+  }
+
+  Future<void> set(bool value) async {
+    state = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_key, value);
+  }
+}
+
+final autoReconnectProvider =
+    StateNotifierProvider<AutoReconnectNotifier, bool>(
+      (ref) => AutoReconnectNotifier(),
+    );
+
 /// Returns the first 6 bytes of [key] as a lowercase hex string.
 String _hex6(Uint8List key) =>
     key.take(6).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
@@ -1592,9 +1670,10 @@ Future<void> _migrateLegacyFavorites(Ref ref, RadioService service) async {
   if (legacy.isEmpty) return;
   final contactsNotifier = ref.read(contactsProvider.notifier);
   for (final contact in ref.read(contactsProvider)) {
-    final keyHex = contact.publicKey
-        .map((b) => b.toRadixString(16).padLeft(2, '0'))
-        .join();
+    final keyHex =
+        contact.publicKey
+            .map((b) => b.toRadixString(16).padLeft(2, '0'))
+            .join();
     if (!legacy.contains(keyHex) || contact.isFavorite) continue;
     contactsNotifier.setFavorite(contact.publicKey, true);
     // Fire-and-forget — OkResponse isn't awaited; failures fall through to
