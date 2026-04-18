@@ -17,9 +17,9 @@ dependencies:
   flutter_blue_plus: ^1.35.0
   permission_handler: ^11.3.1
 
-  # Serial / USB — flutter_libserialport for Windows/Linux/macOS (COM ports)
-  # usb_serial kept for Android USB OTG (Phase 2)
-  flutter_libserialport: ^0.6.0
+  # Serial / USB — usb_serial for Android USB OTG (Phase 2)
+  #   flutter_libserialport planned for Windows/Linux/macOS COM ports (Phase 2)
+  #   flutter_libserialport removed — its .so does not support 16 KB page size
 
   # State management
   flutter_riverpod: ^2.6.1
