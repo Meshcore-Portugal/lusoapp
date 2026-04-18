@@ -1,15 +1,15 @@
-name: Open testing track release
+name: Production track release
 
 on:
   push:
     branches:
-      - dev
+      - main
 
 permissions:
   contents: write
 
 concurrency:
-  group: internal-${{ github.ref_name }}
+  group: production-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -17,7 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.resolve_version.outputs.version }}
-      internal_sharing_url: ${{ steps.play_upload.outputs.internalSharingDownloadUrl }}
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -47,9 +46,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.pub-cache
-          key: ${{ runner.os }}-internal-${{ hashFiles('**/pubspec.lock') }}
+          key: ${{ runner.os }}-prod-${{ hashFiles('**/pubspec.lock') }}
           restore-keys: |
-            ${{ runner.os }}-internal-
+            ${{ runner.os }}-prod-
 
       - name: Decode Keystore
         run: |
@@ -80,40 +79,20 @@ jobs:
           version=$(grep '^version: ' pubspec.yaml | cut -d ' ' -f 2 | tr -d '\r')
           version="${version%%+*}"
           short_sha=$(git rev-parse --short HEAD)
-          version="${version}-dev-${short_sha}"
+          version="${version}-${short_sha}"
 
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "VERSION=${version}" >> "$GITHUB_ENV"
 
-      - name: Upload to Play Store (Internal Test)
-        id: play_upload
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: pt.meshcore.lusoapp
-          releaseFiles: build/dist/*.aab
-          status: completed
-          track: internal
-
-      - name: Promote to Alpha (Closed testing track)
+      - name: Promote to Production
         uses: kevin-david/promote-play-release@v1.2.0
         with:
           service-account-json-raw: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           package-name: pt.meshcore.lusoapp
-          from-track: internal
-          to-track: alpha
-          user-fraction: 1.0
-          inapp-update-priority: 5
-
-      - name: Promote to Beta (Open testing track)
-        uses: kevin-david/promote-play-release@v1.2.0
-        with:
-          service-account-json-raw: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          package-name: pt.meshcore.lusoapp
-          from-track: alpha
-          to-track: beta
-          user-fraction: 1.0
-          inapp-update-priority: 5
+          from-track: beta
+          to-track: production
+          user-fraction: 0.5
+          inapp-update-priority: 3
 
   build_web:
     runs-on: ubuntu-latest
@@ -133,9 +112,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.pub-cache
-          key: ${{ runner.os }}-internal-${{ hashFiles('**/pubspec.lock') }}
+          key: ${{ runner.os }}-prod-${{ hashFiles('**/pubspec.lock') }}
           restore-keys: |
-            ${{ runner.os }}-internal-
+            ${{ runner.os }}-prod-
 
       - name: Run Web build script
         run: bash scripts/build.web.sh
@@ -200,7 +179,7 @@ jobs:
         with:
           tag_name: v${{ needs.build_android.outputs.version }}
           name: LusoApp v${{ needs.build_android.outputs.version }}
-          prerelease: true
+          prerelease: false
           generate_release_notes: true
           target_commitish: ${{ github.sha }}
           files: |
