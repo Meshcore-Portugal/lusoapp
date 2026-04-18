@@ -29,7 +29,7 @@ class NotificationService {
 
   // Notification IDs for Saturday Mesh 3-3-3 reminders.
   static const _plan333Remind10Id = 1008; // 10 min before (20:50)
-  static const _plan333Remind5Id  = 1009; //  5 min before (20:55)
+  static const _plan333Remind5Id = 1009; //  5 min before (20:55)
   // Lisbon timezone — correct for the Portuguese Plano 3-3-3.
   static const _lisbon = 'Europe/Lisbon';
 
@@ -93,8 +93,11 @@ class NotificationService {
 
     // Create Android notification channels once.
     if (defaultTargetPlatform == TargetPlatform.android) {
-      final android = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final android =
+          _plugin
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >();
       await android?.createNotificationChannel(
         const AndroidNotificationChannel(
           _androidChannelId,
@@ -227,10 +230,57 @@ class NotificationService {
   // Plan 3-3-3 scheduled alerts
   // ---------------------------------------------------------------------------
 
+  // Platforms that support zonedSchedule (timed repeating notifications).
+  static bool get _supportsZonedSchedule =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS);
+
+  /// Fire an immediate test notification to verify the notification channel.
+  /// Debug / diagnostic use only.
+  Future<String> showPlan333TestNotification() async {
+    if (!_initialized) return 'Serviço não inicializado';
+    if (kIsWeb) return 'Notificações não suportadas na web';
+
+    const androidDetails = AndroidNotificationDetails(
+      _plan333ChannelId,
+      _plan333ChannelName,
+      channelDescription: _plan333ChannelDesc,
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+      macOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+    );
+
+    await _plugin.show(
+      1099,
+      'Mesh 3-3-3 — Teste',
+      'Notificação de teste. Sistema de alertas a funcionar!',
+      details,
+    );
+    return 'OK';
+  }
+
+  /// Returns how many Plan333 reminders are currently pending in the OS.
+  Future<int> pendingPlan333Count() async {
+    if (!_initialized || kIsWeb) return 0;
+    if (!_supportsZonedSchedule) return 0;
+    final all = await _plugin.pendingNotificationRequests();
+    return all
+        .where((n) => n.id == _plan333Remind10Id || n.id == _plan333Remind5Id)
+        .length;
+  }
+
   /// Schedule 8 daily window alerts + 1 weekly Saturday training reminder.
   /// Safe to call multiple times — cancels existing Plan333 notifications first.
   Future<void> schedulePlan333Alerts() async {
     if (!_initialized || kIsWeb) return;
+    // zonedSchedule is only available on Android, iOS, and macOS.
+    if (!_supportsZonedSchedule) return;
 
     await cancelPlan333Alerts();
 
@@ -253,7 +303,14 @@ class NotificationService {
 
     // Helper: next Saturday at a given hour:minute.
     tz.TZDateTime nextSaturday(int hour, int minute) {
-      var t = tz.TZDateTime(location, now.year, now.month, now.day, hour, minute);
+      var t = tz.TZDateTime(
+        location,
+        now.year,
+        now.month,
+        now.day,
+        hour,
+        minute,
+      );
       if (t.isBefore(now)) t = t.add(const Duration(days: 1));
       while (t.weekday != DateTime.saturday) {
         t = t.add(const Duration(days: 1));
@@ -291,6 +348,7 @@ class NotificationService {
   /// Cancel all Plan 3-3-3 scheduled notifications.
   Future<void> cancelPlan333Alerts() async {
     if (!_initialized || kIsWeb) return;
+    if (!_supportsZonedSchedule) return;
     await _plugin.cancel(_plan333Remind10Id);
     await _plugin.cancel(_plan333Remind5Id);
   }
