@@ -87,33 +87,13 @@ jobs:
 
       - name: Upload to Play Store (Internal Test)
         id: play_upload
-        uses: r0adkll/upload-google-play@v1
+        uses: r0adkll/upload-google-play@7f5b759879c088a86faf85d18779f7f14e79a086
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: pt.meshcore.lusoapp
           releaseFiles: build/dist/*.aab
+          tracks: beta,alpha,internal
           status: completed
-          track: internal
-
-      - name: Promote to Alpha (Closed testing track)
-        uses: kevin-david/promote-play-release@v1.2.0
-        with:
-          service-account-json-raw: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          package-name: pt.meshcore.lusoapp
-          from-track: internal
-          to-track: alpha
-          user-fraction: 1.0
-          inapp-update-priority: 5
-
-      - name: Promote to Beta (Open testing track)
-        uses: kevin-david/promote-play-release@v1.2.0
-        with:
-          service-account-json-raw: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          package-name: pt.meshcore.lusoapp
-          from-track: alpha
-          to-track: beta
-          user-fraction: 1.0
-          inapp-update-priority: 5
 
   build_web:
     runs-on: ubuntu-latest

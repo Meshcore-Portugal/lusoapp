@@ -89,10 +89,10 @@ jobs:
         with:
           service-account-json-raw: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           package-name: pt.meshcore.lusoapp
+          inapp-update-priority: 3
+          user-fraction: 0.5
           from-track: beta
           to-track: production
-          user-fraction: 0.5
-          inapp-update-priority: 3
 
   build_web:
     runs-on: ubuntu-latest
