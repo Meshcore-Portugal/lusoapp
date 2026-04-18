@@ -1012,6 +1012,10 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
         customName: existing.customName,
       );
     } else {
+      // Don't create a nameless contact — an advert without a name is a
+      // path-update ping for a node we haven't met yet; ignore it until
+      // a proper advert with a name arrives.
+      if (name.isEmpty) return;
       next = [
         ...state,
         Contact(
