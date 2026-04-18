@@ -8,13 +8,45 @@ import '../../l10n/l10n.dart';
 import '../../providers/radio_providers.dart';
 
 /// RX log app: captures raw 0x88 RX frames and exports to PCAP.
-class RxLogScreen extends ConsumerWidget {
+class RxLogScreen extends ConsumerStatefulWidget {
   const RxLogScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RxLogScreen> createState() => _RxLogScreenState();
+}
+
+class _RxLogScreenState extends ConsumerState<RxLogScreen> {
+  final _scrollCtrl = ScrollController();
+  int _lastCount = 0;
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.animateTo(
+          _scrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final entries = ref.watch(rxLogProvider);
     final theme = Theme.of(context);
+
+    // Auto-scroll to the bottom whenever a new packet arrives.
+    if (entries.length != _lastCount) {
+      _lastCount = entries.length;
+      _scrollToBottom();
+    }
 
     return Column(
       children: [
@@ -59,7 +91,7 @@ class RxLogScreen extends ConsumerWidget {
               entries.isEmpty
                   ? _EmptyState(theme: theme)
                   : ListView.builder(
-                    reverse: true,
+                    controller: _scrollCtrl,
                     itemCount: entries.length,
                     itemBuilder: (context, index) {
                       final e = entries[index];
