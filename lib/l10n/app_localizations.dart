@@ -2629,7 +2629,7 @@ abstract class AppLocalizations {
   /// No description provided for @radioSettingsAutoAddTitle.
   ///
   /// In pt, this message translates to:
-  /// **'Adição automática de contactos'**
+  /// **'Definições de Contactos'**
   String get radioSettingsAutoAddTitle;
 
   /// No description provided for @radioSettingsAutoAddDesc.
@@ -2637,6 +2637,30 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Quando um nó envia um advert e o rádio está em modo manual, adicionar automaticamente como:'**
   String get radioSettingsAutoAddDesc;
+
+  /// No description provided for @radioSettingsAutoAddAll.
+  ///
+  /// In pt, this message translates to:
+  /// **'Auto Adicionar Todos'**
+  String get radioSettingsAutoAddAll;
+
+  /// No description provided for @radioSettingsAutoAddAllDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Quando ativo, todos os adverts recebidos serão adicionados aos contactos.'**
+  String get radioSettingsAutoAddAllDesc;
+
+  /// No description provided for @radioSettingsAutoAddSelected.
+  ///
+  /// In pt, this message translates to:
+  /// **'Auto Adicionar Selecionados'**
+  String get radioSettingsAutoAddSelected;
+
+  /// No description provided for @radioSettingsAutoAddSelectedDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Quando ativo, apenas os tipos de contactos selecionados abaixo serão auto adicionados.'**
+  String get radioSettingsAutoAddSelectedDesc;
 
   /// No description provided for @radioSettingsAutoAddCompanion.
   ///
@@ -2661,6 +2685,60 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Sensor'**
   String get radioSettingsAutoAddSensor;
+
+  /// No description provided for @radioSettingsOverwriteOldest.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sobrescrever Mais Antigo'**
+  String get radioSettingsOverwriteOldest;
+
+  /// No description provided for @radioSettingsOverwriteOldestDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Quando ativo, os contactos mais antigos sem favorito são substituídos por novos quando a lista está cheia.'**
+  String get radioSettingsOverwriteOldestDesc;
+
+  /// No description provided for @radioSettingsAutoAddMaxHops.
+  ///
+  /// In pt, this message translates to:
+  /// **'Saltos Máximos de Auto Adição'**
+  String get radioSettingsAutoAddMaxHops;
+
+  /// No description provided for @radioSettingsAutoAddMaxHopsDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Os contactos só serão auto adicionados se o caminho do advert tiver o mesmo ou menos saltos que o limite. Deixe em branco para sem limite.'**
+  String get radioSettingsAutoAddMaxHopsDesc;
+
+  /// No description provided for @radioSettingsAutoAddMaxHopsHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Saltos (0-63)'**
+  String get radioSettingsAutoAddMaxHopsHint;
+
+  /// No description provided for @radioSettingsPullToRefresh.
+  ///
+  /// In pt, this message translates to:
+  /// **'Puxar para Atualizar'**
+  String get radioSettingsPullToRefresh;
+
+  /// No description provided for @radioSettingsPullToRefreshDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Quando ativo, pode deslizar para baixo para atualizar a lista de contactos.'**
+  String get radioSettingsPullToRefreshDesc;
+
+  /// No description provided for @radioSettingsShowPublicKeys.
+  ///
+  /// In pt, this message translates to:
+  /// **'Mostrar Chaves Públicas'**
+  String get radioSettingsShowPublicKeys;
+
+  /// No description provided for @radioSettingsShowPublicKeysDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Quando ativo, as chaves públicas serão mostradas na lista de contactos.'**
+  String get radioSettingsShowPublicKeysDesc;
 
   /// No description provided for @roomJoinTitle.
   ///

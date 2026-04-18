@@ -1318,11 +1318,25 @@ class AppLocalizationsPt extends AppLocalizations {
   String get radioSettingsResetValues => 'Repor valores actuais';
 
   @override
-  String get radioSettingsAutoAddTitle => 'Adição automática de contactos';
+  String get radioSettingsAutoAddTitle => 'Definições de Contactos';
 
   @override
   String get radioSettingsAutoAddDesc =>
       'Quando um nó envia um advert e o rádio está em modo manual, adicionar automaticamente como:';
+
+  @override
+  String get radioSettingsAutoAddAll => 'Auto Adicionar Todos';
+
+  @override
+  String get radioSettingsAutoAddAllDesc =>
+      'Quando ativo, todos os adverts recebidos serão adicionados aos contactos.';
+
+  @override
+  String get radioSettingsAutoAddSelected => 'Auto Adicionar Selecionados';
+
+  @override
+  String get radioSettingsAutoAddSelectedDesc =>
+      'Quando ativo, apenas os tipos de contactos selecionados abaixo serão auto adicionados.';
 
   @override
   String get radioSettingsAutoAddCompanion => 'Companheiro (Chat)';
@@ -1335,6 +1349,37 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get radioSettingsAutoAddSensor => 'Sensor';
+
+  @override
+  String get radioSettingsOverwriteOldest => 'Sobrescrever Mais Antigo';
+
+  @override
+  String get radioSettingsOverwriteOldestDesc =>
+      'Quando ativo, os contactos mais antigos sem favorito são substituídos por novos quando a lista está cheia.';
+
+  @override
+  String get radioSettingsAutoAddMaxHops => 'Saltos Máximos de Auto Adição';
+
+  @override
+  String get radioSettingsAutoAddMaxHopsDesc =>
+      'Os contactos só serão auto adicionados se o caminho do advert tiver o mesmo ou menos saltos que o limite. Deixe em branco para sem limite.';
+
+  @override
+  String get radioSettingsAutoAddMaxHopsHint => 'Saltos (0-63)';
+
+  @override
+  String get radioSettingsPullToRefresh => 'Puxar para Atualizar';
+
+  @override
+  String get radioSettingsPullToRefreshDesc =>
+      'Quando ativo, pode deslizar para baixo para atualizar a lista de contactos.';
+
+  @override
+  String get radioSettingsShowPublicKeys => 'Mostrar Chaves Públicas';
+
+  @override
+  String get radioSettingsShowPublicKeysDesc =>
+      'Quando ativo, as chaves públicas serão mostradas na lista de contactos.';
 
   @override
   String get roomJoinTitle => 'Entrar na sala';

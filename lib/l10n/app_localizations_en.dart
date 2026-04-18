@@ -1312,11 +1312,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get radioSettingsResetValues => 'Reset to current values';
 
   @override
-  String get radioSettingsAutoAddTitle => 'Automatic contact addition';
+  String get radioSettingsAutoAddTitle => 'Contact Settings';
 
   @override
   String get radioSettingsAutoAddDesc =>
       'When a node sends an advert and the radio is in manual mode, automatically add as:';
+
+  @override
+  String get radioSettingsAutoAddAll => 'Auto Add All';
+
+  @override
+  String get radioSettingsAutoAddAllDesc =>
+      'When enabled, all received adverts will be added to contacts.';
+
+  @override
+  String get radioSettingsAutoAddSelected => 'Auto Add Selected';
+
+  @override
+  String get radioSettingsAutoAddSelectedDesc =>
+      'When enabled, only contact types selected below will be auto added to contacts.';
 
   @override
   String get radioSettingsAutoAddCompanion => 'Companion (Chat)';
@@ -1329,6 +1343,37 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get radioSettingsAutoAddSensor => 'Sensor';
+
+  @override
+  String get radioSettingsOverwriteOldest => 'Overwrite Oldest';
+
+  @override
+  String get radioSettingsOverwriteOldestDesc =>
+      'When enabled, oldest non-favourite contacts are overwritten with new contacts when contacts list is full.';
+
+  @override
+  String get radioSettingsAutoAddMaxHops => 'Auto Add Max Hops';
+
+  @override
+  String get radioSettingsAutoAddMaxHopsDesc =>
+      'Contacts will only be auto added if their advert path has the same or less hops as the configured limit. Leave this field blank for no limit.';
+
+  @override
+  String get radioSettingsAutoAddMaxHopsHint => 'Max Hops (0-63)';
+
+  @override
+  String get radioSettingsPullToRefresh => 'Pull To Refresh';
+
+  @override
+  String get radioSettingsPullToRefreshDesc =>
+      'When enabled, you can swipe down to refresh the contacts list.';
+
+  @override
+  String get radioSettingsShowPublicKeys => 'Show Public Keys';
+
+  @override
+  String get radioSettingsShowPublicKeysDesc =>
+      'When enabled, public keys will be shown in contacts list.';
 
   @override
   String get roomJoinTitle => 'Join room';

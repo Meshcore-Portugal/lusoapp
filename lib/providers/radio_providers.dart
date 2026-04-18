@@ -1697,22 +1697,40 @@ Future<void> _migrateLegacyFavorites(Ref ref, RadioService service) async {
 /// Controls whether incoming adverts are automatically written back to the
 /// radio's contact table (via CMD_ADD_UPDATE_CONTACT) for each node type.
 ///
-/// All types default to true (auto-add). The user can disable per type
-/// in Radio Settings → "Adição automática de contactos".
+/// Auto-add contact settings. Persisted to SharedPreferences.
 class AdvertAutoAddSettings {
   const AdvertAutoAddSettings({
+    this.addAll = true,
     this.addChat = true,
     this.addRepeater = true,
     this.addRoom = true,
     this.addSensor = true,
+    this.overwriteOldest = false,
+    this.maxHops,
+    this.pullToRefresh = true,
+    this.showPublicKeys = true,
   });
 
+  /// When true, auto-add all advert types (ignores per-type flags).
+  final bool addAll;
   final bool addChat; // type 1
   final bool addRepeater; // type 2
   final bool addRoom; // type 3
   final bool addSensor; // type 4
+  /// Overwrite oldest non-favourite contact when the list is full.
+  final bool overwriteOldest;
+
+  /// Maximum hop count for auto-add; null means no limit.
+  final int? maxHops;
+
+  /// Allow pull-to-refresh gesture on the contacts list.
+  final bool pullToRefresh;
+
+  /// Show public key prefix (shortId) in the contacts list tiles.
+  final bool showPublicKeys;
 
   bool allowsType(int type) {
+    if (addAll) return true;
     switch (type) {
       case 1:
         return addChat;
@@ -1727,16 +1745,28 @@ class AdvertAutoAddSettings {
     }
   }
 
+  static const Object _sentinel = Object();
+
   AdvertAutoAddSettings copyWith({
+    bool? addAll,
     bool? addChat,
     bool? addRepeater,
     bool? addRoom,
     bool? addSensor,
+    bool? overwriteOldest,
+    Object? maxHops = _sentinel,
+    bool? pullToRefresh,
+    bool? showPublicKeys,
   }) => AdvertAutoAddSettings(
+    addAll: addAll ?? this.addAll,
     addChat: addChat ?? this.addChat,
     addRepeater: addRepeater ?? this.addRepeater,
     addRoom: addRoom ?? this.addRoom,
     addSensor: addSensor ?? this.addSensor,
+    overwriteOldest: overwriteOldest ?? this.overwriteOldest,
+    maxHops: identical(maxHops, _sentinel) ? this.maxHops : maxHops as int?,
+    pullToRefresh: pullToRefresh ?? this.pullToRefresh,
+    showPublicKeys: showPublicKeys ?? this.showPublicKeys,
   );
 }
 
@@ -1749,22 +1779,43 @@ class AdvertAutoAddNotifier extends StateNotifier<AdvertAutoAddSettings> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
+    final maxHopsRaw = prefs.getInt('${_key}_maxHops');
     state = AdvertAutoAddSettings(
+      addAll: prefs.getBool('${_key}_addAll') ?? true,
       addChat: prefs.getBool('${_key}_chat') ?? true,
       addRepeater: prefs.getBool('${_key}_repeater') ?? true,
       addRoom: prefs.getBool('${_key}_room') ?? true,
       addSensor: prefs.getBool('${_key}_sensor') ?? true,
+      overwriteOldest: prefs.getBool('${_key}_overwriteOldest') ?? false,
+      maxHops: maxHopsRaw,
+      pullToRefresh: prefs.getBool('${_key}_pullToRefresh') ?? true,
+      showPublicKeys: prefs.getBool('${_key}_showPublicKeys') ?? true,
     );
   }
 
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
-    await Future.wait([
+    final futures = <Future<void>>[
+      prefs.setBool('${_key}_addAll', state.addAll),
       prefs.setBool('${_key}_chat', state.addChat),
       prefs.setBool('${_key}_repeater', state.addRepeater),
       prefs.setBool('${_key}_room', state.addRoom),
       prefs.setBool('${_key}_sensor', state.addSensor),
-    ]);
+      prefs.setBool('${_key}_overwriteOldest', state.overwriteOldest),
+      prefs.setBool('${_key}_pullToRefresh', state.pullToRefresh),
+      prefs.setBool('${_key}_showPublicKeys', state.showPublicKeys),
+    ];
+    if (state.maxHops != null) {
+      futures.add(prefs.setInt('${_key}_maxHops', state.maxHops!));
+    } else {
+      futures.add(prefs.remove('${_key}_maxHops'));
+    }
+    await Future.wait(futures);
+  }
+
+  void setAddAll(bool v) {
+    state = state.copyWith(addAll: v);
+    _save();
   }
 
   void setChat(bool v) {
@@ -1784,6 +1835,26 @@ class AdvertAutoAddNotifier extends StateNotifier<AdvertAutoAddSettings> {
 
   void setSensor(bool v) {
     state = state.copyWith(addSensor: v);
+    _save();
+  }
+
+  void setOverwriteOldest(bool v) {
+    state = state.copyWith(overwriteOldest: v);
+    _save();
+  }
+
+  void setMaxHops(int? v) {
+    state = state.copyWith(maxHops: v);
+    _save();
+  }
+
+  void setPullToRefresh(bool v) {
+    state = state.copyWith(pullToRefresh: v);
+    _save();
+  }
+
+  void setShowPublicKeys(bool v) {
+    state = state.copyWith(showPublicKeys: v);
     _save();
   }
 }

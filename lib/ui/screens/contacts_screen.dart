@@ -192,6 +192,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     final sort = ref.watch(contactSortProvider);
     final contacts = ref.watch(contactsProvider);
     final messages = ref.watch(messagesProvider);
+    final autoAddSettings = ref.watch(advertAutoAddProvider);
 
     final chatContacts = contacts.where((c) => c.isChat).toList();
     final repeaters = contacts.where((c) => c.isRepeater).toList();
@@ -447,39 +448,46 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
               child:
                   filtered.isEmpty
                       ? _EmptyState(filter: filter)
-                      : RefreshIndicator(
-                        onRefresh:
-                            () async =>
-                                ref
-                                    .read(radioServiceProvider)
-                                    ?.requestContacts(),
-                        child: ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 80),
-                          itemCount: filtered.length,
-                          itemBuilder: (context, i) {
-                            final contact = filtered[i];
-                            final keyHex =
-                                contact.publicKey
-                                    .map(
-                                      (b) =>
-                                          b.toRadixString(16).padLeft(2, '0'),
-                                    )
-                                    .join();
-                            final isSelected = _selectedContactKeys.contains(
-                              keyHex,
-                            );
-                            return _ContactTile(
-                              contact: contact,
-                              isMultiSelectMode: _multiSelectMode,
-                              isSelected: isSelected,
-                              onSelected:
-                                  _multiSelectMode
-                                      ? () => _toggleSelection(keyHex)
-                                      : null,
-                              onLongPress: null,
-                            );
-                          },
-                        ),
+                      : Builder(
+                        builder: (context) {
+                          final list = ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 80),
+                            itemCount: filtered.length,
+                            itemBuilder: (context, i) {
+                              final contact = filtered[i];
+                              final keyHex =
+                                  contact.publicKey
+                                      .map(
+                                        (b) =>
+                                            b.toRadixString(16).padLeft(2, '0'),
+                                      )
+                                      .join();
+                              final isSelected = _selectedContactKeys.contains(
+                                keyHex,
+                              );
+                              return _ContactTile(
+                                contact: contact,
+                                isMultiSelectMode: _multiSelectMode,
+                                isSelected: isSelected,
+                                showPublicKey: autoAddSettings.showPublicKeys,
+                                onSelected:
+                                    _multiSelectMode
+                                        ? () => _toggleSelection(keyHex)
+                                        : null,
+                                onLongPress: null,
+                              );
+                            },
+                          );
+                          if (!autoAddSettings.pullToRefresh) return list;
+                          return RefreshIndicator(
+                            onRefresh:
+                                () async =>
+                                    ref
+                                        .read(radioServiceProvider)
+                                        ?.requestContacts(),
+                            child: list,
+                          );
+                        },
                       ),
             ),
           ],
@@ -688,6 +696,7 @@ class _ContactTile extends ConsumerWidget {
     required this.contact,
     this.isMultiSelectMode = false,
     this.isSelected = false,
+    this.showPublicKey = true,
     this.onSelected,
     this.onLongPress,
   });
@@ -695,6 +704,7 @@ class _ContactTile extends ConsumerWidget {
   final Contact contact;
   final bool isMultiSelectMode;
   final bool isSelected;
+  final bool showPublicKey;
   final VoidCallback? onSelected;
   final VoidCallback? onLongPress;
 
@@ -756,12 +766,16 @@ class _ContactTile extends ConsumerWidget {
             fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.w600,
           ),
         ),
-        subtitle: Text(
-          contact.customName != null
-              ? '${contact.name.isNotEmpty ? contact.name : contact.shortId}  •  Visto: $lastSeen  |  Caminho: ${contactPathLabel(contact.pathLen)}'
-              : 'Visto: $lastSeen  |  Caminho: ${contactPathLabel(contact.pathLen)}',
-          style: theme.textTheme.bodySmall,
-        ),
+        subtitle: Text(() {
+          final base =
+              'Visto: $lastSeen  |  Caminho: ${contactPathLabel(contact.pathLen)}';
+          final namePrefix =
+              contact.customName != null
+                  ? '${contact.name.isNotEmpty ? contact.name : contact.shortId}  •  '
+                  : '';
+          final keyPart = showPublicKey ? '  •  ${contact.shortId}' : '';
+          return '$namePrefix$base$keyPart';
+        }(), style: theme.textTheme.bodySmall),
         trailing:
             isFavorite
                 ? const Icon(Icons.star, color: Colors.amber, size: 20)
