@@ -42,6 +42,10 @@ class SerialTransport implements RadioTransport {
 
   @override
   Future<bool> connect() async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      _log.d('Serial not supported on mobile — use BLE');
+      return false;
+    }
     try {
       _port = SerialPort(_portName);
 

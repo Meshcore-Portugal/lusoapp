@@ -285,6 +285,13 @@
   "channelsRemoveTitle": "Eliminar canal",
   "channelsRemoveConfirm": "¿Estás seguro de que quieres eliminar",
   "channelsRemoveWarning": "Esta acción no puede deshacerse.",
+  "channelsMuteTitle": "Canal silenciado",
+  "channelsUnmuteTitle": "Notificaciones activas",
+  "channelsMuteSubtitleOn": "Sin alertas — el indicador de no leídos sigue visible",
+  "channelsMuteSubtitleOff": "Recibe notificaciones e indicador de no leídos",
+  "channelsMuteLabel": "silenciado",
+  "chatMuteChannel": "Silenciar canal",
+  "chatUnmuteChannel": "Reactivar notificaciones",
 
   "chatNoMessages": "Sin mensajes en este canal",
   "chatSendFirstMessage": "¡Envía el primer mensaje!",
@@ -316,6 +323,7 @@
   "chatNoChannelSlots": "Sin espacio disponible para nuevos canales",
   "chatDeleteMessage": "Eliminar mensaje",
   "chatMenuOptions": "Opciones del canal",
+  "chatNewMessages": "Mensajes nuevos",
 
   "connectTitle": "MeshCore Portugal",
   "connectReconnect": "Reconectar",
@@ -358,6 +366,24 @@
   "discoverAddAndSave": "Añadir y guardar",
   "discoverAnnouncedName": "Nombre Anunciado",
   "discoverHeard": "Escuchado",
+  "discoverNever": "Nunca",
+  "discoverNoName": "Sin nombre",
+  "discoverTypeCompanion": "Compañero",
+  "discoverTypeUnknown": "Desconocido",
+  "discoverPathNear": "Cercano",
+  "discoverJustNow": "Ahora",
+  "discoverMinutesAgo": "hace {min}m",
+  "@discoverMinutesAgo": {
+    "placeholders": { "min": { "type": "int" } }
+  },
+  "discoverHoursAgo": "hace {hours}h",
+  "@discoverHoursAgo": {
+    "placeholders": { "hours": { "type": "int" } }
+  },
+  "discoverDaysAgo": "hace {days}d",
+  "@discoverDaysAgo": {
+    "placeholders": { "days": { "type": "int" } }
+  },
 
   "appsPlano333Title": "Plan 3-3-3",
   "appsPlano333Subtitle": "Evento semanal MeshCore",
@@ -438,10 +464,23 @@
   "radioSettingsResetValues": "Restablecer valores actuales",
   "radioSettingsAutoAddTitle": "Adición automática de contactos",
   "radioSettingsAutoAddDesc": "Cuando un nodo envía un advert y la radio está en modo manual, añadir automáticamente como:",
+  "radioSettingsAutoAddAll": "Auto Añadir Todos",
+  "radioSettingsAutoAddAllDesc": "Cuando está activo, todos los adverts recibidos se añadirán a los contactos.",
+  "radioSettingsAutoAddSelected": "Auto Añadir Seleccionados",
+  "radioSettingsAutoAddSelectedDesc": "Cuando está activo, solo los tipos de contacto seleccionados a continuación se añadirán automáticamente.",
   "radioSettingsAutoAddCompanion": "Compañero (Chat)",
   "radioSettingsAutoAddRepeater": "Repetidor",
   "radioSettingsAutoAddRoom": "Sala (Room)",
   "radioSettingsAutoAddSensor": "Sensor",
+  "radioSettingsOverwriteOldest": "Sobrescribir Más Antiguo",
+  "radioSettingsOverwriteOldestDesc": "Cuando está activo, los contactos más antiguos sin favorito son reemplazados por nuevos cuando la lista está llena.",
+  "radioSettingsAutoAddMaxHops": "Saltos Máximos de Auto Adición",
+  "radioSettingsAutoAddMaxHopsDesc": "Los contactos solo se añadirán automáticamente si el camino del advert tiene el mismo o menos saltos que el límite. Dejar en blanco para sin límite.",
+  "radioSettingsAutoAddMaxHopsHint": "Saltos (0-63)",
+  "radioSettingsPullToRefresh": "Deslizar para Actualizar",
+  "radioSettingsPullToRefreshDesc": "Cuando está activo, puedes deslizar hacia abajo para actualizar la lista de contactos.",
+  "radioSettingsShowPublicKeys": "Mostrar Claves Públicas",
+  "radioSettingsShowPublicKeysDesc": "Cuando está activo, las claves públicas se mostrarán en la lista de contactos.",
 
   "roomJoinTitle": "Entrar en sala",
   "roomJoinInstruction": "Esta sala puede requerir contraseña. Déjala en blanco si es pública.",

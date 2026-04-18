@@ -1116,6 +1116,39 @@ class AppLocalizationsPt extends AppLocalizations {
   String get discoverHeard => 'Ouvido';
 
   @override
+  String get discoverNever => 'Nunca';
+
+  @override
+  String get discoverNoName => 'Sem nome';
+
+  @override
+  String get discoverTypeCompanion => 'Companheiro';
+
+  @override
+  String get discoverTypeUnknown => 'Desconhecido';
+
+  @override
+  String get discoverPathNear => 'Próximo';
+
+  @override
+  String get discoverJustNow => 'Agora';
+
+  @override
+  String discoverMinutesAgo(int min) {
+    return '${min}m atrás';
+  }
+
+  @override
+  String discoverHoursAgo(int hours) {
+    return '${hours}h atrás';
+  }
+
+  @override
+  String discoverDaysAgo(int days) {
+    return '${days}d atrás';
+  }
+
+  @override
   String get appsPlano333Title => 'Plano 3-3-3';
 
   @override

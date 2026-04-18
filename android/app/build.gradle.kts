@@ -75,6 +75,15 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = false
+            // flutter_libserialport .so files are not 16 KB page-aligned.
+            // Serial ports are not used on Android (BLE is used instead), so we
+            // exclude them to keep the APK compliant with Google Play requirements.
+            excludes += setOf(
+                "lib/arm64-v8a/libserialport.so",
+                "lib/armeabi-v7a/libserialport.so",
+                "lib/x86_64/libserialport.so",
+                "lib/x86/libserialport.so"
+            )
         }
     }
 }

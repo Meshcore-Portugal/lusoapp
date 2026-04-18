@@ -2236,6 +2236,60 @@ abstract class AppLocalizations {
   /// **'Ouvido'**
   String get discoverHeard;
 
+  /// No description provided for @discoverNever.
+  ///
+  /// In pt, this message translates to:
+  /// **'Nunca'**
+  String get discoverNever;
+
+  /// No description provided for @discoverNoName.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sem nome'**
+  String get discoverNoName;
+
+  /// No description provided for @discoverTypeCompanion.
+  ///
+  /// In pt, this message translates to:
+  /// **'Companheiro'**
+  String get discoverTypeCompanion;
+
+  /// No description provided for @discoverTypeUnknown.
+  ///
+  /// In pt, this message translates to:
+  /// **'Desconhecido'**
+  String get discoverTypeUnknown;
+
+  /// No description provided for @discoverPathNear.
+  ///
+  /// In pt, this message translates to:
+  /// **'Próximo'**
+  String get discoverPathNear;
+
+  /// No description provided for @discoverJustNow.
+  ///
+  /// In pt, this message translates to:
+  /// **'Agora'**
+  String get discoverJustNow;
+
+  /// No description provided for @discoverMinutesAgo.
+  ///
+  /// In pt, this message translates to:
+  /// **'{min}m atrás'**
+  String discoverMinutesAgo(int min);
+
+  /// No description provided for @discoverHoursAgo.
+  ///
+  /// In pt, this message translates to:
+  /// **'{hours}h atrás'**
+  String discoverHoursAgo(int hours);
+
+  /// No description provided for @discoverDaysAgo.
+  ///
+  /// In pt, this message translates to:
+  /// **'{days}d atrás'**
+  String discoverDaysAgo(int days);
+
   /// No description provided for @appsPlano333Title.
   ///
   /// In pt, this message translates to:

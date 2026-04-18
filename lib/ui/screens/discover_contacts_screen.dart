@@ -93,9 +93,9 @@ class _DiscoverContactsScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(context.l10n.discoverTitle),
-            const Text(
-              'Anúncios Recentes',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
+            Text(
+              context.l10n.discoverSubtitle,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
             ),
           ],
         ),
@@ -173,8 +173,8 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             hasAny && query.isNotEmpty
-                ? 'Nenhum contacto encontrado'
-                : 'Nenhum contacto descoberto',
+                ? context.l10n.discoverEmpty
+                : context.l10n.discoverNone,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: theme.colorScheme.onSurface.withAlpha(120),
             ),
@@ -182,8 +182,8 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             hasAny && query.isNotEmpty
-                ? 'Tente uma busca diferente'
-                : 'Contactos aparecem enquanto transmitem na rede',
+                ? context.l10n.discoverEmptyHint
+                : context.l10n.discoverNoneHint,
             style: theme.textTheme.bodySmall,
           ),
         ],
@@ -200,7 +200,8 @@ class _DiscoveredContactTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final ts = contact.lastModified ?? contact.lastAdvertTimestamp;
-    final lastSeen = ts > 0 ? _formatTimestamp(ts) : 'Nunca';
+    final lastSeen =
+        ts > 0 ? _formatTimestamp(context, ts) : context.l10n.discoverNever;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -218,7 +219,7 @@ class _DiscoveredContactTile extends ConsumerWidget {
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         subtitle: Text(
-          'Ouvido: $lastSeen  |  Caminho: ${_pathLabel(contact.pathLen)}  |  Saltos: ${contact.pathLen}',
+          '${context.l10n.discoverHeard}: $lastSeen  |  ${context.l10n.commonPath}: ${_pathLabel(context, contact.pathLen)}  |  ${context.l10n.commonHops}: ${contact.pathLen}',
           style: theme.textTheme.bodySmall,
         ),
         trailing: const Icon(Icons.arrow_forward, size: 18),
@@ -284,7 +285,7 @@ class _DiscoveredContactTile extends ConsumerWidget {
                                   ),
                                 ),
                                 Text(
-                                  '${_typeLabel(contact.type)}  •  ${contact.shortId}',
+                                  '${_typeLabel(context, contact.type)}  •  ${contact.shortId}',
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.onSurface
                                         .withAlpha(130),
@@ -301,22 +302,33 @@ class _DiscoveredContactTile extends ConsumerWidget {
 
                       // Info section
                       _infoRow(
-                        'Nome Anunciado',
-                        contact.name.isNotEmpty ? contact.name : 'Sem nome',
+                        context.l10n.discoverAnnouncedName,
+                        contact.name.isNotEmpty
+                            ? contact.name
+                            : context.l10n.discoverNoName,
                         theme,
                       ),
                       const SizedBox(height: 8),
-                      _infoRow('Tipo', _typeLabel(contact.type), theme),
+                      _infoRow(
+                        context.l10n.commonType,
+                        _typeLabel(context, contact.type),
+                        theme,
+                      ),
                       const SizedBox(height: 8),
                       _infoRow(
-                        'Ouvido',
+                        context.l10n.discoverHeard,
                         _formatTimestamp(
+                          context,
                           contact.lastModified ?? contact.lastAdvertTimestamp,
                         ),
                         theme,
                       ),
                       const SizedBox(height: 8),
-                      _infoRow('Caminho', '${contact.pathLen} saltos', theme),
+                      _infoRow(
+                        context.l10n.commonPath,
+                        '${contact.pathLen} ${contact.pathLen == 1 ? context.l10n.commonSingularHop : context.l10n.commonPluralHops}',
+                        theme,
+                      ),
                       const SizedBox(height: 16),
                       const Divider(),
                     ],
@@ -435,35 +447,36 @@ class _DiscoveredContactTile extends ConsumerWidget {
     );
   }
 
-  String _typeLabel(int type) {
+  String _typeLabel(BuildContext context, int type) {
     switch (type) {
       case 1:
-        return 'Companheiro';
+        return context.l10n.discoverTypeCompanion;
       case 2:
-        return 'Repetidor';
+        return context.l10n.commonRepeater;
       case 3:
-        return 'Sala';
+        return context.l10n.commonRoom;
       case 4:
-        return 'Sensor';
+        return context.l10n.commonSensor;
       default:
-        return 'Desconhecido';
+        return context.l10n.discoverTypeUnknown;
     }
   }
 
-  String _pathLabel(int pathLen) {
-    if (pathLen == 0) return 'Directo';
-    if (pathLen == 1) return 'Próximo';
-    return '$pathLen hops';
+  String _pathLabel(BuildContext context, int pathLen) {
+    if (pathLen == 0) return context.l10n.commonDirect;
+    if (pathLen == 1) return context.l10n.discoverPathNear;
+    return '$pathLen ${context.l10n.commonPluralHops}';
   }
 
-  String _formatTimestamp(int ts) {
+  String _formatTimestamp(BuildContext context, int ts) {
     final dt = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
     final now = DateTime.now();
     final diff = now.difference(dt);
-    if (diff.inMinutes < 1) return 'Agora';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m atrás';
-    if (diff.inHours < 24) return '${diff.inHours}h atrás';
-    return '${diff.inDays}d atrás';
+    if (diff.inMinutes < 1) return context.l10n.discoverJustNow;
+    if (diff.inMinutes < 60)
+      return context.l10n.discoverMinutesAgo(diff.inMinutes);
+    if (diff.inHours < 24) return context.l10n.discoverHoursAgo(diff.inHours);
+    return context.l10n.discoverDaysAgo(diff.inDays);
   }
 
   IconData _avatarIcon(Contact c) =>

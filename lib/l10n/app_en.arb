@@ -366,6 +366,24 @@
   "discoverAddAndSave": "Add and save",
   "discoverAnnouncedName": "Announced Name",
   "discoverHeard": "Heard",
+  "discoverNever": "Never",
+  "discoverNoName": "No name",
+  "discoverTypeCompanion": "Companion",
+  "discoverTypeUnknown": "Unknown",
+  "discoverPathNear": "Nearby",
+  "discoverJustNow": "Just now",
+  "discoverMinutesAgo": "{min}m ago",
+  "@discoverMinutesAgo": {
+    "placeholders": { "min": { "type": "int" } }
+  },
+  "discoverHoursAgo": "{hours}h ago",
+  "@discoverHoursAgo": {
+    "placeholders": { "hours": { "type": "int" } }
+  },
+  "discoverDaysAgo": "{days}d ago",
+  "@discoverDaysAgo": {
+    "placeholders": { "days": { "type": "int" } }
+  },
 
   "appsPlano333Title": "Plan 3-3-3",
   "appsPlano333Subtitle": "Weekly MeshCore event",
