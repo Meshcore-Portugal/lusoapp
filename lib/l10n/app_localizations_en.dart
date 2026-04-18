@@ -866,6 +866,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get channelsRemoveWarning => 'This action cannot be undone.';
 
   @override
+  String get channelsMuteTitle => 'Channel muted';
+
+  @override
+  String get channelsUnmuteTitle => 'Notifications active';
+
+  @override
+  String get channelsMuteSubtitleOn => 'No alerts — unread badge still shown';
+
+  @override
+  String get channelsMuteSubtitleOff =>
+      'Receives notifications and unread badge';
+
+  @override
+  String get channelsMuteLabel => 'muted';
+
+  @override
+  String get chatMuteChannel => 'Mute channel';
+
+  @override
+  String get chatUnmuteChannel => 'Unmute channel';
+
+  @override
   String get chatNoMessages => 'No messages in this channel';
 
   @override
@@ -957,6 +979,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatMenuOptions => 'Channel options';
+
+  @override
+  String get chatNewMessages => 'New messages';
 
   @override
   String get connectTitle => 'MeshCore Portugal';

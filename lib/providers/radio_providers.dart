@@ -408,42 +408,52 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           }
           if (!finalMessage.isOutgoing) {
             _ref.read(networkStatsProvider.notifier).incrementRx();
+            final isMuted =
+                message.channelIndex != null &&
+                _ref
+                    .read(mutedChannelsProvider)
+                    .contains(message.channelIndex!);
             if (message.channelIndex != null) {
               _ref
                   .read(unreadCountsProvider.notifier)
                   .incrementChannel(message.channelIndex!);
             }
-            final channels = _ref.read(channelsProvider);
-            final idx = message.channelIndex ?? 0;
-            final channel = channels.where((c) => c.index == idx).firstOrNull;
-            final channelName =
-                (channel != null && channel.name.isNotEmpty)
-                    ? channel.name
-                    : 'Canal $idx';
-            // Channel messages embed sender as "Name: body" when senderName
-            // is not set separately.  Parse both parts so the notification
-            // shows "Name: body" rather than "Desconhecido: Name: body".
-            final String notifSender;
-            final String notifBody;
-            if (message.senderName != null && message.senderName!.isNotEmpty) {
-              notifSender = message.senderName!;
-              notifBody = message.text;
-            } else {
-              final colonIdx = message.text.indexOf(': ');
-              if (colonIdx > 0) {
-                notifSender = message.text.substring(0, colonIdx).trim();
-                notifBody = message.text.substring(colonIdx + 2);
-              } else {
-                notifSender = 'Desconhecido';
+            // Notifications (OS alert + app-icon badge) are suppressed for
+            // muted channels; the in-app unread badge is still shown above.
+            if (!isMuted) {
+              final channels = _ref.read(channelsProvider);
+              final idx = message.channelIndex ?? 0;
+              final channel = channels.where((c) => c.index == idx).firstOrNull;
+              final channelName =
+                  (channel != null && channel.name.isNotEmpty)
+                      ? channel.name
+                      : 'Canal $idx';
+              // Channel messages embed sender as "Name: body" when senderName
+              // is not set separately.  Parse both parts so the notification
+              // shows "Name: body" rather than "Desconhecido: Name: body".
+              final String notifSender;
+              final String notifBody;
+              if (message.senderName != null &&
+                  message.senderName!.isNotEmpty) {
+                notifSender = message.senderName!;
                 notifBody = message.text;
+              } else {
+                final colonIdx = message.text.indexOf(': ');
+                if (colonIdx > 0) {
+                  notifSender = message.text.substring(0, colonIdx).trim();
+                  notifBody = message.text.substring(colonIdx + 2);
+                } else {
+                  notifSender = 'Desconhecido';
+                  notifBody = message.text;
+                }
               }
+              NotificationService.instance.showChannelMessage(
+                channelName: channelName,
+                senderName: notifSender,
+                text: notifBody,
+                isAppInForeground: AppLifecycleObserver.isInForeground,
+              );
             }
-            NotificationService.instance.showChannelMessage(
-              channelName: channelName,
-              senderName: notifSender,
-              text: notifBody,
-              isAppInForeground: AppLifecycleObserver.isInForeground,
-            );
           }
         case SelfInfoResponse(:final info):
           _ref.read(selfInfoProvider.notifier).state = info;
@@ -1366,6 +1376,46 @@ final messagesProvider =
 // Unread message counts
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Muted channels
+// ---------------------------------------------------------------------------
+
+class MutedChannelsNotifier extends StateNotifier<Set<int>> {
+  MutedChannelsNotifier() : super({}) {
+    _load();
+  }
+
+  static const _key = 'muted_channels_v1';
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_key) ?? [];
+    state = list.map(int.parse).toSet();
+  }
+
+  Future<void> toggle(int channelIndex) async {
+    final next = Set<int>.from(state);
+    if (next.contains(channelIndex)) {
+      next.remove(channelIndex);
+    } else {
+      next.add(channelIndex);
+    }
+    state = next;
+    await _save();
+  }
+
+  Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_key, state.map((i) => '$i').toList());
+  }
+}
+
+final mutedChannelsProvider =
+    StateNotifierProvider<MutedChannelsNotifier, Set<int>>(
+      (ref) => MutedChannelsNotifier(),
+    );
+
+// ---------------------------------------------------------------------------
 /// Immutable snapshot of unread counts per channel and per contact.
 class UnreadCounts {
   const UnreadCounts({this.channels = const {}, this.contacts = const {}});
@@ -1385,31 +1435,81 @@ class UnreadCounts {
 class UnreadCountsNotifier extends StateNotifier<UnreadCounts> {
   UnreadCountsNotifier() : super(const UnreadCounts());
 
+  static const _chKey = 'unread_channels_v1';
+  static const _coKey = 'unread_contacts_v1';
+
+  Future<void> loadFromStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final chRaw = prefs.getString(_chKey);
+    final coRaw = prefs.getString(_coKey);
+    Map<int, int> ch = {};
+    Map<String, int> co = {};
+    if (chRaw != null) {
+      for (final part in chRaw.split(',')) {
+        final kv = part.split(':');
+        if (kv.length == 2) {
+          final k = int.tryParse(kv[0]);
+          final v = int.tryParse(kv[1]);
+          if (k != null && v != null && v > 0) ch[k] = v;
+        }
+      }
+    }
+    if (coRaw != null) {
+      for (final part in coRaw.split(',')) {
+        final kv = part.split(':');
+        if (kv.length == 2 && kv[0].isNotEmpty) {
+          final v = int.tryParse(kv[1]);
+          if (v != null && v > 0) co[kv[0]] = v;
+        }
+      }
+    }
+    state = UnreadCounts(channels: ch, contacts: co);
+  }
+
+  Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _chKey,
+      state.channels.entries.map((e) => '${e.key}:${e.value}').join(','),
+    );
+    await prefs.setString(
+      _coKey,
+      state.contacts.entries.map((e) => '${e.key}:${e.value}').join(','),
+    );
+  }
+
   void incrementChannel(int index) {
     final ch = Map<int, int>.from(state.channels)
       ..[index] = (state.channels[index] ?? 0) + 1;
     state = UnreadCounts(channels: ch, contacts: state.contacts);
+    _save();
   }
 
   void incrementContact(String hex6) {
     final co = Map<String, int>.from(state.contacts)
       ..[hex6] = (state.contacts[hex6] ?? 0) + 1;
     state = UnreadCounts(channels: state.channels, contacts: co);
+    _save();
   }
 
   void markChannelRead(int index) {
     if ((state.channels[index] ?? 0) == 0) return;
     final ch = Map<int, int>.from(state.channels)..remove(index);
     state = UnreadCounts(channels: ch, contacts: state.contacts);
+    _save();
   }
 
   void markContactRead(String hex6) {
     if ((state.contacts[hex6] ?? 0) == 0) return;
     final co = Map<String, int>.from(state.contacts)..remove(hex6);
     state = UnreadCounts(channels: state.channels, contacts: co);
+    _save();
   }
 
-  void reset() => state = const UnreadCounts();
+  void reset() {
+    state = const UnreadCounts();
+    _save();
+  }
 }
 
 final unreadCountsProvider =

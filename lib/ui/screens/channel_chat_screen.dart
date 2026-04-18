@@ -22,8 +22,19 @@ class ChannelChatScreen extends ConsumerStatefulWidget {
 class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
+
+  /// Key attached to the unread divider widget so we can ensureVisible on it.
+  final _unreadDividerKey = GlobalKey();
   ChatMessage? _replyingTo;
   bool _atBottom = true;
+
+  /// Unread count captured before marking channel read on open.
+  /// Used to scroll to the first unread message and show the divider.
+  int _unreadOnOpen = 0;
+
+  /// Index (in the message list) of the first unread message when the screen
+  /// was opened. -1 means the divider should not be shown.
+  int _firstUnreadIndex = -1;
 
   @override
   void initState() {
@@ -31,14 +42,34 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      // Capture unread count BEFORE clearing it.
+      _unreadOnOpen = ref
+          .read(unreadCountsProvider)
+          .forChannel(widget.channelIndex);
       ref
           .read(unreadCountsProvider.notifier)
           .markChannelRead(widget.channelIndex);
-      // Load persisted messages, then scroll to bottom once they are in state.
+      // Load persisted messages, then scroll to first unread (or bottom).
       await ref
           .read(messagesProvider.notifier)
           .ensureLoadedForChannel(widget.channelIndex);
-      if (mounted) _scrollToBottom(animate: false, attempts: 4);
+      if (mounted) {
+        if (_unreadOnOpen > 0) {
+          // Compute the divider index after messages are loaded.
+          final msgs =
+              ref
+                  .read(messagesProvider)
+                  .where((m) => m.channelIndex == widget.channelIndex)
+                  .toList();
+          final idx = (msgs.length - _unreadOnOpen).clamp(0, msgs.length - 1);
+          if (idx >= 0 && idx < msgs.length) {
+            setState(() => _firstUnreadIndex = idx);
+          }
+          _scrollToFirstUnread();
+        } else {
+          _scrollToBottom(animate: false, attempts: 4);
+        }
+      }
     });
   }
 
@@ -50,16 +81,35 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
     _replyingTo = null;
     _textController.clear();
     _atBottom = true;
+    _firstUnreadIndex = -1;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      _unreadOnOpen = ref
+          .read(unreadCountsProvider)
+          .forChannel(widget.channelIndex);
       ref
           .read(unreadCountsProvider.notifier)
           .markChannelRead(widget.channelIndex);
       await ref
           .read(messagesProvider.notifier)
           .ensureLoadedForChannel(widget.channelIndex);
-      if (mounted) _scrollToBottom(animate: false, attempts: 4);
+      if (mounted) {
+        if (_unreadOnOpen > 0) {
+          final msgs =
+              ref
+                  .read(messagesProvider)
+                  .where((m) => m.channelIndex == widget.channelIndex)
+                  .toList();
+          final idx = (msgs.length - _unreadOnOpen).clamp(0, msgs.length - 1);
+          if (idx >= 0 && idx < msgs.length) {
+            setState(() => _firstUnreadIndex = idx);
+          }
+          _scrollToFirstUnread();
+        } else {
+          _scrollToBottom(animate: false, attempts: 4);
+        }
+      }
     });
   }
 
@@ -69,6 +119,10 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
         _scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 80;
     if (atBottom != _atBottom) setState(() => _atBottom = atBottom);
+    // Once the user has scrolled to the bottom, dismiss the unread divider.
+    if (atBottom && _firstUnreadIndex != -1) {
+      setState(() => _firstUnreadIndex = -1);
+    }
   }
 
   @override
@@ -111,6 +165,53 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
     _textController.clear();
     if (_replyingTo != null) setState(() => _replyingTo = null);
     _scrollToBottom();
+  }
+
+  /// Scroll so the unread divider is at the top of the viewport.
+  /// Delegates to [_tryScrollToDivider] which retries each frame until the
+  /// divider widget is actually built by the lazy ListView.
+  void _scrollToFirstUnread() {
+    if (_firstUnreadIndex < 0) {
+      _scrollToBottom(animate: false, attempts: 4);
+      return;
+    }
+    _tryScrollToDivider(attempts: 6);
+  }
+
+  /// Each attempt:
+  ///  - If the divider GlobalKey has a live context → ensureVisible (done).
+  ///  - Otherwise do a rough fractional jump to force the lazy list to build
+  ///    items near the divider, then schedule the next attempt.
+  void _tryScrollToDivider({int attempts = 6}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _firstUnreadIndex < 0) return;
+
+      // Try precise scroll first.
+      final ctx = _unreadDividerKey.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(ctx, alignment: 0.0, duration: Duration.zero);
+        return;
+      }
+
+      // Divider not built yet — do a rough jump to bring it into the build
+      // window of the lazy list, then retry next frame.
+      if (_scrollController.hasClients) {
+        final max = _scrollController.position.maxScrollExtent;
+        if (max > 0) {
+          final msgs =
+              ref
+                  .read(messagesProvider)
+                  .where((m) => m.channelIndex == widget.channelIndex)
+                  .toList();
+          if (msgs.isNotEmpty) {
+            final fraction = _firstUnreadIndex / (msgs.length + 1);
+            _scrollController.jumpTo((fraction * max).clamp(0.0, max));
+          }
+        }
+      }
+
+      if (attempts > 1) _tryScrollToDivider(attempts: attempts - 1);
+    });
   }
 
   void _scrollToBottom({bool animate = true, int attempts = 1}) {
@@ -171,6 +272,9 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
             .where((m) => m.channelIndex == widget.channelIndex)
             .toList();
     final theme = Theme.of(context);
+    final isMuted = ref.watch(
+      mutedChannelsProvider.select((s) => s.contains(widget.channelIndex)),
+    );
 
     final channelName =
         channels
@@ -196,6 +300,15 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+              if (isMuted)
+                Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: Icon(
+                    Icons.notifications_off_outlined,
+                    size: 16,
+                    color: theme.colorScheme.onSurface.withAlpha(140),
+                  ),
+                ),
               const Spacer(),
               Text(
                 '${channelMessages.length} mensagens',
@@ -206,7 +319,11 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
                   icon: const Icon(Icons.more_vert, size: 20),
                   tooltip: context.l10n.chatMenuOptions,
                   onSelected: (value) async {
-                    if (value == 'clear') {
+                    if (value == 'mute') {
+                      await ref
+                          .read(mutedChannelsProvider.notifier)
+                          .toggle(widget.channelIndex);
+                    } else if (value == 'clear') {
                       final confirm = await showDialog<bool>(
                         context: context,
                         builder:
@@ -240,6 +357,29 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
                   },
                   itemBuilder:
                       (_) => [
+                        PopupMenuItem(
+                          value: 'mute',
+                          child: ListTile(
+                            leading: Icon(
+                              isMuted
+                                  ? Icons.notifications_outlined
+                                  : Icons.notifications_off_outlined,
+                              color:
+                                  isMuted
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.onSurface.withAlpha(
+                                        160,
+                                      ),
+                            ),
+                            title: Text(
+                              isMuted
+                                  ? context.l10n.chatUnmuteChannel
+                                  : context.l10n.chatMuteChannel,
+                            ),
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                          ),
+                        ),
                         PopupMenuItem(
                           value: 'clear',
                           child: ListTile(
@@ -288,9 +428,26 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
                   : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(8),
-                    itemCount: channelMessages.length,
+                    // Extra item slot for the unread divider when active.
+                    itemCount:
+                        channelMessages.length +
+                        (_firstUnreadIndex >= 0 ? 1 : 0),
                     itemBuilder: (context, index) {
-                      final msg = channelMessages[index];
+                      // If the divider is active and we hit its slot, render it.
+                      if (_firstUnreadIndex >= 0 &&
+                          index == _firstUnreadIndex) {
+                        return _UnreadDivider(
+                          key: _unreadDividerKey,
+                          onDismiss:
+                              () => setState(() => _firstUnreadIndex = -1),
+                        );
+                      }
+                      // Shift real message index down by 1 after the divider.
+                      final msgIndex =
+                          (_firstUnreadIndex >= 0 && index > _firstUnreadIndex)
+                              ? index - 1
+                              : index;
+                      final msg = channelMessages[msgIndex];
                       return _MessageBubble(
                         message: msg,
                         selfName: selfName,
@@ -642,6 +799,57 @@ Widget _buildMentionText(
   }
 
   return Text.rich(TextSpan(children: spans));
+}
+
+/// Horizontal divider shown between the last-read message and the first unread.
+/// Dismissed automatically when the user scrolls to the bottom, or tapped.
+class _UnreadDivider extends StatelessWidget {
+  const _UnreadDivider({super.key, required this.onDismiss});
+
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.primary;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(child: Divider(color: color.withAlpha(160), thickness: 1)),
+          GestureDetector(
+            onTap: onDismiss,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: color.withAlpha(30),
+                border: Border.all(color: color.withAlpha(120)),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.mark_chat_unread_outlined, size: 14, color: color),
+                  const SizedBox(width: 4),
+                  Text(
+                    context.l10n.chatNewMessages,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(Icons.close, size: 12, color: color.withAlpha(160)),
+                ],
+              ),
+            ),
+          ),
+          Expanded(child: Divider(color: color.withAlpha(160), thickness: 1)),
+        ],
+      ),
+    );
+  }
 }
 
 class _MessageBubble extends ConsumerWidget {

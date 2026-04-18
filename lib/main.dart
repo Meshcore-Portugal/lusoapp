@@ -58,6 +58,9 @@ class _McAppPtState extends ConsumerState<McAppPt> {
     // Restore cached channels for offline browsing.
     await ref.read(channelsProvider.notifier).loadFromStorage();
 
+    // Restore persisted unread counts so badges survive app restarts.
+    await ref.read(unreadCountsProvider.notifier).loadFromStorage();
+
     // Restore persisted message paths so path details are available after reboot.
     await ref.read(packetHeardProvider.notifier).loadFromStorage();
 

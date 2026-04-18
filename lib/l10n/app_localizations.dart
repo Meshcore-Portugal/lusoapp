@@ -1768,6 +1768,48 @@ abstract class AppLocalizations {
   /// **'Esta acção não pode ser desfeita.'**
   String get channelsRemoveWarning;
 
+  /// No description provided for @channelsMuteTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Canal silenciado'**
+  String get channelsMuteTitle;
+
+  /// No description provided for @channelsUnmuteTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Notificações activas'**
+  String get channelsUnmuteTitle;
+
+  /// No description provided for @channelsMuteSubtitleOn.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sem alertas — badge de não lidas ainda visível'**
+  String get channelsMuteSubtitleOn;
+
+  /// No description provided for @channelsMuteSubtitleOff.
+  ///
+  /// In pt, this message translates to:
+  /// **'Recebe notificações e badge de não lidas'**
+  String get channelsMuteSubtitleOff;
+
+  /// No description provided for @channelsMuteLabel.
+  ///
+  /// In pt, this message translates to:
+  /// **'silenciado'**
+  String get channelsMuteLabel;
+
+  /// No description provided for @chatMuteChannel.
+  ///
+  /// In pt, this message translates to:
+  /// **'Silenciar canal'**
+  String get chatMuteChannel;
+
+  /// No description provided for @chatUnmuteChannel.
+  ///
+  /// In pt, this message translates to:
+  /// **'Reativar notificações'**
+  String get chatUnmuteChannel;
+
   /// No description provided for @chatNoMessages.
   ///
   /// In pt, this message translates to:
@@ -1947,6 +1989,12 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Opções do canal'**
   String get chatMenuOptions;
+
+  /// No description provided for @chatNewMessages.
+  ///
+  /// In pt, this message translates to:
+  /// **'Novas mensagens'**
+  String get chatNewMessages;
 
   /// No description provided for @connectTitle.
   ///

@@ -288,6 +288,13 @@
   "channelsRemoveTitle": "Remover canal",
   "channelsRemoveConfirm": "Tem a certeza que quer remover",
   "channelsRemoveWarning": "Esta acção não pode ser desfeita.",
+  "channelsMuteTitle": "Canal silenciado",
+  "channelsUnmuteTitle": "Notificações activas",
+  "channelsMuteSubtitleOn": "Sem alertas — badge de não lidas ainda visível",
+  "channelsMuteSubtitleOff": "Recebe notificações e badge de não lidas",
+  "channelsMuteLabel": "silenciado",
+  "chatMuteChannel": "Silenciar canal",
+  "chatUnmuteChannel": "Reativar notificações",
 
   "chatNoMessages": "Sem mensagens neste canal",
   "chatSendFirstMessage": "Envie a primeira mensagem!",
@@ -319,6 +326,7 @@
   "chatNoChannelSlots": "Sem espaço disponível para novos canais",
   "chatDeleteMessage": "Apagar mensagem",
   "chatMenuOptions": "Opções do canal",
+  "chatNewMessages": "Novas mensagens",
 
   "connectTitle": "MeshCore Portugal",
   "connectReconnect": "Ligar novamente",

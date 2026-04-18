@@ -874,6 +874,29 @@ class AppLocalizationsEs extends AppLocalizations {
   String get channelsRemoveWarning => 'Esta acción no puede deshacerse.';
 
   @override
+  String get channelsMuteTitle => 'Canal silenciado';
+
+  @override
+  String get channelsUnmuteTitle => 'Notificações activas';
+
+  @override
+  String get channelsMuteSubtitleOn =>
+      'Sem alertas — badge de não lidas ainda visível';
+
+  @override
+  String get channelsMuteSubtitleOff =>
+      'Recebe notificações e badge de não lidas';
+
+  @override
+  String get channelsMuteLabel => 'silenciado';
+
+  @override
+  String get chatMuteChannel => 'Silenciar canal';
+
+  @override
+  String get chatUnmuteChannel => 'Reativar notificações';
+
+  @override
   String get chatNoMessages => 'Sin mensajes en este canal';
 
   @override
@@ -965,6 +988,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get chatMenuOptions => 'Opciones del canal';
+
+  @override
+  String get chatNewMessages => 'Novas mensagens';
 
   @override
   String get connectTitle => 'MeshCore Portugal';

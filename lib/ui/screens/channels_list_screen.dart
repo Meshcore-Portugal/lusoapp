@@ -835,7 +835,7 @@ class _KeyInfoCard extends StatelessWidget {
 // Edit channel sheet (rename + delete + QR share)
 // ---------------------------------------------------------------------------
 
-class _EditChannelSheet extends StatefulWidget {
+class _EditChannelSheet extends ConsumerStatefulWidget {
   const _EditChannelSheet({
     required this.channel,
     required this.onSave,
@@ -847,10 +847,10 @@ class _EditChannelSheet extends StatefulWidget {
   final Future<void> Function(int index) onDelete;
 
   @override
-  State<_EditChannelSheet> createState() => _EditChannelSheetState();
+  ConsumerState<_EditChannelSheet> createState() => _EditChannelSheetState();
 }
 
-class _EditChannelSheetState extends State<_EditChannelSheet> {
+class _EditChannelSheetState extends ConsumerState<_EditChannelSheet> {
   late final TextEditingController _nameCtrl;
   bool _saving = false;
   bool _deleting = false;
@@ -989,6 +989,9 @@ class _EditChannelSheetState extends State<_EditChannelSheet> {
     final theme = Theme.of(context);
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
     final secret = widget.channel.secret;
+    final isMuted = ref.watch(
+      mutedChannelsProvider.select((s) => s.contains(widget.channel.index)),
+    );
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottom),
@@ -1015,6 +1018,36 @@ class _EditChannelSheetState extends State<_EditChannelSheet> {
               ],
             ),
             const SizedBox(height: 20),
+
+            // Mute toggle
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: Icon(
+                isMuted
+                    ? Icons.notifications_off_outlined
+                    : Icons.notifications_outlined,
+                color:
+                    isMuted
+                        ? theme.colorScheme.onSurface.withAlpha(140)
+                        : theme.colorScheme.primary,
+              ),
+              title: Text(
+                isMuted
+                    ? context.l10n.channelsMuteTitle
+                    : context.l10n.channelsUnmuteTitle,
+              ),
+              subtitle: Text(
+                isMuted
+                    ? context.l10n.channelsMuteSubtitleOn
+                    : context.l10n.channelsMuteSubtitleOff,
+              ),
+              value: isMuted,
+              onChanged:
+                  (_) => ref
+                      .read(mutedChannelsProvider.notifier)
+                      .toggle(widget.channel.index),
+            ),
+            const Divider(height: 16),
 
             // Channel name
             TextField(
@@ -1247,6 +1280,9 @@ class _ChannelTile extends ConsumerWidget {
     final unreadCount = ref.watch(
       unreadCountsProvider.select((u) => u.forChannel(channel.index)),
     );
+    final isMuted = ref.watch(
+      mutedChannelsProvider.select((s) => s.contains(channel.index)),
+    );
 
     final allMessages = ref.watch(messagesProvider);
     final channelMessages =
@@ -1265,25 +1301,34 @@ class _ChannelTile extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
-              // Leading: index badge with unread indicator
+              // Leading: index badge with unread indicator (greyed when muted)
               Badge(
-                isLabelVisible: hasUnread,
+                isLabelVisible: hasUnread && !isMuted,
                 label: Text(unreadCount > 99 ? '99+' : '$unreadCount'),
                 child: CircleAvatar(
                   backgroundColor:
-                      hasUnread
+                      hasUnread && !isMuted
                           ? theme.colorScheme.primaryContainer
                           : theme.colorScheme.surfaceContainerHighest,
-                  child: Text(
-                    '${channel.index}',
-                    style: TextStyle(
-                      color:
-                          hasUnread
-                              ? theme.colorScheme.onPrimaryContainer
-                              : theme.colorScheme.onSurface.withAlpha(180),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child:
+                      isMuted
+                          ? Icon(
+                            Icons.notifications_off_outlined,
+                            size: 18,
+                            color: theme.colorScheme.onSurface.withAlpha(120),
+                          )
+                          : Text(
+                            '${channel.index}',
+                            style: TextStyle(
+                              color:
+                                  hasUnread
+                                      ? theme.colorScheme.onPrimaryContainer
+                                      : theme.colorScheme.onSurface.withAlpha(
+                                        180,
+                                      ),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                 ),
               ),
 
@@ -1294,12 +1339,38 @@ class _ChannelTile extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      channel.name,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight:
-                            hasUnread ? FontWeight.bold : FontWeight.w500,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            channel.name,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight:
+                                  hasUnread && !isMuted
+                                      ? FontWeight.bold
+                                      : FontWeight.w500,
+                              color:
+                                  isMuted
+                                      ? theme.colorScheme.onSurface.withAlpha(
+                                        120,
+                                      )
+                                      : null,
+                            ),
+                          ),
+                        ),
+                        if (isMuted)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Text(
+                              context.l10n.channelsMuteLabel,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurface.withAlpha(
+                                  100,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(

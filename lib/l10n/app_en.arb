@@ -285,6 +285,13 @@
   "channelsRemoveTitle": "Remove channel",
   "channelsRemoveConfirm": "Are you sure you want to remove",
   "channelsRemoveWarning": "This action cannot be undone.",
+  "channelsMuteTitle": "Channel muted",
+  "channelsUnmuteTitle": "Notifications active",
+  "channelsMuteSubtitleOn": "No alerts — unread badge still shown",
+  "channelsMuteSubtitleOff": "Receives notifications and unread badge",
+  "channelsMuteLabel": "muted",
+  "chatMuteChannel": "Mute channel",
+  "chatUnmuteChannel": "Unmute channel",
 
   "chatNoMessages": "No messages in this channel",
   "chatSendFirstMessage": "Send the first message!",
@@ -316,6 +323,7 @@
   "chatNoChannelSlots": "No slots available for new channels",
   "chatDeleteMessage": "Delete message",
   "chatMenuOptions": "Channel options",
+  "chatNewMessages": "New messages",
 
   "connectTitle": "MeshCore Portugal",
   "connectReconnect": "Reconnect",
