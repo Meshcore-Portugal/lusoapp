@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
-import 'telemetry_screen.dart';
 
 /// Drill-down page for radio configuration and telemetry.
 ///
@@ -403,39 +402,11 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
               // ----- Advert auto-add settings -----
               const SizedBox(height: 24),
               const _AdvertAutoAddCard(),
-
-              // ----- Telemetry section -----
-              const SizedBox(height: 32),
-              Text(
-                context.l10n.commonTelemetry,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              // Embed telemetry as a non-scrollable column (parent scrolls).
-              const _EmbeddedTelemetry(),
             ],
           ),
         ),
       ),
     );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Embedded telemetry — wraps TelemetryScreen content without its own scroll
-// ---------------------------------------------------------------------------
-
-class _EmbeddedTelemetry extends StatelessWidget {
-  const _EmbeddedTelemetry();
-
-  @override
-  Widget build(BuildContext context) {
-    // TelemetryScreen is a ConsumerWidget with a ListView.
-    // We embed it with constrained height so it doesn't conflict with the
-    // parent scroll. SizedBox with a generous height lets it render fully.
-    return const SizedBox(height: 600, child: TelemetryScreen());
   }
 }
 

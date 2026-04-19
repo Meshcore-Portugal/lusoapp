@@ -484,8 +484,10 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           // When pushNewAdvert (isNew=true) the radio may NOT have added the
           // contact to its own table (manual-contact mode). Write it back
           // explicitly — but only if the user's auto-add setting allows this
-          // node type.
-          if (isNew) {
+          // node type AND the advert carries a real name. Nameless adverts
+          // are path-update pings; pushing them would create unnamed
+          // contacts in the radio's table (shown as bare hex IDs).
+          if (isNew && name.trim().isNotEmpty) {
             final autoAdd = _ref.read(advertAutoAddProvider);
             if (type != 0 && autoAdd.allowsType(type)) {
               final service = _ref.read(radioServiceProvider);
@@ -500,7 +502,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
                           ),
                         )
                         .firstOrNull;
-                if (contact != null) {
+                if (contact != null && contact.name.trim().isNotEmpty) {
                   service.addUpdateContact(contact).catchError((_) {});
                 }
               }
