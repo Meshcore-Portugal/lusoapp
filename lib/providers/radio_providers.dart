@@ -555,6 +555,10 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _ref.read(radioStatsRadioProvider.notifier).state = response;
         case StatsPacketsResponse():
           _ref.read(radioStatsPacketsProvider.notifier).state = response;
+        case AutoAddConfigResponse(:final bitmask, :final maxHops):
+          _ref
+              .read(advertAutoAddProvider.notifier)
+              .loadFromRadio(bitmask, maxHops);
         case LogRxDataPush(:final data):
           _processLogRxData(data);
         default:
@@ -813,7 +817,11 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     _ref.read(channelsProvider.notifier).refresh(service.channels);
     log.d('Channels done: ${receivedChannels.length}/$maxChannels received');
 
-    // 5. Drain any messages queued while the app was disconnected.
+    // 5. Read the radio's auto-add config and seed the UI from the radio's
+    //    persisted values (radio is source of truth for these settings).
+    unawaited(service.requestAutoAddConfig().catchError((_) {}));
+
+    // 6. Drain any messages queued while the app was disconnected.
     //    The spec says to send CMD_SYNC_NEXT_MESSAGE during initialisation.
     //    RadioService._processResponse() continues the chain automatically
     //    (each received message triggers the next sync until the queue is empty).
@@ -1873,9 +1881,12 @@ class AdvertAutoAddSettings {
 }
 
 class AdvertAutoAddNotifier extends StateNotifier<AdvertAutoAddSettings> {
-  AdvertAutoAddNotifier() : super(const AdvertAutoAddSettings()) {
+  AdvertAutoAddNotifier(this._getService)
+    : super(const AdvertAutoAddSettings()) {
     _load();
   }
+
+  final RadioService? Function() _getService;
 
   static const _key = 'advert_autoadd_v1';
 
@@ -1915,39 +1926,92 @@ class AdvertAutoAddNotifier extends StateNotifier<AdvertAutoAddSettings> {
     await Future.wait(futures);
   }
 
+  /// Push current state to the radio.  No-op when not connected.
+  Future<void> _pushToRadioIfConnected() async {
+    final service = _getService();
+    if (service == null) return;
+    final (bitmask, radioMaxHops) = toRadioConfig();
+    await service.setAutoAddConfig(bitmask, radioMaxHops).catchError((_) {});
+  }
+
+  /// Encodes current state as the two radio bytes.
+  ///
+  /// Returns `(autoadd_config bitmask, autoadd_max_hops)` where
+  /// maxHops 0 = no limit, 1 = direct, N = up to N-1 hops.
+  (int, int) toRadioConfig() {
+    int bitmask = 0;
+    if (state.overwriteOldest) bitmask |= autoAddOverwriteOldest;
+    if (state.addAll || state.addChat) bitmask |= autoAddChat;
+    if (state.addAll || state.addRepeater) bitmask |= autoAddRepeater;
+    if (state.addAll || state.addRoom) bitmask |= autoAddRoom;
+    if (state.addAll || state.addSensor) bitmask |= autoAddSensor;
+    final radioMaxHops = state.maxHops == null ? 0 : state.maxHops! + 1;
+    return (bitmask, radioMaxHops);
+  }
+
+  /// Seeds state from the radio's persisted config (called on connect).
+  ///
+  /// App-only fields ([AdvertAutoAddSettings.pullToRefresh],
+  /// [AdvertAutoAddSettings.showPublicKeys]) are preserved from the
+  /// current local state.
+  void loadFromRadio(int bitmask, int maxHops) {
+    final addChat = (bitmask & autoAddChat) != 0;
+    final addRepeater = (bitmask & autoAddRepeater) != 0;
+    final addRoom = (bitmask & autoAddRoom) != 0;
+    final addSensor = (bitmask & autoAddSensor) != 0;
+    final addAll = addChat && addRepeater && addRoom && addSensor;
+    state = state.copyWith(
+      addAll: addAll,
+      addChat: addChat,
+      addRepeater: addRepeater,
+      addRoom: addRoom,
+      addSensor: addSensor,
+      overwriteOldest: (bitmask & autoAddOverwriteOldest) != 0,
+      maxHops: maxHops == 0 ? null : maxHops - 1, // 0→null, N→N-1
+    );
+    _save();
+  }
+
   void setAddAll(bool v) {
     state = state.copyWith(addAll: v);
     _save();
+    unawaited(_pushToRadioIfConnected());
   }
 
   void setChat(bool v) {
     state = state.copyWith(addChat: v);
     _save();
+    unawaited(_pushToRadioIfConnected());
   }
 
   void setRepeater(bool v) {
     state = state.copyWith(addRepeater: v);
     _save();
+    unawaited(_pushToRadioIfConnected());
   }
 
   void setRoom(bool v) {
     state = state.copyWith(addRoom: v);
     _save();
+    unawaited(_pushToRadioIfConnected());
   }
 
   void setSensor(bool v) {
     state = state.copyWith(addSensor: v);
     _save();
+    unawaited(_pushToRadioIfConnected());
   }
 
   void setOverwriteOldest(bool v) {
     state = state.copyWith(overwriteOldest: v);
     _save();
+    unawaited(_pushToRadioIfConnected());
   }
 
   void setMaxHops(int? v) {
     state = state.copyWith(maxHops: v);
     _save();
+    unawaited(_pushToRadioIfConnected());
   }
 
   void setPullToRefresh(bool v) {
@@ -1963,7 +2027,7 @@ class AdvertAutoAddNotifier extends StateNotifier<AdvertAutoAddSettings> {
 
 final advertAutoAddProvider =
     StateNotifierProvider<AdvertAutoAddNotifier, AdvertAutoAddSettings>(
-      (ref) => AdvertAutoAddNotifier(),
+      (ref) => AdvertAutoAddNotifier(() => ref.read(radioServiceProvider)),
     );
 
 // ---------------------------------------------------------------------------

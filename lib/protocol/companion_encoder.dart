@@ -366,6 +366,20 @@ class CompanionEncoder {
     return _frame(cmdSendControlData, buf.toBytes());
   }
 
+  /// GET_AUTOADD_CONFIG — read the radio's auto-add bitmask and max-hops.
+  static Uint8List getAutoAddConfig() => _frame(cmdGetAutoAddConfig);
+
+  /// SET_AUTOADD_CONFIG — write the radio's auto-add bitmask and max-hops.
+  ///
+  /// [bitmask] is a combination of [autoAddChat], [autoAddRepeater], etc.
+  /// [maxHops] : 0 = no limit, 1 = direct only (0 hops), N = up to N-1 hops.
+  static Uint8List setAutoAddConfig(int bitmask, int maxHops) {
+    return _frame(
+      cmdSetAutoAddConfig,
+      Uint8List.fromList([bitmask & 0xFF, maxHops & 0xFF]),
+    );
+  }
+
   // --- Utility ---
 
   static int _nowEpoch() => DateTime.now().millisecondsSinceEpoch ~/ 1000;

@@ -55,6 +55,8 @@ const int cmdSendBinaryReq = 0x32;
 const int cmdSendPathDiscoveryReq = 0x34;
 const int cmdSendControlData = 0x37;
 const int cmdGetStats = 0x38;
+const int cmdSetAutoAddConfig = 0x3A; // 58 — write autoadd bitmask + max-hops
+const int cmdGetAutoAddConfig = 0x3B; // 59 — read  autoadd bitmask + max-hops
 
 // ---------------------------------------------------------------------------
 // CMD_GET_STATS sub-types
@@ -92,6 +94,26 @@ const int respChannelMsgRecvV3 = 0x11;
 const int respChannelInfo = 0x12;
 const int respSignature = 0x14;
 const int respStats = 0x18;
+const int respAutoAddConfig = 0x19; // 25 — response to CMD_GET_AUTOADD_CONFIG
+
+// ---------------------------------------------------------------------------
+// autoadd_config bitmask bits  (companion radio firmware — MyMesh.cpp)
+// ---------------------------------------------------------------------------
+
+/// Overwrite the oldest non-favourite contact when the contact table is full.
+const int autoAddOverwriteOldest = 0x01;
+
+/// Auto-add Chat / Companion node adverts (ADV_TYPE_CHAT = 1).
+const int autoAddChat = 0x02;
+
+/// Auto-add Repeater node adverts (ADV_TYPE_REPEATER = 2).
+const int autoAddRepeater = 0x04;
+
+/// Auto-add Room Server node adverts (ADV_TYPE_ROOM = 3).
+const int autoAddRoom = 0x08;
+
+/// Auto-add Sensor node adverts (ADV_TYPE_SENSOR = 4).
+const int autoAddSensor = 0x10;
 
 // ---------------------------------------------------------------------------
 // Unsolicited push codes (Radio → App)

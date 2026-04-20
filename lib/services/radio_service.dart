@@ -172,6 +172,14 @@ class RadioService {
     await _send(CompanionEncoder.reboot());
   }
 
+  Future<void> requestAutoAddConfig() async {
+    await _send(CompanionEncoder.getAutoAddConfig());
+  }
+
+  Future<void> setAutoAddConfig(int bitmask, int maxHops) async {
+    await _send(CompanionEncoder.setAutoAddConfig(bitmask, maxHops));
+  }
+
   Future<void> requestPrivateKeyExport() async {
     await _send(CompanionEncoder.exportPrivateKey());
   }
@@ -188,8 +196,7 @@ class RadioService {
   /// Must be called after a successful [login] to that peer.
   /// The response arrives as a [PrivateMessageResponse] on [responses].
   Future<void> sendAdminCommand(Uint8List pubKey, String command) async {
-    final prefix =
-        pubKey.sublist(0, pubKey.length < 6 ? pubKey.length : 6);
+    final prefix = pubKey.sublist(0, pubKey.length < 6 ? pubKey.length : 6);
     await _send(CompanionEncoder.sendAdminCommand(prefix, command));
   }
 

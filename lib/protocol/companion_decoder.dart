@@ -128,6 +128,9 @@ class CompanionDecoder {
         return StatusResponsePush(data);
       case pushRawData:
         return RawDataPush(data);
+      case respAutoAddConfig:
+        if (data.length < 2) return null;
+        return AutoAddConfigResponse(bitmask: data[0], maxHops: data[1]);
       default:
         _log.w('Unknown response code: 0x${code.toRadixString(16)}');
         return UnknownResponse(code, data);
@@ -820,6 +823,18 @@ class PrivateKeyResponse extends CompanionResponse {
 
   /// Raw 64-byte private key received from the radio.
   final Uint8List privateKey;
+}
+
+/// Response to CMD_GET_AUTOADD_CONFIG (0x3B).
+/// Also sent spontaneously after CMD_SET_AUTOADD_CONFIG (0x3A) confirms the write.
+class AutoAddConfigResponse extends CompanionResponse {
+  const AutoAddConfigResponse({required this.bitmask, required this.maxHops});
+
+  /// autoadd_config bitmask — see [autoAddChat], [autoAddRepeater], etc.
+  final int bitmask;
+
+  /// autoadd_max_hops: 0 = no limit, 1 = direct (0 hops), N = up to N-1 hops.
+  final int maxHops;
 }
 
 /// Core device statistics (CMD_GET_STATS + STATS_TYPE_CORE).
