@@ -473,8 +473,9 @@ class _DiscoveredContactTile extends ConsumerWidget {
     final now = DateTime.now();
     final diff = now.difference(dt);
     if (diff.inMinutes < 1) return context.l10n.discoverJustNow;
-    if (diff.inMinutes < 60)
+    if (diff.inMinutes < 60) {
       return context.l10n.discoverMinutesAgo(diff.inMinutes);
+    }
     if (diff.inHours < 24) return context.l10n.discoverHoursAgo(diff.inHours);
     return context.l10n.discoverDaysAgo(diff.inDays);
   }
