@@ -482,6 +482,7 @@
   "radioSettingsPullToRefreshDesc": "Cuando está activo, puedes deslizar hacia abajo para actualizar la lista de contactos.",
   "radioSettingsShowPublicKeys": "Mostrar Claves Públicas",
   "radioSettingsShowPublicKeysDesc": "Cuando está activo, las claves públicas se mostrarán en la lista de contactos.",
+  "radioSettingsBandPresetsTitle": "Preajustes de Banda",
   "roomJoinTitle": "Entrar en sala",
   "roomJoinInstruction": "Esta sala puede requerir contraseña. Déjala en blanco si es pública.",
   "roomPasswordLabel": "Contraseña (opcional)",

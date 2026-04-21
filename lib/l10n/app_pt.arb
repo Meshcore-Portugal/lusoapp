@@ -503,6 +503,7 @@
   "radioSettingsPullToRefreshDesc": "Quando ativo, pode deslizar para baixo para atualizar a lista de contactos.",
   "radioSettingsShowPublicKeys": "Mostrar Chaves Públicas",
   "radioSettingsShowPublicKeysDesc": "Quando ativo, as chaves públicas serão mostradas na lista de contactos.",
+  "radioSettingsBandPresetsTitle": "Predefinições de Banda",
   "roomJoinTitle": "Entrar na sala",
   "roomJoinInstruction": "Esta sala pode requerer uma palavra-passe. Deixe em branco se for pública.",
   "roomPasswordLabel": "Palavra-passe (opcional)",

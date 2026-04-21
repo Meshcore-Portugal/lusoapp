@@ -1446,6 +1446,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'When enabled, public keys will be shown in contacts list.';
 
   @override
+  String get radioSettingsBandPresetsTitle => 'Band Presets';
+
+  @override
   String get roomJoinTitle => 'Join room';
 
   @override

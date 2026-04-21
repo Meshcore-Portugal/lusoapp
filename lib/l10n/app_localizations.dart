@@ -2866,6 +2866,12 @@ abstract class AppLocalizations {
   /// **'Quando ativo, as chaves públicas serão mostradas na lista de contactos.'**
   String get radioSettingsShowPublicKeysDesc;
 
+  /// No description provided for @radioSettingsBandPresetsTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Predefinições de Banda'**
+  String get radioSettingsBandPresetsTitle;
+
   /// No description provided for @roomJoinTitle.
   ///
   /// In pt, this message translates to:

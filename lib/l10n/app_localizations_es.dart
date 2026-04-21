@@ -1457,6 +1457,9 @@ class AppLocalizationsEs extends AppLocalizations {
       'Cuando está activo, las claves públicas se mostrarán en la lista de contactos.';
 
   @override
+  String get radioSettingsBandPresetsTitle => 'Preajustes de Banda';
+
+  @override
   String get roomJoinTitle => 'Entrar en sala';
 
   @override

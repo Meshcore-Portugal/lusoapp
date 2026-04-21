@@ -482,6 +482,7 @@
   "radioSettingsPullToRefreshDesc": "When enabled, you can swipe down to refresh the contacts list.",
   "radioSettingsShowPublicKeys": "Show Public Keys",
   "radioSettingsShowPublicKeysDesc": "When enabled, public keys will be shown in contacts list.",
+  "radioSettingsBandPresetsTitle": "Band Presets",
   "roomJoinTitle": "Join room",
   "roomJoinInstruction": "This room may require a password. Leave blank if public.",
   "roomPasswordLabel": "Password (optional)",

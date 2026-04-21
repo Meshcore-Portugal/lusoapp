@@ -54,6 +54,58 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
     (label: '4/8', val: 8),
   ];
 
+  // 433.375 MHz and 869.618 MHz are the MeshCore community defaults for PT/EU.
+  // freqKHz is stored in MHz×1000 units (same as RadioConfig.frequencyHz).
+  static const _bandPresets = [
+    (
+      label: '433 MHz',
+      freqKHz: 433375,
+      bandwidthHz: 62500,
+      sf: 9,
+      cr: 6,
+      txPower: 10,
+    ),
+    (
+      label: '868 MHz',
+      freqKHz: 869618,
+      bandwidthHz: 62500,
+      sf: 7,
+      cr: 6,
+      txPower: 27,
+    ),
+  ];
+
+  /// Returns the index of the matching band preset, or null if the current
+  /// form values don't match any preset (i.e. user has custom settings).
+  int? get _activePresetIndex {
+    final freqKHz =
+        ((double.tryParse(_freqController.text) ?? 0) * 1e3).round();
+    final txPower = int.tryParse(_txPowerController.text);
+    for (var i = 0; i < _bandPresets.length; i++) {
+      final p = _bandPresets[i];
+      if (freqKHz == p.freqKHz &&
+          _bandwidthHz == p.bandwidthHz &&
+          _spreadingFactor == p.sf &&
+          _codingRate == p.cr &&
+          txPower == p.txPower) {
+        return i;
+      }
+    }
+    return null;
+  }
+
+  void _applyPreset(int index) {
+    final p = _bandPresets[index];
+    setState(() {
+      _freqController.text = (p.freqKHz / 1e3).toStringAsFixed(4);
+      _bandwidthHz = p.bandwidthHz;
+      _spreadingFactor = p.sf;
+      _codingRate = p.cr;
+      _txPowerController.text = '${p.txPower}';
+      _dirty = true;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -183,6 +235,33 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.bold,
                         ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // ----- Band presets -----
+                      Text(
+                        context.l10n.radioSettingsBandPresetsTitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SegmentedButton<int>(
+                        emptySelectionAllowed: true,
+                        segments: [
+                          for (var i = 0; i < _bandPresets.length; i++)
+                            ButtonSegment(
+                              value: i,
+                              label: Text(_bandPresets[i].label),
+                              icon: const Icon(Icons.radio, size: 16),
+                            ),
+                        ],
+                        selected: {
+                          if (_activePresetIndex != null) _activePresetIndex!,
+                        },
+                        onSelectionChanged: (sel) {
+                          if (sel.isNotEmpty) _applyPreset(sel.first);
+                        },
                       ),
                       const SizedBox(height: 16),
 
