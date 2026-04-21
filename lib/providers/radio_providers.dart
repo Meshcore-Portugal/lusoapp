@@ -487,9 +487,19 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _ref.read(selfInfoProvider.notifier).state = info;
           _ref.read(radioConfigProvider.notifier).state = info.radioConfig;
           _pushWidget();
-        case BattAndStorageResponse(:final batteryMv):
+        case BattAndStorageResponse(
+          :final batteryMv,
+          :final storageUsed,
+          :final storageTotal,
+        ):
           _ref.read(batteryProvider.notifier).state = batteryMv;
           _ref.read(batteryHistoryProvider.notifier).add(batteryMv);
+          if (storageUsed != null || storageTotal != null) {
+            _ref.read(storageProvider.notifier).state = (
+              storageUsed,
+              storageTotal,
+            );
+          }
           _pushWidget();
         case DeviceInfoResponse(:final info):
           _ref.read(deviceInfoProvider.notifier).state = info;
@@ -935,6 +945,9 @@ final selfInfoProvider = StateProvider<SelfInfo?>((_) => null);
 final radioConfigProvider = StateProvider<RadioConfig?>((_) => null);
 final deviceInfoProvider = StateProvider<DeviceInfo?>((_) => null);
 final batteryProvider = StateProvider<int>((_) => 0);
+
+/// (storageUsed, storageTotal) in bytes; both null until first RESP_BATT_AND_STORAGE.
+final storageProvider = StateProvider<(int?, int?)>((_) => (null, null));
 
 // Contacts
 class ContactsNotifier extends StateNotifier<List<Contact>> {

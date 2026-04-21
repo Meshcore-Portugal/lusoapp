@@ -1306,6 +1306,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get radioSettingsStorage => 'Storage';
 
   @override
+  String get radioSettingsChannels => 'Channels';
+
+  @override
+  String get radioSettingsContacts => 'Contacts';
+
+  @override
+  String get radioSettingsDiscovered => 'Discovered';
+
+  @override
+  String get radioSettingsAppVersion => 'App Version';
+
+  @override
   String get radioSettingsLoRa => 'LoRa Parameters';
 
   @override

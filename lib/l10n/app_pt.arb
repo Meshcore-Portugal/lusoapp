@@ -1,12 +1,10 @@
 {
   "@@locale": "pt",
-
   "navChannels": "Canais",
   "navContacts": "Contactos",
   "navMap": "Mapa",
   "navApps": "Apps",
   "navSettings": "Definições",
-
   "commonSave": "Guardar",
   "commonSaving": "A guardar...",
   "commonCancel": "Cancelar",
@@ -79,15 +77,12 @@
   "commonClearHistory": "Limpar histórico",
   "commonSingularHop": "salto",
   "commonPluralHops": "saltos",
-
   "homeDisconnectTitle": "Desligar rádio?",
   "homeDisconnectContent": "A ligação ao rádio será terminada",
   "homeDisconnect": "Desligar",
-
   "homeExitTitle": "Sair da LusoAPP?",
   "homeExitContent": "A ligação ao rádio será terminada e a aplicação encerrada.",
   "homeExit": "Sair",
-
   "settingsIdentity": "Identidade",
   "settingsPublicKey": "Chave Pública",
   "settingsCopyPublicKey": "Copiar chave pública",
@@ -140,7 +135,6 @@
   "settingsProtocolName": "Companion Radio Protocol v3",
   "settingsLicense": "Licença",
   "settingsLicenseMIT": "MIT",
-
   "contactsAll": "Todos",
   "contactsFavorites": "Favoritos",
   "contactsCompanions": "Companheiros",
@@ -186,7 +180,11 @@
   "contactsTypeCompanion": "Tipo: Companheiro",
   "contactsSavedToRadio": "{name} guardado no rádio",
   "@contactsSavedToRadio": {
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "contactsSaveToRadioError": "Erro ao guardar contacto no rádio",
   "contactsSaveTimeout": "Timeout: rádio não respondeu",
@@ -239,7 +237,6 @@
   "contactsAirtimeRx": "Tempo no ar (RX)",
   "contactsDuplicates": "Duplicados",
   "contactsNotSavedHint": "Este contacto foi ouvido mas não está guardado no rádio",
-
   "channelsCreatePrivate": "Criar Canal Privado",
   "channelsCreatePrivateDesc": "Seguro com uma chave secreta",
   "channelsJoinPrivate": "Entrar num Canal Privado",
@@ -295,7 +292,6 @@
   "channelsMuteLabel": "silenciado",
   "chatMuteChannel": "Silenciar canal",
   "chatUnmuteChannel": "Reativar notificações",
-
   "chatNoMessages": "Sem mensagens neste canal",
   "chatSendFirstMessage": "Envie a primeira mensagem!",
   "chatInputHint": "Mensagem para o canal...",
@@ -327,7 +323,6 @@
   "chatDeleteMessage": "Apagar mensagem",
   "chatMenuOptions": "Opções do canal",
   "chatNewMessages": "Novas mensagens",
-
   "connectTitle": "MeshCore Portugal",
   "connectReconnect": "Ligar novamente",
   "connectContinueOffline": "Continuar offline",
@@ -355,7 +350,6 @@
   "connectOpenSettings": "Definições",
   "connectFailTitle": "Falha ao ligar ao dispositivo",
   "connectLastFailTitle": "Falha ao ligar ao último dispositivo",
-
   "discoverTitle": "Descobrir",
   "discoverSubtitle": "Anúncios Recentes",
   "discoverSearchHint": "Procurar contactos descobertos...",
@@ -377,17 +371,28 @@
   "discoverJustNow": "Agora",
   "discoverMinutesAgo": "{min}m atrás",
   "@discoverMinutesAgo": {
-    "placeholders": { "min": { "type": "int" } }
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
   },
   "discoverHoursAgo": "{hours}h atrás",
   "@discoverHoursAgo": {
-    "placeholders": { "hours": { "type": "int" } }
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
   },
   "discoverDaysAgo": "{days}d atrás",
   "@discoverDaysAgo": {
-    "placeholders": { "days": { "type": "int" } }
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
   },
-
   "appsPlano333Title": "Plano 3-3-3",
   "appsPlano333Subtitle": "Evento semanal MeshCore",
   "appsTelemetryTitle": "Telemetria",
@@ -396,7 +401,6 @@
   "appsRxLogSubtitle": "Captura e exporta PCAP",
   "appsQrTitle": "Leitor QR",
   "appsQrSubtitle": "Digitalizar código QR",
-
   "mapNoGps": "Sem dados GPS. Toca em \"Localizar\" ou aguarda contactos com coordenadas",
   "mapShareMap": "Partilhar mapa",
   "mapViewAll": "Ver todos",
@@ -417,16 +421,23 @@
   "mapAttribution": "MeshCore Portugal",
   "mapAttributionOSM": "© OpenStreetMap contributors",
   "mapPathPrefix": "Path ·",
-
   "privateNoMessages": "Sem mensagens",
   "privateSendFirstMessage": "Envie a primeira mensagem!",
   "privateMessageTo": "Mensagem para {name}...",
   "@privateMessageTo": {
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "privateTracingRoute": "A traçar rota para {name}",
   "@privateTracingRoute": {
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "privateRouteFailed": "Não foi possível descobrir a rota — tente novamente",
   "privateRouteNoResponse": "Sem resposta à rota — tente novamente",
@@ -439,17 +450,19 @@
   "privateTraceRoute": "Traçar rota",
   "privateManagePath": "Gerir caminho",
   "privateContactLabel": "Contacto",
-
   "qrTitle": "Ler QR Code",
   "qrUnavailable": "Scanner de QR Code não disponível nesta plataforma",
   "qrUnavailableHint": "Use um dispositivo Android ou iOS",
   "qrHint": "Aponte para um QR Code MeshCore",
-
   "radioSettingsTitle": "Configuração do Rádio",
   "radioSettingsDevice": "Dispositivo",
   "radioSettingsModel": "Modelo",
   "radioSettingsFirmware": "Firmware",
   "radioSettingsStorage": "Armazenamento",
+  "radioSettingsChannels": "Canais",
+  "radioSettingsContacts": "Contactos",
+  "radioSettingsDiscovered": "Descobertos",
+  "radioSettingsAppVersion": "Versão da App",
   "radioSettingsLoRa": "Parâmetros LoRa",
   "radioSettingsFrequency": "Frequência (MHz)",
   "radioSettingsFreqLabel": "Frequência",
@@ -490,7 +503,6 @@
   "radioSettingsPullToRefreshDesc": "Quando ativo, pode deslizar para baixo para atualizar a lista de contactos.",
   "radioSettingsShowPublicKeys": "Mostrar Chaves Públicas",
   "radioSettingsShowPublicKeysDesc": "Quando ativo, as chaves públicas serão mostradas na lista de contactos.",
-
   "roomJoinTitle": "Entrar na sala",
   "roomJoinInstruction": "Esta sala pode requerer uma palavra-passe. Deixe em branco se for pública.",
   "roomPasswordLabel": "Palavra-passe (opcional)",
@@ -501,11 +513,14 @@
   "roomReplyStrip": "Sala",
   "roomMessageHint": "Mensagem para {name} sala...",
   "@roomMessageHint": {
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "roomMessageFallback": "Escreva uma mensagem...",
   "roomTelemetryData": "Dados de telemetria",
-
   "rxLogTitle": "RX Log",
   "rxLogExportPcap": "Exportar PCAPNG",
   "rxLogClearLog": "Limpar log",
@@ -522,7 +537,6 @@
   "rxLogPacketTypePrefix": "Tipo",
   "rxLogEmptyTitle": "Sem pacotes RX",
   "rxLogEmptyHint": "Quando a rádio receber tráfego mesh, os pacotes aparecem aqui.",
-
   "telemetryBattery": "Bateria",
   "telemetryNetStats": "Estatísticas da Rede",
   "telemetryRadioState": "Rádio — Estado",
@@ -556,7 +570,6 @@
   "telemetryFloodRX": "Flood RX",
   "telemetryDirectTX": "Direto TX",
   "telemetryDirectRX": "Direto RX",
-
   "eventTitle": "Programa do Evento",
   "eventDateLabel": "Abril 2026",
   "eventSummitTitle": "Tech Summit 2026",
@@ -569,11 +582,14 @@
   "eventChannelSheetDesc": "Adiciona o canal ao rádio ligado ou consulte os dados manualmente.",
   "eventChannelAdded": "Canal #plano333 adicionado no slot {slot}",
   "@eventChannelAdded": {
-    "placeholders": { "slot": { "type": "int" } }
+    "placeholders": {
+      "slot": {
+        "type": "int"
+      }
+    }
   },
   "eventChannelNotFound": "Canal #techsummit2026 não encontrado no rádio.",
   "eventChannelNoSlots": "Sem slots de canal disponíveis para adicionar #techsummit2026.",
-
   "plan333CardTitle": "MESH 3-3-3",
   "plan333EventActive": "● EVENTO ACTIVO",
   "plan333PhaseCQ": "CQ 21:00–22:00",
@@ -624,7 +640,11 @@
   "plan333AbortedMessage": "Automação abortada — sem mais envios nesta sessão.",
   "plan333SendCqButton": "ENVIAR CQ  ({count}/3)",
   "@plan333SendCqButton": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "plan333AllSent": "✓  3 CQs enviados",
   "plan333ConfigureFirst": "Configure os dados primeiro",
@@ -633,6 +653,10 @@
   "plan333ChannelSheetDesc": "Adiciona o canal ao rádio ligado ou consulte os dados manualmente.",
   "plan333ChannelAdded": "Canal #plano333 adicionado no slot {slot}",
   "@plan333ChannelAdded": {
-    "placeholders": { "slot": { "type": "int" } }
+    "placeholders": {
+      "slot": {
+        "type": "int"
+      }
+    }
   }
 }

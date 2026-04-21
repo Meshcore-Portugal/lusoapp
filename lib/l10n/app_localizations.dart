@@ -2602,6 +2602,30 @@ abstract class AppLocalizations {
   /// **'Armazenamento'**
   String get radioSettingsStorage;
 
+  /// No description provided for @radioSettingsChannels.
+  ///
+  /// In pt, this message translates to:
+  /// **'Canais'**
+  String get radioSettingsChannels;
+
+  /// No description provided for @radioSettingsContacts.
+  ///
+  /// In pt, this message translates to:
+  /// **'Contactos'**
+  String get radioSettingsContacts;
+
+  /// No description provided for @radioSettingsDiscovered.
+  ///
+  /// In pt, this message translates to:
+  /// **'Descobertos'**
+  String get radioSettingsDiscovered;
+
+  /// No description provided for @radioSettingsAppVersion.
+  ///
+  /// In pt, this message translates to:
+  /// **'Versão da App'**
+  String get radioSettingsAppVersion;
+
   /// No description provided for @radioSettingsLoRa.
   ///
   /// In pt, this message translates to:

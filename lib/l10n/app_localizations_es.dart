@@ -1317,6 +1317,18 @@ class AppLocalizationsEs extends AppLocalizations {
   String get radioSettingsStorage => 'Almacenamiento';
 
   @override
+  String get radioSettingsChannels => 'Canales';
+
+  @override
+  String get radioSettingsContacts => 'Contactos';
+
+  @override
+  String get radioSettingsDiscovered => 'Descubiertos';
+
+  @override
+  String get radioSettingsAppVersion => 'Versión de App';
+
+  @override
   String get radioSettingsLoRa => 'Parámetros LoRa';
 
   @override

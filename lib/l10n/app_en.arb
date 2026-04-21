@@ -1,12 +1,10 @@
 {
   "@@locale": "en",
-
   "navChannels": "Channels",
   "navContacts": "Contacts",
   "navMap": "Map",
   "navApps": "Apps",
   "navSettings": "Settings",
-
   "commonSave": "Save",
   "commonSaving": "Saving...",
   "commonCancel": "Cancel",
@@ -79,15 +77,12 @@
   "commonClearHistory": "Clear history",
   "commonSingularHop": "hop",
   "commonPluralHops": "hops",
-
   "homeDisconnectTitle": "Disconnect radio?",
   "homeDisconnectContent": "The radio connection will be terminated",
   "homeDisconnect": "Disconnect",
-
   "homeExitTitle": "Exit LusoAPP?",
   "homeExitContent": "The radio connection will be terminated and the app will close.",
   "homeExit": "Exit",
-
   "settingsIdentity": "Identity",
   "settingsPublicKey": "Public Key",
   "settingsCopyPublicKey": "Copy public key",
@@ -140,7 +135,6 @@
   "settingsProtocolName": "Companion Radio Protocol v3",
   "settingsLicense": "License",
   "settingsLicenseMIT": "MIT",
-
   "contactsAll": "All",
   "contactsFavorites": "Favorites",
   "contactsCompanions": "Companions",
@@ -236,7 +230,6 @@
   "contactsAirtimeRx": "Airtime (RX)",
   "contactsDuplicates": "Duplicates",
   "contactsNotSavedHint": "This contact was heard but is not saved on the radio",
-
   "channelsCreatePrivate": "Create Private Channel",
   "channelsCreatePrivateDesc": "Secured with a secret key",
   "channelsJoinPrivate": "Join Private Channel",
@@ -292,7 +285,6 @@
   "channelsMuteLabel": "muted",
   "chatMuteChannel": "Mute channel",
   "chatUnmuteChannel": "Unmute channel",
-
   "chatNoMessages": "No messages in this channel",
   "chatSendFirstMessage": "Send the first message!",
   "chatInputHint": "Message to channel...",
@@ -324,7 +316,6 @@
   "chatDeleteMessage": "Delete message",
   "chatMenuOptions": "Channel options",
   "chatNewMessages": "New messages",
-
   "connectTitle": "MeshCore Portugal",
   "connectReconnect": "Reconnect",
   "connectContinueOffline": "Continue offline",
@@ -352,7 +343,6 @@
   "connectOpenSettings": "Settings",
   "connectFailTitle": "Failed to connect to device",
   "connectLastFailTitle": "Failed to connect to last device",
-
   "discoverTitle": "Discover",
   "discoverSubtitle": "Recent Adverts",
   "discoverSearchHint": "Search discovered contacts...",
@@ -374,17 +364,28 @@
   "discoverJustNow": "Just now",
   "discoverMinutesAgo": "{min}m ago",
   "@discoverMinutesAgo": {
-    "placeholders": { "min": { "type": "int" } }
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
   },
   "discoverHoursAgo": "{hours}h ago",
   "@discoverHoursAgo": {
-    "placeholders": { "hours": { "type": "int" } }
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
   },
   "discoverDaysAgo": "{days}d ago",
   "@discoverDaysAgo": {
-    "placeholders": { "days": { "type": "int" } }
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
   },
-
   "appsPlano333Title": "Plan 3-3-3",
   "appsPlano333Subtitle": "Weekly MeshCore event",
   "appsTelemetryTitle": "Telemetry",
@@ -393,7 +394,6 @@
   "appsRxLogSubtitle": "Capture and export PCAP",
   "appsQrTitle": "QR Reader",
   "appsQrSubtitle": "Scan QR code",
-
   "mapNoGps": "No GPS data. Tap \"Locate\" or wait for contacts with coordinates",
   "mapShareMap": "Share map",
   "mapViewAll": "View all",
@@ -414,7 +414,6 @@
   "mapAttribution": "MeshCore Portugal",
   "mapAttributionOSM": "© OpenStreetMap contributors",
   "mapPathPrefix": "Path ·",
-
   "privateNoMessages": "No messages",
   "privateSendFirstMessage": "Send the first message!",
   "privateMessageTo": "Message to {name}...",
@@ -430,17 +429,19 @@
   "privateTraceRoute": "Trace route",
   "privateManagePath": "Manage path",
   "privateContactLabel": "Contact",
-
   "qrTitle": "Read QR Code",
   "qrUnavailable": "QR Code scanner not available on this platform",
   "qrUnavailableHint": "Use an Android or iOS device",
   "qrHint": "Point at a MeshCore QR Code",
-
   "radioSettingsTitle": "Radio Configuration",
   "radioSettingsDevice": "Device",
   "radioSettingsModel": "Model",
   "radioSettingsFirmware": "Firmware",
   "radioSettingsStorage": "Storage",
+  "radioSettingsChannels": "Channels",
+  "radioSettingsContacts": "Contacts",
+  "radioSettingsDiscovered": "Discovered",
+  "radioSettingsAppVersion": "App Version",
   "radioSettingsLoRa": "LoRa Parameters",
   "radioSettingsFrequency": "Frequency (MHz)",
   "radioSettingsFreqLabel": "Frequency",
@@ -481,7 +482,6 @@
   "radioSettingsPullToRefreshDesc": "When enabled, you can swipe down to refresh the contacts list.",
   "radioSettingsShowPublicKeys": "Show Public Keys",
   "radioSettingsShowPublicKeysDesc": "When enabled, public keys will be shown in contacts list.",
-
   "roomJoinTitle": "Join room",
   "roomJoinInstruction": "This room may require a password. Leave blank if public.",
   "roomPasswordLabel": "Password (optional)",
@@ -493,7 +493,6 @@
   "roomMessageHint": "Message to {name} room...",
   "roomMessageFallback": "Write a message...",
   "roomTelemetryData": "Telemetry data",
-
   "rxLogTitle": "RX Log",
   "rxLogExportPcap": "Export PCAPNG",
   "rxLogClearLog": "Clear log",
@@ -510,7 +509,6 @@
   "rxLogPacketTypePrefix": "Type",
   "rxLogEmptyTitle": "No RX packets",
   "rxLogEmptyHint": "When the radio receives mesh traffic, packets appear here.",
-
   "telemetryBattery": "Battery",
   "telemetryNetStats": "Network Statistics",
   "telemetryRadioState": "Radio — State",
@@ -544,7 +542,6 @@
   "telemetryFloodRX": "Flood RX",
   "telemetryDirectTX": "Direct TX",
   "telemetryDirectRX": "Direct RX",
-
   "eventTitle": "Event Program",
   "eventDateLabel": "April 2026",
   "eventSummitTitle": "Tech Summit 2026",
@@ -558,7 +555,6 @@
   "eventChannelAdded": "Channel #plano333 added in slot {slot}",
   "eventChannelNotFound": "Channel #techsummit2026 not found on radio.",
   "eventChannelNoSlots": "No channel slots available to add #techsummit2026.",
-
   "plan333CardTitle": "MESH 3-3-3",
   "plan333EventActive": "● EVENT ACTIVE",
   "plan333PhaseCQ": "CQ 21:00–22:00",

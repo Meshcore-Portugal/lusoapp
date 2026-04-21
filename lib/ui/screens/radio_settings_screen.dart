@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
+import 'discover_contacts_screen.dart';
 
 /// Drill-down page for radio configuration and telemetry.
 ///
@@ -29,6 +31,7 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
 
   bool _dirty = false;
   bool _saving = false;
+  String _appVersion = '';
 
   static const _bandwidths = [
     (label: '7.8 kHz', hz: 7800),
@@ -56,6 +59,9 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
     super.initState();
     final config = ref.read(radioConfigProvider);
     _populateFrom(config);
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) setState(() => _appVersion = info.version);
+    });
   }
 
   void _populateFrom(RadioConfig? config) {
@@ -122,6 +128,9 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
     final config = ref.watch(radioConfigProvider);
     final deviceInfo = ref.watch(deviceInfoProvider);
     final selfInfo = ref.watch(selfInfoProvider);
+    final contacts = ref.watch(contactsProvider);
+    final channels = ref.watch(channelsProvider);
+    final discovered = ref.watch(discoveredContactsProvider);
     final theme = Theme.of(context);
 
     // Keep form in sync with radio-pushed config while user hasn't edited.
@@ -150,47 +159,13 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
 
               // ----- Device info -----
               if (deviceInfo != null || selfInfo != null)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.l10n.radioSettingsDevice,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        if (selfInfo != null)
-                          _InfoRow(
-                            label: context.l10n.commonName,
-                            value: selfInfo.name,
-                          ),
-                        if (deviceInfo != null) ...[
-                          _InfoRow(
-                            label: context.l10n.radioSettingsModel,
-                            value: deviceInfo.model ?? deviceInfo.deviceName,
-                          ),
-                          _InfoRow(
-                            label: context.l10n.radioSettingsFirmware,
-                            value:
-                                deviceInfo.versionString ??
-                                'v${deviceInfo.firmwareVersion}',
-                          ),
-                          if (deviceInfo.storageUsed != null &&
-                              deviceInfo.storageTotal != null)
-                            _InfoRow(
-                              label: context.l10n.radioSettingsStorage,
-                              value:
-                                  '${deviceInfo.storageUsed} / ${deviceInfo.storageTotal} bytes',
-                            ),
-                        ],
-                      ],
-                    ),
-                  ),
+                _DeviceInfoCard(
+                  selfInfo: selfInfo,
+                  deviceInfo: deviceInfo,
+                  contactCount: contacts.length,
+                  activeChannelCount: channels.where((c) => !c.isEmpty).length,
+                  discoveredCount: discovered.length,
+                  appVersion: _appVersion,
                 ),
               if (deviceInfo != null || selfInfo != null)
                 const SizedBox(height: 16),
@@ -488,6 +463,216 @@ class _ConfigSummaryCard extends StatelessWidget {
       default:
         return 'CR$cr';
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Device info card
+// ---------------------------------------------------------------------------
+
+class _DeviceInfoCard extends ConsumerWidget {
+  const _DeviceInfoCard({
+    required this.selfInfo,
+    required this.deviceInfo,
+    required this.contactCount,
+    required this.activeChannelCount,
+    required this.discoveredCount,
+    required this.appVersion,
+  });
+
+  final SelfInfo? selfInfo;
+  final DeviceInfo? deviceInfo;
+  final int contactCount;
+  final int activeChannelCount;
+  final int discoveredCount;
+  final String appVersion;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final maxChannels = deviceInfo?.maxChannels;
+    final maxContacts = deviceInfo?.maxContacts;
+    final (storageUsed, storageTotal) = ref.watch(storageProvider);
+
+    String _kbStr(int bytes) {
+      if (bytes < 1024) return '${bytes}b';
+      return '${(bytes / 1024).toStringAsFixed(0)}kb';
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              l10n.radioSettingsDevice,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Radio identity rows
+            if (selfInfo != null)
+              _InfoRow(label: l10n.commonName, value: selfInfo!.name),
+            if (deviceInfo != null) ...[
+              _InfoRow(
+                label: l10n.radioSettingsModel,
+                value: deviceInfo!.model ?? deviceInfo!.deviceName,
+              ),
+              _InfoRow(
+                label: l10n.radioSettingsFirmware,
+                value:
+                    deviceInfo!.versionString ??
+                    'v${deviceInfo!.firmwareVersion}',
+              ),
+            ],
+
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+
+            // Capacity indicators row
+            Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 20,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _CapacityRow(
+                        label: l10n.radioSettingsChannels,
+                        used: activeChannelCount,
+                        max: maxChannels,
+                      ),
+                      const SizedBox(height: 4),
+                      _CapacityRow(
+                        label: l10n.radioSettingsContacts,
+                        used: contactCount,
+                        max: maxContacts,
+                      ),
+                      const SizedBox(height: 4),
+                      _CapacityRow(
+                        label: l10n.radioSettingsDiscovered,
+                        used: discoveredCount,
+                        max: null,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            // Storage
+            if (storageUsed != null && storageTotal != null) ...[
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(
+                    Icons.sd_storage,
+                    size: 20,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.radioSettingsStorage,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurface.withAlpha(140),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value:
+                                      storageTotal > 0
+                                          ? storageUsed / storageTotal
+                                          : 0,
+                                  minHeight: 6,
+                                  backgroundColor:
+                                      theme.colorScheme.surfaceContainerHighest,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${_kbStr(storageUsed)} / ${_kbStr(storageTotal)}',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
+            // App version
+            if (appVersion.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+              _InfoRow(label: l10n.radioSettingsAppVersion, value: appVersion),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CapacityRow extends StatelessWidget {
+  const _CapacityRow({
+    required this.label,
+    required this.used,
+    required this.max,
+  });
+
+  final String label;
+  final int used;
+  final int? max;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final valueText = max != null ? '$used/$max' : '$used';
+    return Row(
+      children: [
+        SizedBox(
+          width: 100,
+          child: Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withAlpha(140),
+            ),
+          ),
+        ),
+        Text(
+          valueText,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
   }
 }
 

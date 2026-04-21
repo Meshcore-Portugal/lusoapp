@@ -1313,6 +1313,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String get radioSettingsStorage => 'Armazenamento';
 
   @override
+  String get radioSettingsChannels => 'Canais';
+
+  @override
+  String get radioSettingsContacts => 'Contactos';
+
+  @override
+  String get radioSettingsDiscovered => 'Descobertos';
+
+  @override
+  String get radioSettingsAppVersion => 'Versão da App';
+
+  @override
   String get radioSettingsLoRa => 'Parâmetros LoRa';
 
   @override
