@@ -1699,19 +1699,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get plan333PhaseCQ => 'CQ 21:00–22:00';
 
   @override
-  String get plan333PhaseQSL => 'QSL 21:30–22:00';
-
-  @override
   String get plan333CqSent => 'CQ enviados:';
 
   @override
   String get plan333LastSent => '(último:';
-
-  @override
-  String get plan333QslSent => 'QSL enviados:';
-
-  @override
-  String get plan333NoQslLog => 'sin QSLs en el log';
 
   @override
   String get plan333EventSchedule =>
@@ -1742,11 +1733,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get plan333LocalityHint => 'Ej: Olaias';
 
   @override
-  String get plan333AutoSend => 'Envío automático de CQ y QSL';
+  String get plan333AutoSend => 'Envío automático de CQ';
 
   @override
-  String get plan333AutoSendDesc =>
-      'CQ: hasta 3 mensajes (21:00–22:00)  •  QSL: confirma cada estación recibida (21:30–22:00)';
+  String get plan333AutoSendDesc => 'CQ: hasta 3 mensajes (21:00–22:00)';
 
   @override
   String get plan333CqMessageLabel => 'Mensaje CQ:';
@@ -1765,16 +1755,6 @@ class AppLocalizationsEs extends AppLocalizations {
       'CQ Plan 333, [Nombre], [Ciudad], [Localidad]';
 
   @override
-  String get plan333FormatQSL => 'QSL (confirmación)';
-
-  @override
-  String get plan333FormatQSLPhase => 'Opcional 21:30–22:00';
-
-  @override
-  String get plan333FormatQSLTemplate =>
-      'QSL, [Nombre estación recibida], [N] saltos, [local]\nEj: QSL, Daytona, 5 saltos, Tomar';
-
-  @override
   String get plan333ConfigureChannel =>
       'Configurar Canal MeshCore  (#plano333)';
 
@@ -1790,50 +1770,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get plan333AlertsActive => 'Alertas activas a las 20:50 y 20:55.';
-
-  @override
-  String get plan333StationsHeard => 'Estaciones Escuchadas';
-
-  @override
-  String get plan333ShareLog => 'Compartir log';
-
-  @override
-  String get plan333ClearLog => 'Limpiar log';
-
-  @override
-  String get plan333NoStationsYet =>
-      'Ninguna estación escuchada aún. Los CQs recibidos en el canal aparecen aquí automáticamente.';
-
-  @override
-  String get plan333ClearQslTitle => '¿Limpiar QSL?';
-
-  @override
-  String get plan333ClearQslContent =>
-      'Todos los QSL registrados serán eliminados.';
-
-  @override
-  String get plan333AddQslTitle => 'Añadir QSL';
-
-  @override
-  String get plan333StationLabel => 'Estación *';
-
-  @override
-  String get plan333StationHint => 'ej: Daytona';
-
-  @override
-  String get plan333HopsLabel => 'Saltos:';
-
-  @override
-  String get plan333DirectOption => 'Directo';
-
-  @override
-  String get plan333LocationLabel => 'Ubicación';
-
-  @override
-  String get plan333LocationHint => 'ej: Tomar';
-
-  @override
-  String get plan333NotesLabel => 'Notas (opcional)';
 
   @override
   String get plan333AbortAutoSend => 'Abortar auto-envío';

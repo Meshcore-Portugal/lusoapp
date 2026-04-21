@@ -3328,12 +3328,6 @@ abstract class AppLocalizations {
   /// **'CQ 21:00–22:00'**
   String get plan333PhaseCQ;
 
-  /// No description provided for @plan333PhaseQSL.
-  ///
-  /// In pt, this message translates to:
-  /// **'QSL 21:30–22:00'**
-  String get plan333PhaseQSL;
-
   /// No description provided for @plan333CqSent.
   ///
   /// In pt, this message translates to:
@@ -3345,18 +3339,6 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'(último:'**
   String get plan333LastSent;
-
-  /// No description provided for @plan333QslSent.
-  ///
-  /// In pt, this message translates to:
-  /// **'QSL enviados:'**
-  String get plan333QslSent;
-
-  /// No description provided for @plan333NoQslLog.
-  ///
-  /// In pt, this message translates to:
-  /// **'sem QSLs no log'**
-  String get plan333NoQslLog;
 
   /// No description provided for @plan333EventSchedule.
   ///
@@ -3415,13 +3397,13 @@ abstract class AppLocalizations {
   /// No description provided for @plan333AutoSend.
   ///
   /// In pt, this message translates to:
-  /// **'Envio automático de CQ e QSL'**
+  /// **'Envio automático de CQ'**
   String get plan333AutoSend;
 
   /// No description provided for @plan333AutoSendDesc.
   ///
   /// In pt, this message translates to:
-  /// **'CQ: até 3 mensagens (21:00–22:00)  •  QSL: confirma cada estação recebida (21:30–22:00)'**
+  /// **'CQ: até 3 mensagens (21:00–22:00)'**
   String get plan333AutoSendDesc;
 
   /// No description provided for @plan333CqMessageLabel.
@@ -3454,24 +3436,6 @@ abstract class AppLocalizations {
   /// **'CQ Plano 333, [Nome], [Cidade], [Localidade]'**
   String get plan333FormatCqTemplate;
 
-  /// No description provided for @plan333FormatQSL.
-  ///
-  /// In pt, this message translates to:
-  /// **'QSL (confirmação)'**
-  String get plan333FormatQSL;
-
-  /// No description provided for @plan333FormatQSLPhase.
-  ///
-  /// In pt, this message translates to:
-  /// **'Opcional 21:30–22:00'**
-  String get plan333FormatQSLPhase;
-
-  /// No description provided for @plan333FormatQSLTemplate.
-  ///
-  /// In pt, this message translates to:
-  /// **'QSL, [Nome estação recebida], [N] hops, [local]\nEx: QSL, Daytona, 5 hops, Tomar'**
-  String get plan333FormatQSLTemplate;
-
   /// No description provided for @plan333ConfigureChannel.
   ///
   /// In pt, this message translates to:
@@ -3501,90 +3465,6 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Alertas ativos às 20:50 e 20:55.'**
   String get plan333AlertsActive;
-
-  /// No description provided for @plan333StationsHeard.
-  ///
-  /// In pt, this message translates to:
-  /// **'Estações Ouvidas'**
-  String get plan333StationsHeard;
-
-  /// No description provided for @plan333ShareLog.
-  ///
-  /// In pt, this message translates to:
-  /// **'Partilhar log'**
-  String get plan333ShareLog;
-
-  /// No description provided for @plan333ClearLog.
-  ///
-  /// In pt, this message translates to:
-  /// **'Limpar log'**
-  String get plan333ClearLog;
-
-  /// No description provided for @plan333NoStationsYet.
-  ///
-  /// In pt, this message translates to:
-  /// **'Nenhuma estação ouvida ainda. Os CQs recebidos no canal aparecem aqui automaticamente.'**
-  String get plan333NoStationsYet;
-
-  /// No description provided for @plan333ClearQslTitle.
-  ///
-  /// In pt, this message translates to:
-  /// **'Limpar QSL?'**
-  String get plan333ClearQslTitle;
-
-  /// No description provided for @plan333ClearQslContent.
-  ///
-  /// In pt, this message translates to:
-  /// **'Todos os QSL registados serão apagados.'**
-  String get plan333ClearQslContent;
-
-  /// No description provided for @plan333AddQslTitle.
-  ///
-  /// In pt, this message translates to:
-  /// **'Adicionar QSL'**
-  String get plan333AddQslTitle;
-
-  /// No description provided for @plan333StationLabel.
-  ///
-  /// In pt, this message translates to:
-  /// **'Estação *'**
-  String get plan333StationLabel;
-
-  /// No description provided for @plan333StationHint.
-  ///
-  /// In pt, this message translates to:
-  /// **'ex: Daytona'**
-  String get plan333StationHint;
-
-  /// No description provided for @plan333HopsLabel.
-  ///
-  /// In pt, this message translates to:
-  /// **'Hops:'**
-  String get plan333HopsLabel;
-
-  /// No description provided for @plan333DirectOption.
-  ///
-  /// In pt, this message translates to:
-  /// **'Direto'**
-  String get plan333DirectOption;
-
-  /// No description provided for @plan333LocationLabel.
-  ///
-  /// In pt, this message translates to:
-  /// **'Localização'**
-  String get plan333LocationLabel;
-
-  /// No description provided for @plan333LocationHint.
-  ///
-  /// In pt, this message translates to:
-  /// **'ex: Tomar'**
-  String get plan333LocationHint;
-
-  /// No description provided for @plan333NotesLabel.
-  ///
-  /// In pt, this message translates to:
-  /// **'Notas (opcional)'**
-  String get plan333NotesLabel;
 
   /// No description provided for @plan333AbortAutoSend.
   ///
