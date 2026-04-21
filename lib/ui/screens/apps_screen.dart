@@ -44,6 +44,14 @@ class AppsScreen extends StatelessWidget {
       route: '/apps/rxlog',
     ),
     _AppEntry(
+      id: 'noisefloor',
+      title: 'Noise Floor',
+      subtitle: 'Ruído de fundo em tempo real',
+      icon: Icons.graphic_eq,
+      color: Color(0xFF22C55E),
+      route: '/apps/noisefloor',
+    ),
+    _AppEntry(
       id: 'qr',
       title: 'Leitor QR',
       subtitle: 'Digitalizar código QR',

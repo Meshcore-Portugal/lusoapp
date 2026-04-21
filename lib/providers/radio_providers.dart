@@ -570,6 +570,9 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _ref.read(radioStatsCoreProvider.notifier).state = response;
         case StatsRadioResponse():
           _ref.read(radioStatsRadioProvider.notifier).state = response;
+          _ref
+              .read(noiseFloorHistoryProvider.notifier)
+              .add(response.noiseFloor);
         case StatsPacketsResponse():
           _ref.read(radioStatsPacketsProvider.notifier).state = response;
         case AutoAddConfigResponse(:final bitmask, :final maxHops):
@@ -2091,6 +2094,40 @@ final radioStatsRadioProvider = StateProvider<StatsRadioResponse?>((_) => null);
 final radioStatsPacketsProvider = StateProvider<StatsPacketsResponse?>(
   (_) => null,
 );
+
+// ---------------------------------------------------------------------------
+// Noise floor history (in-session ring buffer, up to 300 readings)
+// ---------------------------------------------------------------------------
+
+class NoiseFloorReading {
+  const NoiseFloorReading({required this.timestamp, required this.dBm});
+  final DateTime timestamp;
+  final int dBm;
+}
+
+class NoiseFloorHistoryNotifier extends StateNotifier<List<NoiseFloorReading>> {
+  NoiseFloorHistoryNotifier() : super([]);
+
+  static const _maxReadings = 300;
+
+  void add(int dBm) {
+    final next = [
+      ...state,
+      NoiseFloorReading(timestamp: DateTime.now(), dBm: dBm),
+    ];
+    state =
+        next.length > _maxReadings
+            ? next.sublist(next.length - _maxReadings)
+            : next;
+  }
+
+  void clear() => state = [];
+}
+
+final noiseFloorHistoryProvider =
+    StateNotifierProvider<NoiseFloorHistoryNotifier, List<NoiseFloorReading>>(
+      (ref) => NoiseFloorHistoryNotifier(),
+    );
 
 // ---------------------------------------------------------------------------
 // Packet heard tracker (driven by 0x88 raw RF log)

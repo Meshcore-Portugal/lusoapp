@@ -16,6 +16,7 @@ import 'screens/settings_screen.dart';
 import 'screens/event_program_screen.dart';
 import 'screens/telemetry_screen.dart';
 import 'screens/discover_contacts_screen.dart';
+import 'screens/noise_floor_screen.dart';
 import 'screens/rx_log_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -64,6 +65,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/apps/rxlog',
             builder: (context, state) => const RxLogScreen(),
+          ),
+          GoRoute(
+            path: '/apps/noisefloor',
+            builder: (context, state) => const NoiseFloorScreen(),
           ),
           GoRoute(
             path: '/apps/event',
