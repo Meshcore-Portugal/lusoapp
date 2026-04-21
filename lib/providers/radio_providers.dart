@@ -16,6 +16,11 @@ import '../services/storage_service.dart';
 import '../services/widget_service.dart';
 import '../transport/transport.dart';
 
+/// Returns the 64-char hex string of the first 32 bytes of a public key.
+/// Used as a stable map key for comparing contact identity across providers.
+String _keyHex(Uint8List key) =>
+    key.take(32).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+
 // ---------------------------------------------------------------------------
 // Transport state
 // ---------------------------------------------------------------------------
@@ -37,6 +42,12 @@ final connectionProgressProvider = StateProvider<int>((_) => 0);
 
 final radioServiceProvider = StateProvider<RadioService?>((_) => null);
 
+/// Snapshot of the public-key hex-strings of contacts confirmed to be stored
+/// on the radio at the last explicit sync (initial connect or contact deletion).
+/// Used by [discoveredContactsProvider] so that background path-update refreshes
+/// don't falsely hide contacts from the discover screen.
+final radioContactsSnapshotProvider = StateProvider<Set<String>>((_) => {});
+
 // ---------------------------------------------------------------------------
 // Last connected device (loaded on app start from SharedPreferences)
 // ---------------------------------------------------------------------------
@@ -57,6 +68,12 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
 
   /// Set to true in [disconnect] to abort any in-progress reconnect loop.
   bool _reconnectCancelled = false;
+
+  /// When true the next [EndContactsResponse] will also update
+  /// [radioContactsSnapshotProvider].  Set before explicit contact syncs
+  /// (initial connect, deletion); left false for path-update auto-refreshes
+  /// so the discover screen is not destabilised by background syncs.
+  bool _pendingSnapshotUpdate = false;
 
   void _setStep(int step, String label) {
     _ref.read(connectionProgressProvider.notifier).state = step;
@@ -299,10 +316,24 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         case EndContactsResponse():
           // Full list has arrived — replace provider state with final radio list.
           _ref.read(contactsProvider.notifier).refresh(service.contacts);
+          // Only update the discover-screen snapshot when this sync was
+          // explicitly requested (initial connect or contact deletion).
+          // Background path-update syncs must not update the snapshot,
+          // otherwise contacts re-added by the radio's auto-add feature
+          // disappear from discover before the user can see them.
+          if (_pendingSnapshotUpdate) {
+            _pendingSnapshotUpdate = false;
+            _ref.read(radioContactsSnapshotProvider.notifier).state =
+                service.contacts.map((c) => _keyHex(c.publicKey)).toSet();
+          }
           _pushWidget();
         case ContactDeletedPush():
-          // Radio confirmed deletion — refresh from the service's now-updated list.
-          _ref.read(contactsProvider.notifier).refresh(service.contacts);
+          // Radio confirmed deletion — request a fresh contact list so
+          // service.contacts is rebuilt without the deleted entry before
+          // refreshing contactsProvider.  Also schedule a snapshot update so
+          // the discover screen correctly reflects the post-deletion state.
+          _pendingSnapshotUpdate = true;
+          unawaited(service.requestContacts().catchError((_) {}));
         case ChannelInfoResponse():
           _ref.read(channelsProvider.notifier).refresh(service.channels);
           _pushWidget();
@@ -503,7 +534,16 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
                         )
                         .firstOrNull;
                 if (contact != null && contact.name.trim().isNotEmpty) {
-                  service.addUpdateContact(contact).catchError((_) {});
+                  // After pushing the contact to the radio, refresh contacts
+                  // and update the snapshot so the discover screen removes
+                  // the now-saved contact from its list.
+                  service
+                      .addUpdateContact(contact)
+                      .then((_) {
+                        _pendingSnapshotUpdate = true;
+                        return service.requestContacts().catchError((_) {});
+                      })
+                      .catchError((_) {});
                 }
               }
             }
@@ -547,7 +587,10 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _ref.read(loginResultProvider.notifier).state = false;
         case PathUpdatedPush():
           // Radio has updated a contact's cached route — re-sync the contact
-          // list so the UI shows the new hop count.
+          // list so the UI shows the new hop count.  Do NOT set
+          // _pendingSnapshotUpdate here: path-update refreshes must not
+          // update the discover snapshot (race condition where auto-re-added
+          // contacts would disappear from discover before the user can see them).
           service.requestContacts().catchError((_) {});
         case StatsCoreResponse():
           _ref.read(radioStatsCoreProvider.notifier).state = response;
@@ -717,7 +760,10 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     unawaited(service.requestStats(statsTypePackets).catchError((_) {}));
 
     // 3. Contacts — wait for the end-of-contacts marker.
+    // Mark that the resulting EndContactsResponse should update the discover
+    // snapshot — this is the authoritative initial sync.
     _setStep(3, 'A sincronizar contactos...');
+    _pendingSnapshotUpdate = true;
     final contactsResp = await _sendAndWait(
       service,
       () => service.requestContacts(),
@@ -907,16 +953,39 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
   }
 
   void refresh(List<Contact> contacts) {
-    // Contacts from the radio — carry over customName from local cache.
+    // Contacts from the radio — carry over local-only fields (customName,
+    // lastAdvertTimestamp) from the cache.  The radio doesn't track when we
+    // last heard an advert from a node, so without this merge a background
+    // sync (e.g. after auto-add or path update) would wipe lastAdvertTimestamp
+    // and the discover screen would lose the contact.
     final merged =
         contacts.map((incoming) {
           final existing = state.firstWhere(
             (c) => _keysEqual(c.publicKey, incoming.publicKey),
             orElse: () => incoming,
           );
-          return existing.customName != null
-              ? incoming.withCustomName(existing.customName)
-              : incoming;
+          // Identical instance — no local cache hit, nothing to preserve.
+          if (identical(existing, incoming)) return incoming;
+          var merged =
+              existing.customName != null
+                  ? incoming.withCustomName(existing.customName)
+                  : incoming;
+          // Preserve the most recent advert timestamp seen locally.
+          if (existing.lastAdvertTimestamp > merged.lastAdvertTimestamp) {
+            merged = Contact(
+              publicKey: merged.publicKey,
+              type: merged.type,
+              flags: merged.flags,
+              pathLen: merged.pathLen,
+              name: merged.name,
+              lastAdvertTimestamp: existing.lastAdvertTimestamp,
+              latitude: merged.latitude,
+              longitude: merged.longitude,
+              lastModified: merged.lastModified,
+              customName: merged.customName,
+            );
+          }
+          return merged;
         }).toList();
 
     // Preserve locally-cached contacts that are not in the radio's list.

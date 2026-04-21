@@ -8,21 +8,16 @@ import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 
-/// Contacts discovered via mesh adverts but not (yet) saved to the radio.
+/// All contacts heard via mesh adverts. The user can choose to store any of
+/// them on the radio, regardless of whether auto-add already pushed them there.
 final discoveredContactsProvider = Provider<List<Contact>>((ref) {
   final allContacts = ref.watch(contactsProvider);
-  final service = ref.watch(radioServiceProvider);
 
-  // Advert-only contacts are those in local cache but not confirmed on radio.
-  if (service == null || service.contacts.isEmpty) {
-    return []; // No radio connected or no radio contacts yet.
-  }
-
-  final radioKeys = service.contacts.map((c) => _hex32(c.publicKey)).toSet();
+  // Only show contacts that have actually been heard via an advert
+  // (lastAdvertTimestamp > 0).  Pure radio-synced contacts (heard before this
+  // session, with no advert seen) are shown in the main contacts list instead.
   final discovered =
-      allContacts
-          .where((c) => !radioKeys.contains(_hex32(c.publicKey)))
-          .toList();
+      allContacts.where((c) => c.lastAdvertTimestamp > 0).toList();
 
   // Sort by last heard (newest first).
   discovered.sort(

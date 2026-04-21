@@ -509,15 +509,31 @@ class CompanionDecoder {
     if (data.length < 32) return null;
     final pubKey = Uint8List.fromList(data.sublist(0, 32));
 
-    // Both pushAdvert (0x80) and pushNewAdvert (0x8A) use the same layout:
-    // pubkey[0..31] type[32] name[33..end] (null-terminated or end-of-data)
-    if (data.length < 33) {
-      return AdvertPush(pubKey, 0, '', isNew: isNew);
+    // The firmware emits two different push frames:
+    //
+    //   PUSH_CODE_ADVERT     (0x80) — payload = pubkey (32 bytes only).
+    //                                  Sent for path/profile updates of an
+    //                                  already-known contact.
+    //
+    //   PUSH_CODE_NEW_ADVERT (0x8A) — payload = full RESP_CODE_CONTACT frame
+    //                                  body (pubkey, type, flags, path_len,
+    //                                  out_path[64], name[32 null-padded],
+    //                                  last_advert_timestamp, gps_lat,
+    //                                  gps_lon, lastmod). Sent for newly
+    //                                  discovered contacts (firmware uses
+    //                                  writeContactRespFrame).
+    //
+    // Use the full-contact layout for the 0x8A case so we get the real name.
+    if (isNew && data.length >= 131) {
+      final type = data[32];
+      // flags @33, path_len @34, path @35..98 are not surfaced here.
+      final nameEnd = _findNullTerminator(data, 99, 131);
+      final name = _decodeRadioString(data.sublist(99, nameEnd));
+      return AdvertPush(pubKey, type, name.trim(), isNew: isNew);
     }
-    final type = data[32];
-    final nameEnd = _findNullTerminator(data, 33, data.length);
-    final name = _decodeRadioString(data.sublist(33, nameEnd));
-    return AdvertPush(pubKey, type, name.trim(), isNew: isNew);
+
+    // PUSH_CODE_ADVERT (0x80) — pubkey only, no type/name carried.
+    return AdvertPush(pubKey, 0, '', isNew: isNew);
   }
 
   static BinaryResponsePush? _parseBinaryResponse(Uint8List data) {
