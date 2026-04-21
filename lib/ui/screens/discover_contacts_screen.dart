@@ -8,14 +8,13 @@ import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 
-/// All contacts heard via mesh adverts. The user can choose to store any of
-/// them on the radio, regardless of whether auto-add already pushed them there.
+/// Contacts heard via mesh adverts (whether or not stored on the radio).
+/// The contacts screen shows only radio-stored contacts; this screen shows
+/// everything heard on the mesh so the user can decide what to save.
 final discoveredContactsProvider = Provider<List<Contact>>((ref) {
   final allContacts = ref.watch(contactsProvider);
 
-  // Only show contacts that have actually been heard via an advert
-  // (lastAdvertTimestamp > 0).  Pure radio-synced contacts (heard before this
-  // session, with no advert seen) are shown in the main contacts list instead.
+  // Show every contact heard via an advert this session (lastAdvertTimestamp > 0).
   final discovered =
       allContacts.where((c) => c.lastAdvertTimestamp > 0).toList();
 

@@ -186,13 +186,29 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
         .join();
   }
 
+  static String _radioKeyHex(Uint8List key) =>
+      key.take(32).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+
   @override
   Widget build(BuildContext context) {
     final filter = ref.watch(contactFilterProvider);
     final sort = ref.watch(contactSortProvider);
-    final contacts = ref.watch(contactsProvider);
+    final allContacts = ref.watch(contactsProvider);
+    final radioKeys = ref.watch(radioContactsSnapshotProvider);
     final messages = ref.watch(messagesProvider);
     final autoAddSettings = ref.watch(advertAutoAddProvider);
+
+    // Only show contacts actually stored on the radio. Advert-heard contacts
+    // that haven't been saved to the radio appear in the discover screen only.
+    // When not connected (radioKeys is empty because no sync has completed)
+    // fall back to the full cache so the list isn't blank before first connect.
+    final isConnected = radioKeys.isNotEmpty;
+    final contacts =
+        !isConnected
+            ? allContacts // Not yet synced — show cached list
+            : allContacts
+                .where((c) => radioKeys.contains(_radioKeyHex(c.publicKey)))
+                .toList();
 
     final chatContacts = contacts.where((c) => c.isChat).toList();
     final repeaters = contacts.where((c) => c.isRepeater).toList();

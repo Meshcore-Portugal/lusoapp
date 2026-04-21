@@ -316,16 +316,13 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         case EndContactsResponse():
           // Full list has arrived — replace provider state with final radio list.
           _ref.read(contactsProvider.notifier).refresh(service.contacts);
-          // Only update the discover-screen snapshot when this sync was
-          // explicitly requested (initial connect or contact deletion).
-          // Background path-update syncs must not update the snapshot,
-          // otherwise contacts re-added by the radio's auto-add feature
-          // disappear from discover before the user can see them.
-          if (_pendingSnapshotUpdate) {
-            _pendingSnapshotUpdate = false;
-            _ref.read(radioContactsSnapshotProvider.notifier).state =
-                service.contacts.map((c) => _keyHex(c.publicKey)).toSet();
-          }
+          // Always update the snapshot: it is the authoritative set of keys
+          // stored on the radio, used by the contacts screen to filter out
+          // advert-only (not-on-radio) entries.  The discover screen no longer
+          // uses this snapshot, so updating it on every sync is safe.
+          _pendingSnapshotUpdate = false;
+          _ref.read(radioContactsSnapshotProvider.notifier).state =
+              service.contacts.map((c) => _keyHex(c.publicKey)).toSet();
           _pushWidget();
         case ContactDeletedPush():
           // Radio confirmed deletion — request a fresh contact list so
