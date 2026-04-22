@@ -7,11 +7,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../protocol/commands.dart';
 import '../../providers/radio_providers.dart';
 
-/// Real-time noise floor chart.
+/// Real-time RSSI + Noise Floor chart.
 ///
-/// Polls `CMD_GET_STATS / STATS_TYPE_RADIO` every 2 seconds while the screen
-/// is active and renders a fixed-range area chart (-60 dBm … -120 dBm) that
-/// scrolls as new readings arrive.
+/// Polls `CMD_GET_STATS / STATS_TYPE_RADIO` every 2 seconds and renders both
+/// series on a shared fixed-range area chart (-60 dBm … -120 dBm).
 class NoiseFloorScreen extends ConsumerStatefulWidget {
   const NoiseFloorScreen({super.key});
 
@@ -21,11 +20,12 @@ class NoiseFloorScreen extends ConsumerStatefulWidget {
 
 class _NoiseFloorScreenState extends ConsumerState<NoiseFloorScreen> {
   Timer? _pollTimer;
+  bool _showRssi = true;
+  bool _showNoise = true;
 
   @override
   void initState() {
     super.initState();
-    // Fire an immediate request and then poll every 2 s.
     _poll();
     _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _poll());
   }
@@ -43,33 +43,48 @@ class _NoiseFloorScreenState extends ConsumerState<NoiseFloorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final history = ref.watch(noiseFloorHistoryProvider);
+    final noiseHistory = ref.watch(noiseFloorHistoryProvider);
+    final rssiHistory = ref.watch(rssiHistoryProvider);
     final current = ref.watch(radioStatsRadioProvider);
     final theme = Theme.of(context);
 
-    final currentDbm = current?.noiseFloor;
-    final label = currentDbm != null ? '${currentDbm}dBm' : '—';
+    final rssiDbm = current?.lastRssi;
+    final noiseDbm = current?.noiseFloor;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D1117),
       appBar: AppBar(
-        title: const Text('Noise Floor'),
+        title: const Text('RSSI / Noise Floor'),
         backgroundColor: const Color(0xFF0D1117),
         foregroundColor: Colors.white,
         elevation: 0,
       ),
       body: Column(
         children: [
-          // Current value readout
+          // Current value readout — tappable chips toggle visibility
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text(
-              label,
-              style: theme.textTheme.headlineMedium?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.2,
-              ),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _ValueChip(
+                  label: 'RSSI',
+                  value: rssiDbm != null ? '${rssiDbm}dBm' : '—',
+                  color: const Color(0xFF38BDF8),
+                  active: _showRssi,
+                  theme: theme,
+                  onTap: () => setState(() => _showRssi = !_showRssi),
+                ),
+                const SizedBox(width: 24),
+                _ValueChip(
+                  label: 'Noise Floor',
+                  value: noiseDbm != null ? '${noiseDbm}dBm' : '—',
+                  color: const Color(0xFF4ADE80),
+                  active: _showNoise,
+                  theme: theme,
+                  onTap: () => setState(() => _showNoise = !_showNoise),
+                ),
+              ],
             ),
           ),
 
@@ -77,7 +92,85 @@ class _NoiseFloorScreenState extends ConsumerState<NoiseFloorScreen> {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(left: 8, right: 16, bottom: 16),
-              child: _NoiseFloorChart(history: history),
+              child: _RfChart(
+                noiseHistory: _showNoise ? noiseHistory : const [],
+                rssiHistory: _showRssi ? rssiHistory : const [],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Value chip
+// ---------------------------------------------------------------------------
+
+class _ValueChip extends StatelessWidget {
+  const _ValueChip({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.active,
+    required this.theme,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+  final bool active;
+  final ThemeData theme;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveColor = active ? color : color.withAlpha(60);
+    final effectiveValueColor =
+        active ? Colors.white : Colors.white.withAlpha(60);
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: effectiveColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: effectiveColor,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                active ? Icons.visibility : Icons.visibility_off,
+                size: 12,
+                color: effectiveColor,
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: effectiveValueColor,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.1,
             ),
           ),
         ],
@@ -90,23 +183,17 @@ class _NoiseFloorScreenState extends ConsumerState<NoiseFloorScreen> {
 // Chart widget
 // ---------------------------------------------------------------------------
 
-/// Fixed-range (-60 … -120 dBm) scrolling area chart.
-/// Shows the last [_visiblePoints] readings; older readings scroll off the
-/// left edge as new ones arrive.
-class _NoiseFloorChart extends StatelessWidget {
-  const _NoiseFloorChart({required this.history});
+class _RfChart extends StatelessWidget {
+  const _RfChart({required this.noiseHistory, required this.rssiHistory});
 
-  final List<NoiseFloorReading> history;
+  final List<NoiseFloorReading> noiseHistory;
+  final List<RssiReading> rssiHistory;
 
-  // Visible Y range
   static const double _yMax = -60.0;
   static const double _yMin = -120.0;
-  static const double _yRange = _yMax - _yMin; // 60
-
-  // How many readings to show at once
+  static const double _yRange = _yMax - _yMin;
   static const int _visiblePoints = 120;
 
-  // Y-axis labels every 5 dBm
   static const List<int> _yTicks = [
     -60,
     -65,
@@ -129,7 +216,6 @@ class _NoiseFloorChart extends StatelessWidget {
 
     return Row(
       children: [
-        // Y-axis labels
         SizedBox(
           width: yLabelWidth,
           child: LayoutBuilder(
@@ -146,7 +232,7 @@ class _NoiseFloorChart extends StatelessWidget {
                       child: Text(
                         '$tick',
                         style: const TextStyle(
-                          color: Color(0xFFD97706),
+                          color: Color(0xFF718096),
                           fontSize: 10,
                           fontFeatures: [FontFeature.tabularFigures()],
                         ),
@@ -157,11 +243,12 @@ class _NoiseFloorChart extends StatelessWidget {
             },
           ),
         ),
-
-        // Chart area
         Expanded(
           child: CustomPaint(
-            painter: _ChartPainter(history: history),
+            painter: _ChartPainter(
+              noiseHistory: noiseHistory,
+              rssiHistory: rssiHistory,
+            ),
             child: const SizedBox.expand(),
           ),
         ),
@@ -169,25 +256,26 @@ class _NoiseFloorChart extends StatelessWidget {
     );
   }
 
-  /// Maps a dBm value to a top-offset fraction (0 = top = -60 dBm).
-  static double _yToFraction(double dBm) {
-    return (_yMax - dBm) / _yRange;
-  }
+  static double _yToFraction(double dBm) => (_yMax - dBm) / _yRange;
 }
 
 // ---------------------------------------------------------------------------
-// CustomPainter
+// CustomPainter — draws both series
 // ---------------------------------------------------------------------------
 
 class _ChartPainter extends CustomPainter {
-  const _ChartPainter({required this.history});
+  const _ChartPainter({required this.noiseHistory, required this.rssiHistory});
 
-  final List<NoiseFloorReading> history;
+  final List<NoiseFloorReading> noiseHistory;
+  final List<RssiReading> rssiHistory;
 
   static const double _yMax = -60.0;
   static const double _yMin = -120.0;
   static const double _yRange = _yMax - _yMin;
   static const int _visiblePoints = 120;
+
+  static const Color _noiseColor = Color(0xFF4ADE80); // green
+  static const Color _rssiColor = Color(0xFF38BDF8); // sky blue
 
   static const List<int> _gridTicks = [
     -60,
@@ -205,16 +293,14 @@ class _ChartPainter extends CustomPainter {
     -120,
   ];
 
-  double _yToY(double dBm, double height) {
-    return (_yMax - dBm) / _yRange * height;
-  }
+  double _yToY(double dBm, double h) => (_yMax - dBm) / _yRange * h;
 
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
 
-    // --- Grid lines ---
+    // --- Grid ---
     final gridPaint =
         Paint()
           ..color = const Color(0xFF2D3748)
@@ -223,99 +309,107 @@ class _ChartPainter extends CustomPainter {
 
     for (final tick in _gridTicks) {
       final y = _yToY(tick.toDouble(), h);
-      final path =
-          Path()
-            ..moveTo(0, y)
-            ..lineTo(w, y);
-      // Dashed line effect
-      _drawDashedPath(canvas, path, gridPaint, dashLen: 6, gapLen: 4);
+      _drawDashedPath(
+        canvas,
+        Path()
+          ..moveTo(0, y)
+          ..lineTo(w, y),
+        gridPaint,
+        dashLen: 6,
+        gapLen: 4,
+      );
     }
 
-    if (history.isEmpty) return;
+    // Draw noise floor first (behind RSSI)
+    _drawSeries(
+      canvas,
+      size,
+      noiseHistory.map((r) => r.dBm).toList(),
+      _noiseColor,
+    );
+    _drawSeries(
+      canvas,
+      size,
+      rssiHistory.map((r) => r.dBm).toList(),
+      _rssiColor,
+    );
+  }
 
-    // Use the last _visiblePoints readings
+  void _drawSeries(Canvas canvas, Size size, List<int> data, Color color) {
+    if (data.isEmpty) return;
+    final w = size.width;
+    final h = size.height;
+
     final visible =
-        history.length > _visiblePoints
-            ? history.sublist(history.length - _visiblePoints)
-            : history;
-
-    if (visible.length < 2) {
-      // Only 1 point — draw a horizontal line at that value
-      final y = _yToY(visible.first.dBm.toDouble().clamp(_yMin, _yMax), h);
-      final linePaint =
-          Paint()
-            ..color = const Color(0xFF4ADE80)
-            ..strokeWidth = 2
-            ..style = PaintingStyle.stroke;
-      canvas.drawLine(Offset(0, y), Offset(w, y), linePaint);
-      return;
-    }
+        data.length > _visiblePoints
+            ? data.sublist(data.length - _visiblePoints)
+            : data;
 
     final count = visible.length;
-    double xOf(int i) => i / (_visiblePoints - 1) * w;
-    double yOf(int i) =>
-        _yToY(visible[i].dBm.toDouble().clamp(_yMin, _yMax), h);
 
-    // Align the rightmost point to the right edge.
-    // The leftmost rendered point starts at xOf(0) in a full-width context
-    // where the total visible window always represents _visiblePoints slots.
-    // When history is shorter, compress to the right.
     double xOfPoint(int i) {
-      if (count >= _visiblePoints) return xOf(i);
-      // Compress: latest point is at right edge.
+      if (count >= _visiblePoints) return i / (_visiblePoints - 1) * w;
       final offset = (_visiblePoints - count) / (_visiblePoints - 1) * w;
       return offset + i / (_visiblePoints - 1) * w;
     }
 
-    // --- Area fill ---
+    double yOfPoint(int i) =>
+        _yToY(visible[i].toDouble().clamp(_yMin, _yMax), h);
+
+    if (count < 2) {
+      canvas.drawLine(
+        Offset(0, yOfPoint(0)),
+        Offset(w, yOfPoint(0)),
+        Paint()
+          ..color = color
+          ..strokeWidth = 2
+          ..style = PaintingStyle.stroke,
+      );
+      return;
+    }
+
+    // Area fill
     final fillPath = Path();
     fillPath.moveTo(xOfPoint(0), h);
-    fillPath.lineTo(xOfPoint(0), yOf(0));
+    fillPath.lineTo(xOfPoint(0), yOfPoint(0));
     for (var i = 1; i < count; i++) {
-      fillPath.lineTo(xOfPoint(i), yOf(i));
+      fillPath.lineTo(xOfPoint(i), yOfPoint(i));
     }
     fillPath.lineTo(xOfPoint(count - 1), h);
     fillPath.close();
 
-    final fillPaint =
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              const Color(0xFF4ADE80).withAlpha(180),
-              const Color(0xFF4ADE80).withAlpha(40),
-            ],
-          ).createShader(Rect.fromLTWH(0, 0, w, h))
-          ..style = PaintingStyle.fill;
+    canvas.drawPath(
+      fillPath,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [color.withAlpha(120), color.withAlpha(20)],
+        ).createShader(Rect.fromLTWH(0, 0, w, h))
+        ..style = PaintingStyle.fill,
+    );
 
-    canvas.drawPath(fillPath, fillPaint);
-
-    // --- Line ---
+    // Line
     final linePath = Path();
-    linePath.moveTo(xOfPoint(0), yOf(0));
+    linePath.moveTo(xOfPoint(0), yOfPoint(0));
     for (var i = 1; i < count; i++) {
-      linePath.lineTo(xOfPoint(i), yOf(i));
+      linePath.lineTo(xOfPoint(i), yOfPoint(i));
     }
 
-    final linePaint =
-        Paint()
-          ..color = const Color(0xFF4ADE80)
-          ..strokeWidth = 2
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round;
-
-    canvas.drawPath(linePath, linePaint);
-
-    // --- Tip dot ---
-    final tipX = xOfPoint(count - 1);
-    final tipY = yOf(count - 1);
-    canvas.drawCircle(
-      Offset(tipX, tipY),
-      4,
-      Paint()..color = const Color(0xFF4ADE80),
+    canvas.drawPath(
+      linePath,
+      Paint()
+        ..color = color
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
     );
+
+    // Tip dot
+    final tipX = xOfPoint(count - 1);
+    final tipY = yOfPoint(count - 1);
+    canvas.drawCircle(Offset(tipX, tipY), 4, Paint()..color = color);
     canvas.drawCircle(
       Offset(tipX, tipY),
       4,
@@ -333,15 +427,19 @@ class _ChartPainter extends CustomPainter {
     required double dashLen,
     required double gapLen,
   }) {
-    final metrics = path.computeMetrics();
-    for (final metric in metrics) {
+    for (final metric in path.computeMetrics()) {
       var distance = 0.0;
       var draw = true;
       while (distance < metric.length) {
         final len = draw ? dashLen : gapLen;
         if (draw) {
-          final end = math.min(distance + len, metric.length);
-          canvas.drawPath(metric.extractPath(distance, end), paint);
+          canvas.drawPath(
+            metric.extractPath(
+              distance,
+              math.min(distance + len, metric.length),
+            ),
+            paint,
+          );
         }
         distance += len;
         draw = !draw;
@@ -350,5 +448,6 @@ class _ChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_ChartPainter old) => old.history != history;
+  bool shouldRepaint(_ChartPainter old) =>
+      old.noiseHistory != noiseHistory || old.rssiHistory != rssiHistory;
 }

@@ -45,8 +45,8 @@ class AppsScreen extends StatelessWidget {
     ),
     _AppEntry(
       id: 'noisefloor',
-      title: 'Noise Floor',
-      subtitle: 'Ruído de fundo em tempo real',
+      title: 'RSSI / Noise Floor',
+      subtitle: 'RSSI e ruído de fundo em tempo real',
       icon: Icons.graphic_eq,
       color: Color(0xFF22C55E),
       route: '/apps/noisefloor',

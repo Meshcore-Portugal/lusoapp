@@ -596,6 +596,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _ref
               .read(noiseFloorHistoryProvider.notifier)
               .add(response.noiseFloor);
+          _ref.read(rssiHistoryProvider.notifier).add(response.lastRssi);
         case StatsPacketsResponse():
           _ref.read(radioStatsPacketsProvider.notifier).state = response;
         case AutoAddConfigResponse(:final bitmask, :final maxHops):
@@ -2150,6 +2151,37 @@ class NoiseFloorHistoryNotifier extends StateNotifier<List<NoiseFloorReading>> {
 final noiseFloorHistoryProvider =
     StateNotifierProvider<NoiseFloorHistoryNotifier, List<NoiseFloorReading>>(
       (ref) => NoiseFloorHistoryNotifier(),
+    );
+
+// ---------------------------------------------------------------------------
+// RSSI history (in-session ring buffer, up to 300 readings)
+// ---------------------------------------------------------------------------
+
+class RssiReading {
+  const RssiReading({required this.timestamp, required this.dBm});
+  final DateTime timestamp;
+  final int dBm;
+}
+
+class RssiHistoryNotifier extends StateNotifier<List<RssiReading>> {
+  RssiHistoryNotifier() : super([]);
+
+  static const _maxReadings = 300;
+
+  void add(int dBm) {
+    final next = [...state, RssiReading(timestamp: DateTime.now(), dBm: dBm)];
+    state =
+        next.length > _maxReadings
+            ? next.sublist(next.length - _maxReadings)
+            : next;
+  }
+
+  void clear() => state = [];
+}
+
+final rssiHistoryProvider =
+    StateNotifierProvider<RssiHistoryNotifier, List<RssiReading>>(
+      (ref) => RssiHistoryNotifier(),
     );
 
 // ---------------------------------------------------------------------------
