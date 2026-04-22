@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
+import '../../transport/transport.dart';
 import '../theme.dart';
 import '../widgets/path_sheet.dart';
 import 'qr_scanner_screen.dart';
@@ -195,16 +196,18 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     final sort = ref.watch(contactSortProvider);
     final allContacts = ref.watch(contactsProvider);
     final radioKeys = ref.watch(radioContactsSnapshotProvider);
+    final transportState = ref.watch(connectionProvider);
+    final contactsSynced = ref.watch(contactsSyncedProvider);
     final messages = ref.watch(messagesProvider);
     final autoAddSettings = ref.watch(advertAutoAddProvider);
 
     // Only show contacts actually stored on the radio. Advert-heard contacts
     // that haven't been saved to the radio appear in the discover screen only.
-    // When not connected (radioKeys is empty because no sync has completed)
-    // fall back to the full cache so the list isn't blank before first connect.
-    final isConnected = radioKeys.isNotEmpty;
+    // Fall back to the full cache while disconnected or while the initial
+    // sync is still in progress (so the list isn't blank during connect).
+    final isConnected = transportState == TransportState.connected;
     final contacts =
-        !isConnected
+        (!isConnected || !contactsSynced)
             ? allContacts // Not yet synced — show cached list
             : allContacts
                 .where((c) => radioKeys.contains(_radioKeyHex(c.publicKey)))

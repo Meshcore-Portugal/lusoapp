@@ -48,6 +48,13 @@ final radioServiceProvider = StateProvider<RadioService?>((_) => null);
 /// don't falsely hide contacts from the discover screen.
 final radioContactsSnapshotProvider = StateProvider<Set<String>>((_) => {});
 
+/// True once the first [EndContactsResponse] has been received after the
+/// current connection was established.  Reset to false on every new connect
+/// attempt and on disconnect.  Used by the contacts screen to distinguish
+/// "no contacts on this radio" (synced, empty snapshot) from "not yet synced"
+/// (should fall back to the local cache).
+final contactsSyncedProvider = StateProvider<bool>((_) => false);
+
 // ---------------------------------------------------------------------------
 // Last connected device (loaded on app start from SharedPreferences)
 // ---------------------------------------------------------------------------
@@ -81,6 +88,10 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   }
 
   Future<bool> connectBle(String deviceId, String deviceName) async {
+    // Clear stale snapshot and sync flag so the contacts screen falls back
+    // to the cached list while the new radio's sync is in progress.
+    _ref.read(radioContactsSnapshotProvider.notifier).state = {};
+    _ref.read(contactsSyncedProvider.notifier).state = false;
     state = TransportState.connecting;
     _setStep(0, 'A ligar via Bluetooth...');
     try {
@@ -123,6 +134,10 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     String deviceName, {
     ConnectionMode mode = ConnectionMode.companion,
   }) async {
+    // Clear stale snapshot and sync flag so the contacts screen falls back
+    // to the cached list while the new radio's sync is in progress.
+    _ref.read(radioContactsSnapshotProvider.notifier).state = {};
+    _ref.read(contactsSyncedProvider.notifier).state = false;
     state = TransportState.connecting;
     _setStep(0, 'A ligar via USB série...');
     try {
@@ -185,6 +200,10 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
       _ref.read(radioServiceProvider.notifier).state = null;
     }
     _ref.read(unreadCountsProvider.notifier).reset();
+    // Clear snapshot and sync flag so the contacts screen no longer filters
+    // by the disconnected radio's keys on the next connection.
+    _ref.read(radioContactsSnapshotProvider.notifier).state = {};
+    _ref.read(contactsSyncedProvider.notifier).state = false;
     _setStep(0, '');
     state = TransportState.disconnected;
     _pushWidget();
@@ -323,6 +342,10 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _pendingSnapshotUpdate = false;
           _ref.read(radioContactsSnapshotProvider.notifier).state =
               service.contacts.map((c) => _keyHex(c.publicKey)).toSet();
+          // Mark that a full sync has completed for this connection — the
+          // contacts screen uses this (not snapshot size) to know it should
+          // show only radio contacts, even when the radio has zero contacts.
+          _ref.read(contactsSyncedProvider.notifier).state = true;
           _pushWidget();
         case ContactDeletedPush():
           // Radio confirmed deletion — request a fresh contact list so
