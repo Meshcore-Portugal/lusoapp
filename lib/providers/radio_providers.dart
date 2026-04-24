@@ -1277,6 +1277,89 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   /// slower earlier save never overwrites a faster later save.
   final Map<String, Future<void>> _saveLocks = {};
 
+  // ---------------------------------------------------------------------------
+  // Send-failure timer: arm when a private outgoing message is added; cancel
+  // when the radio confirms it was sent (SentResponse). If the timer fires
+  // without a SentResponse the message is marked as failed.
+  // ---------------------------------------------------------------------------
+
+  /// One timer per outgoing private message (keyed by timestamp).
+  final Map<int, Timer> _sendTimers = {};
+
+  static const _sendTimeout = Duration(seconds: 45);
+
+  void _armSendTimer(int timestamp) {
+    _sendTimers[timestamp]?.cancel();
+    _sendTimers[timestamp] = Timer(_sendTimeout, () {
+      _sendTimers.remove(timestamp);
+      _markPrivateMessageFailed(timestamp);
+    });
+  }
+
+  void _markPrivateMessageFailed(int timestamp) {
+    final idx = state.indexWhere(
+      (m) =>
+          m.isOutgoing &&
+          m.isPrivate &&
+          m.timestamp == timestamp &&
+          m.sentRouteFlag == null &&
+          !m.failed,
+    );
+    if (idx < 0) return;
+    final updated = state[idx].copyWith(failed: true);
+    final newList = List<ChatMessage>.from(state);
+    newList[idx] = updated;
+    state = newList;
+    _saveForMessage(updated);
+  }
+
+  /// Reset [msg] to pending state and re-arm the send timer. Returns the
+  /// updated message (with retryCount incremented) for the caller to resend.
+  ChatMessage? markMessageRetrying(ChatMessage msg) {
+    for (var i = state.length - 1; i >= 0; i--) {
+      final m = state[i];
+      if (m.isOutgoing &&
+          m.isPrivate &&
+          m.timestamp == msg.timestamp &&
+          _senderKeyMatch(m, msg)) {
+        // Reconstruct with all fields reset for retry; sentRouteFlag cleared.
+        final updated = ChatMessage(
+          text: m.text,
+          timestamp: m.timestamp,
+          isOutgoing: true,
+          senderKey: m.senderKey,
+          channelIndex: null,
+          senderName: m.senderName,
+          confirmed: false,
+          snr: m.snr,
+          pathLen: m.pathLen,
+          heardCount: m.heardCount,
+          sentRouteFlag: null,
+          packetHashHex: m.packetHashHex,
+          isCliResponse: m.isCliResponse,
+          failed: false,
+          retryCount: m.retryCount + 1,
+        );
+        final newList = List<ChatMessage>.from(state);
+        newList[i] = updated;
+        state = newList;
+        _saveForMessage(updated);
+        _armSendTimer(updated.timestamp);
+        return updated;
+      }
+    }
+    return null;
+  }
+
+  @override
+  void dispose() {
+    for (final t in _sendTimers.values) {
+      t.cancel();
+    }
+    _sendTimers.clear();
+    super.dispose();
+  }
+
   void addMessage(ChatMessage message) {
     // Dedup: skip if an identical message already exists in state.
     // Include senderKey prefix so messages from different contacts with
@@ -1298,6 +1381,11 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     state = [...state, message];
     _saveForMessage(message);
     _ref.read(networkStatsProvider.notifier).incrementTx();
+    // Arm failure timer for private messages (no timer for channel messages —
+    // they don't use SentResponse and are best-effort).
+    if (message.isPrivate) {
+      _armSendTimer(message.timestamp);
+    }
   }
 
   /// Increment heard count on an outgoing channel message matched by packet
@@ -1306,6 +1394,20 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   /// is the cumulative repeater count (duplicates minus 1).
   ///
   /// If [hashHex] matches a message that already has the same packetHashHex,
+  /// Clear [packetHashHex] and [heardCount] on a channel message so that a
+  /// retransmission can claim a fresh hash from the next loopback echo.
+  void resetChannelResend(ChatMessage msg) {
+    final idx = state.indexWhere(
+      (m) => m.timestamp == msg.timestamp && m.channelIndex == msg.channelIndex,
+    );
+    if (idx < 0) return;
+    final updated = state[idx].copyWith(packetHashHex: null, heardCount: 0);
+    final newList = List<ChatMessage>.from(state);
+    newList[idx] = updated;
+    state = newList;
+    _saveForMessage(updated);
+  }
+
   /// update its heardCount.  Otherwise try to assign the hash to the most
   /// recent outgoing message on [channelIndex] that has no hash yet.
   ///
@@ -1399,6 +1501,9 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
       if (msg.isOutgoing &&
           msg.sentRouteFlag == null &&
           msg.channelIndex == null) {
+        // Cancel the failure timer — radio confirmed it sent the packet.
+        _sendTimers[msg.timestamp]?.cancel();
+        _sendTimers.remove(msg.timestamp);
         final updated = msg.copyWith(sentRouteFlag: routeFlag);
         final newList = List<ChatMessage>.from(state);
         newList[i] = updated;

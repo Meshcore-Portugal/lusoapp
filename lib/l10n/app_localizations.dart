@@ -1882,6 +1882,18 @@ abstract class AppLocalizations {
   /// **'Detalhes da mensagem'**
   String get chatMsgDetails;
 
+  /// No description provided for @chatRetry.
+  ///
+  /// In pt, this message translates to:
+  /// **'Reenviar'**
+  String get chatRetry;
+
+  /// No description provided for @chatFailed.
+  ///
+  /// In pt, this message translates to:
+  /// **'Falhou'**
+  String get chatFailed;
+
   /// No description provided for @chatPathLabel.
   ///
   /// In pt, this message translates to:
@@ -1995,6 +2007,18 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Novas mensagens'**
   String get chatNewMessages;
+
+  /// No description provided for @chatPingButton.
+  ///
+  /// In pt, this message translates to:
+  /// **'!ping'**
+  String get chatPingButton;
+
+  /// No description provided for @chatViewResultOnline.
+  ///
+  /// In pt, this message translates to:
+  /// **'ver resultado online'**
+  String get chatViewResultOnline;
 
   /// No description provided for @connectTitle.
   ///

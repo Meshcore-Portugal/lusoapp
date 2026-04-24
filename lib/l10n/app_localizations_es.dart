@@ -933,6 +933,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatMsgDetails => 'Detalles del mensaje';
 
   @override
+  String get chatRetry => 'Reenviar';
+
+  @override
+  String get chatFailed => 'Fallido';
+
+  @override
   String get chatPathLabel => 'Ruta';
 
   @override
@@ -991,6 +997,12 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get chatNewMessages => 'Mensajes nuevos';
+
+  @override
+  String get chatPingButton => '!ping';
+
+  @override
+  String get chatViewResultOnline => 'ver resultado online';
 
   @override
   String get connectTitle => 'MeshCore Portugal';

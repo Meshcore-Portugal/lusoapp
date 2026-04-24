@@ -95,6 +95,22 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     _scrollToBottom();
   }
 
+  void _retryMessage(ChatMessage msg) {
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+    final updated = ref
+        .read(messagesProvider.notifier)
+        .markMessageRetrying(msg);
+    if (updated == null) return;
+    final keyPrefix =
+        _contactKey.length >= 6 ? _contactKey.sublist(0, 6) : _contactKey;
+    service.sendPrivateMessage(
+      keyPrefix,
+      updated.text,
+      attempt: updated.retryCount,
+    );
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -347,6 +363,8 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
                             msg.isOutgoing
                                 ? null
                                 : () => setState(() => _replyingTo = msg),
+                        onRetry:
+                            msg.isOutgoing ? () => _retryMessage(msg) : null,
                       );
                     },
                   ),
@@ -664,6 +682,7 @@ class _PrivateMessageBubble extends StatelessWidget {
   const _PrivateMessageBubble({
     required this.message,
     this.onReply,
+    this.onRetry,
     this.contactDisplayName,
     this.contactPathLen,
     this.selfName,
@@ -672,6 +691,7 @@ class _PrivateMessageBubble extends StatelessWidget {
   });
   final ChatMessage message;
   final VoidCallback? onReply;
+  final VoidCallback? onRetry;
   final String? contactDisplayName;
   final int? contactPathLen;
   final String? selfName;
@@ -789,6 +809,21 @@ class _PrivateMessageBubble extends StatelessWidget {
                       onReply!();
                     },
                   ),
+                if (msg.isOutgoing && (msg.failed || msg.sentRouteFlag == null))
+                  ListTile(
+                    leading: Icon(
+                      Icons.refresh,
+                      color:
+                          msg.failed
+                              ? Theme.of(context).colorScheme.error
+                              : null,
+                    ),
+                    title: Text(context.l10n.chatRetry),
+                    onTap: () {
+                      Navigator.pop(context);
+                      onRetry?.call();
+                    },
+                  ),
                 ListTile(
                   leading: const Icon(Icons.copy),
                   title: Text(context.l10n.commonCopyText),
@@ -896,9 +931,19 @@ class _PrivateMessageBubble extends StatelessWidget {
                     ),
                   if (msg.isOutgoing)
                     _DetailRow(
-                      icon: msg.confirmed ? Icons.done_all : Icons.done,
+                      icon:
+                          msg.failed
+                              ? Icons.error_outline
+                              : msg.confirmed
+                              ? Icons.done_all
+                              : Icons.done,
                       label: 'Estado',
-                      value: msg.confirmed ? 'Confirmado' : 'Pendente',
+                      value:
+                          msg.failed
+                              ? context.l10n.chatFailed
+                              : msg.confirmed
+                              ? 'Confirmado'
+                              : 'Pendente',
                       theme: theme,
                     ),
                   const SizedBox(height: 8),
@@ -986,14 +1031,24 @@ class _PrivateMessageBubble extends StatelessWidget {
                         ),
                       ],
                       const SizedBox(width: 4),
-                      Icon(
-                        message.confirmed ? Icons.done_all : Icons.done,
-                        size: 13,
-                        color:
-                            message.confirmed
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.onSurface.withAlpha(130),
-                      ),
+                      if (message.failed)
+                        GestureDetector(
+                          onTap: onRetry,
+                          child: Icon(
+                            Icons.error_outline,
+                            size: 14,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        )
+                      else
+                        Icon(
+                          message.confirmed ? Icons.done_all : Icons.done,
+                          size: 13,
+                          color:
+                              message.confirmed
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.onSurface.withAlpha(130),
+                        ),
                     ],
                   ),
                 ),

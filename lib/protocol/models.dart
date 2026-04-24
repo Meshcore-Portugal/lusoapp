@@ -201,6 +201,8 @@ class ChatMessage extends Equatable {
         json['sentRouteFlag'] as int? ??
         (json['sentViaFlood'] == true ? 1 : null),
     packetHashHex: json['packetHashHex'] as String?,
+    failed: json['failed'] as bool? ?? false,
+    retryCount: json['retryCount'] as int? ?? 0,
   );
   const ChatMessage({
     required this.text,
@@ -216,6 +218,8 @@ class ChatMessage extends Equatable {
     this.sentRouteFlag,
     this.packetHashHex,
     this.isCliResponse = false,
+    this.failed = false,
+    this.retryCount = 0,
   });
 
   final String text;
@@ -241,6 +245,12 @@ class ChatMessage extends Equatable {
   /// CLI command response, not a user-visible chat message.
   final bool isCliResponse;
 
+  /// True when the radio failed to send this message (timeout waiting for SentResponse).
+  final bool failed;
+
+  /// Number of retry attempts made for this message (passed as the `attempt` byte).
+  final int retryCount;
+
   bool get isChannel => channelIndex != null;
   bool get isPrivate => channelIndex == null;
 
@@ -258,6 +268,8 @@ class ChatMessage extends Equatable {
     int? sentRouteFlag,
     String? packetHashHex,
     bool? isCliResponse,
+    bool? failed,
+    int? retryCount,
   }) {
     return ChatMessage(
       text: text ?? this.text,
@@ -273,6 +285,8 @@ class ChatMessage extends Equatable {
       sentRouteFlag: sentRouteFlag ?? this.sentRouteFlag,
       packetHashHex: packetHashHex ?? this.packetHashHex,
       isCliResponse: isCliResponse ?? this.isCliResponse,
+      failed: failed ?? this.failed,
+      retryCount: retryCount ?? this.retryCount,
     );
   }
 
@@ -289,6 +303,8 @@ class ChatMessage extends Equatable {
     'heardCount': heardCount,
     'sentRouteFlag': sentRouteFlag,
     'packetHashHex': packetHashHex,
+    if (failed) 'failed': failed,
+    if (retryCount > 0) 'retryCount': retryCount,
   };
 
   @override
@@ -300,6 +316,8 @@ class ChatMessage extends Equatable {
     heardCount,
     sentRouteFlag,
     packetHashHex,
+    failed,
+    retryCount,
   ];
 }
 

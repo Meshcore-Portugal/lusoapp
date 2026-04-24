@@ -478,20 +478,53 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
         ),
 
         // Input bar
-        _ChatInputBar(
-          controller: _textController,
-          onSend: _sendMessage,
-          hintText: context.l10n.chatInputHint,
-          replyTo: _replyingTo,
-          onCancelReply:
-              _replyingTo != null
-                  ? () => setState(() => _replyingTo = null)
-                  : null,
-          participants: {
-            for (final m in channelMessages.where((m) => !m.isOutgoing))
-              _senderFromMessage(m),
-          }..remove('Canal'),
-        ),
+        if (channelName?.toLowerCase() == '#ping')
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () {
+                  final service = ref.read(radioServiceProvider);
+                  if (service == null) return;
+                  final ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+                  ref
+                      .read(messagesProvider.notifier)
+                      .addOutgoing(
+                        ChatMessage(
+                          text: '!ping',
+                          timestamp: ts,
+                          isOutgoing: true,
+                          channelIndex: widget.channelIndex,
+                        ),
+                      );
+                  service.sendChannelMessage(
+                    widget.channelIndex,
+                    '!ping',
+                    timestamp: ts,
+                  );
+                  _scrollToBottom();
+                },
+                icon: const Icon(Icons.wifi_tethering),
+                label: Text(context.l10n.chatPingButton),
+              ),
+            ),
+          )
+        else
+          _ChatInputBar(
+            controller: _textController,
+            onSend: _sendMessage,
+            hintText: context.l10n.chatInputHint,
+            replyTo: _replyingTo,
+            onCancelReply:
+                _replyingTo != null
+                    ? () => setState(() => _replyingTo = null)
+                    : null,
+            participants: {
+              for (final m in channelMessages.where((m) => !m.isOutgoing))
+                _senderFromMessage(m),
+            }..remove('Canal'),
+          ),
       ],
     );
   }
@@ -751,110 +784,166 @@ Widget _buildMentionText(
   Color? selfMentionColor,
   Color? otherMentionColor,
   void Function(String channelName)? onHashtagTap,
+  bool showMeshcoreResultButton = false,
 }) {
   text = _sanitizeUtf16(text);
+
+  // Extract a meshcore.pt/p/ URL before building inline spans so it can be
+  // rendered as a full-width button below the text instead of inline.
+  String? meshcoreResultUrl;
+  if (showMeshcoreResultButton) {
+    final meshcorePattern = RegExp(r'https?://[^\s]*meshcore\.pt/p/[^\s]*');
+    final m = meshcorePattern.firstMatch(text);
+    if (m != null) {
+      meshcoreResultUrl = m.group(0)!;
+      // Remove the URL (and any trailing/leading whitespace around it) from text.
+      text = text.replaceFirst(meshcorePattern, '').trim();
+      // Also strip the leading @[selfName] reply pill since the button makes
+      // it clear who the message is addressed to.
+      text = text.replaceFirst(RegExp(r'^@\[[^\]]+\]\s*'), '').trim();
+    }
+  }
+
   // Combined: @[mention] OR #hashtag OR https?:// URL.
   final pattern = RegExp(
     r'@\[([^\]]+)\]|#([A-Za-z][A-Za-z0-9_]*)|((https?://)[^\s]+)',
   );
   final matches = pattern.allMatches(text).toList();
-  if (matches.isEmpty) return Text(text, style: style);
 
-  final spans = <InlineSpan>[];
-  var cursor = 0;
+  Widget textWidget =
+      matches.isEmpty
+          ? Text(text, style: style)
+          : () {
+            final spans = <InlineSpan>[];
+            var cursor = 0;
 
-  for (final match in matches) {
-    if (match.start > cursor) {
-      spans.add(
-        TextSpan(text: text.substring(cursor, match.start), style: style),
-      );
-    }
+            for (final match in matches) {
+              if (match.start > cursor) {
+                spans.add(
+                  TextSpan(
+                    text: text.substring(cursor, match.start),
+                    style: style,
+                  ),
+                );
+              }
 
-    if (match.group(1) != null) {
-      // ── @[mention] pill ──────────────────────────────────────────────────
-      final name = match.group(1)!;
-      final isSelf =
-          selfName != null &&
-          name.trim().toLowerCase() == selfName.trim().toLowerCase();
-      final pillColor =
-          isSelf
-              ? (selfMentionColor ?? theme.colorScheme.tertiary)
-              : (otherMentionColor ?? theme.colorScheme.primary);
-      final textColor = _pillTextColor(pillColor);
-      spans.add(
-        WidgetSpan(
-          alignment: PlaceholderAlignment.middle,
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 1),
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-            decoration: BoxDecoration(
-              color: pillColor,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              '@$name',
-              style: (theme.textTheme.labelSmall ?? const TextStyle()).copyWith(
-                color: textColor,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
+              if (match.group(1) != null) {
+                // ── @[mention] pill ────────────────────────────────────────────
+                final name = match.group(1)!;
+                final isSelf =
+                    selfName != null &&
+                    name.trim().toLowerCase() == selfName.trim().toLowerCase();
+                final pillColor =
+                    isSelf
+                        ? (selfMentionColor ?? theme.colorScheme.tertiary)
+                        : (otherMentionColor ?? theme.colorScheme.primary);
+                final textColor = _pillTextColor(pillColor);
+                spans.add(
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 1),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: pillColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '@$name',
+                        style: (theme.textTheme.labelSmall ?? const TextStyle())
+                            .copyWith(
+                              color: textColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                    ),
+                  ),
+                );
+              } else if (match.group(2) != null) {
+                // ── #hashtag pill ──────────────────────────────────────────────
+                final tag = match.group(2)!;
+                final pillColor = theme.colorScheme.secondary;
+                final textColor = _pillTextColor(pillColor);
+                spans.add(
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    child: GestureDetector(
+                      onTap:
+                          onHashtagTap != null ? () => onHashtagTap(tag) : null,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 1),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: pillColor,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '#$tag',
+                          style: (theme.textTheme.labelSmall ??
+                                  const TextStyle())
+                              .copyWith(
+                                color: textColor,
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              } else if (match.group(3) != null) {
+                // ── https:// URL ───────────────────────────────────────────────
+                final url = match.group(3)!;
+                spans.add(
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    child: GestureDetector(
+                      onTap: () => _launchUrl(context, url),
+                      child: Text(
+                        url,
+                        style: (style ?? const TextStyle()).copyWith(
+                          color: Colors.lightBlue,
+                          decoration: TextDecoration.underline,
+                          decorationColor: Colors.lightBlue,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }
+              cursor = match.end;
+            }
+
+            if (cursor < text.length) {
+              spans.add(TextSpan(text: text.substring(cursor), style: style));
+            }
+            return Text.rich(TextSpan(children: spans));
+          }();
+
+  if (meshcoreResultUrl == null) return textWidget;
+
+  final resultUrl = meshcoreResultUrl;
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (text.isNotEmpty) textWidget,
+      const SizedBox(height: 6),
+      ElevatedButton.icon(
+        onPressed: () => _launchUrl(context, resultUrl),
+        icon: const Icon(Icons.open_in_browser, size: 14),
+        label: Text(context.l10n.chatViewResultOnline),
+        style: ElevatedButton.styleFrom(
+          textStyle: const TextStyle(fontSize: 12),
         ),
-      );
-    } else if (match.group(2) != null) {
-      // ── #hashtag pill ────────────────────────────────────────────────────
-      final tag = match.group(2)!;
-      final pillColor = theme.colorScheme.secondary;
-      final textColor = _pillTextColor(pillColor);
-      spans.add(
-        WidgetSpan(
-          alignment: PlaceholderAlignment.middle,
-          child: GestureDetector(
-            onTap: onHashtagTap != null ? () => onHashtagTap(tag) : null,
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 1),
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: pillColor,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                '#$tag',
-                style: (theme.textTheme.labelSmall ?? const TextStyle())
-                    .copyWith(color: textColor, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-        ),
-      );
-    } else if (match.group(3) != null) {
-      // ── https:// URL ─────────────────────────────────────────────────────
-      final url = match.group(3)!;
-      spans.add(
-        WidgetSpan(
-          alignment: PlaceholderAlignment.middle,
-          child: GestureDetector(
-            onTap: () => _launchUrl(context, url),
-            child: Text(
-              url,
-              style: (style ?? const TextStyle()).copyWith(
-                color: Colors.lightBlue,
-                decoration: TextDecoration.underline,
-                decorationColor: Colors.lightBlue,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-    cursor = match.end;
-  }
-
-  if (cursor < text.length) {
-    spans.add(TextSpan(text: text.substring(cursor), style: style));
-  }
-
-  return Text.rich(TextSpan(children: spans));
+      ),
+    ],
+  );
 }
 
 /// Horizontal divider shown between the last-read message and the first unread.
@@ -1338,6 +1427,25 @@ class _MessageBubble extends ConsumerWidget {
                         onReply!();
                       },
                     ),
+                  if (msg.isOutgoing && msg.channelIndex != null)
+                    ListTile(
+                      leading: const Icon(Icons.refresh),
+                      title: Text(context.l10n.chatRetry),
+                      onTap: () {
+                        Navigator.pop(context);
+                        // Reset hash so the new transmission can claim a
+                        // fresh loopback echo and relay count.
+                        ref
+                            .read(messagesProvider.notifier)
+                            .resetChannelResend(msg);
+                        final service = ref.read(radioServiceProvider);
+                        service?.sendChannelMessage(
+                          msg.channelIndex!,
+                          msg.text,
+                          timestamp: msg.timestamp,
+                        );
+                      },
+                    ),
                   ListTile(
                     leading: const Icon(Icons.copy),
                     title: Text(context.l10n.commonCopyText),
@@ -1678,6 +1786,14 @@ class _MessageBubble extends ConsumerWidget {
                         otherMentionColor: otherMentionColor,
                         onHashtagTap:
                             (tag) => _handleHashtagTap(context, ref, tag),
+                        showMeshcoreResultButton: () {
+                          final sn = selfName;
+                          if (sn == null) return false;
+                          return RegExp(
+                            '@\\[${RegExp.escape(sn)}\\]',
+                            caseSensitive: false,
+                          ).hasMatch(displayText);
+                        }(),
                       ),
                       Builder(
                         builder: (_) {
