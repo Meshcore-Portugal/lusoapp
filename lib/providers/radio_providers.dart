@@ -103,15 +103,22 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
       if (ok) {
         await _fetchInitialData(service);
         state = TransportState.connected;
+        // Prefer the radio's configured node name; fall back to the BLE
+        // advertisement name so the reconnect button always shows something.
+        final radioNodeName = _ref.read(selfInfoProvider)?.name;
+        final displayName =
+            (radioNodeName != null && radioNodeName.isNotEmpty)
+                ? radioNodeName
+                : deviceName;
         await StorageService.instance.saveLastDevice(
           id: deviceId,
           type: 'ble',
-          name: deviceName,
+          name: displayName,
         );
         _ref.read(lastDeviceProvider.notifier).state = LastDevice(
           id: deviceId,
           type: 'ble',
-          name: deviceName,
+          name: displayName,
         );
         _setupAutoReconnect(service, () => connectBle(deviceId, deviceName));
         _startBatteryPolling(service);
@@ -160,15 +167,22 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         state = TransportState.connected;
         final typeStr =
             mode == ConnectionMode.kiss ? 'serialKiss' : 'serialCompanion';
+        // Prefer the radio's configured node name; fall back to the USB
+        // device name so the reconnect button always shows something.
+        final radioNodeName = _ref.read(selfInfoProvider)?.name;
+        final displayName =
+            (radioNodeName != null && radioNodeName.isNotEmpty)
+                ? radioNodeName
+                : deviceName;
         await StorageService.instance.saveLastDevice(
           id: deviceId,
           type: typeStr,
-          name: deviceName,
+          name: displayName,
         );
         _ref.read(lastDeviceProvider.notifier).state = LastDevice(
           id: deviceId,
           type: typeStr,
-          name: deviceName,
+          name: displayName,
         );
         _startBatteryPolling(service);
         _pushWidget();
@@ -477,6 +491,27 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _ref.read(selfInfoProvider.notifier).state = info;
           _ref.read(radioConfigProvider.notifier).state = info.radioConfig;
           _pushWidget();
+          // Keep the reconnect-button name in sync with the radio's node
+          // name. This fires both at initial connect and whenever the user
+          // renames the radio while connected.
+          if (info.name.isNotEmpty && state == TransportState.connected) {
+            final last = _ref.read(lastDeviceProvider);
+            if (last != null && last.name != info.name) {
+              final updated = LastDevice(
+                id: last.id,
+                type: last.type,
+                name: info.name,
+              );
+              _ref.read(lastDeviceProvider.notifier).state = updated;
+              unawaited(
+                StorageService.instance.saveLastDevice(
+                  id: last.id,
+                  type: last.type,
+                  name: info.name,
+                ),
+              );
+            }
+          }
         case BattAndStorageResponse(
           :final batteryMv,
           :final storageUsed,
