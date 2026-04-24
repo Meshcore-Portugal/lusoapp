@@ -631,29 +631,44 @@ void main() {
   });
 
   group('CompanionDecoder - AdvertPush', () {
-    test('decode AdvertPush with pubkey, type, and name', () {
-      final builder = BytesBuilder();
-      builder.add(Uint8List.fromList(List.generate(32, (i) => i)));
-      builder.addByte(1);
-      builder.add(Uint8List.fromList(utf8.encode('NewNode')));
-      final payload = Uint8List.fromList([pushAdvert, ...builder.toBytes()]);
-      final resp = CompanionDecoder.decode(payload);
-      expect(resp, isA<AdvertPush>());
-      final advert = resp as AdvertPush;
-      expect(advert.name, 'NewNode');
-      expect(advert.type, 1);
-      expect(advert.publicKey.length, 32);
-    });
+    test(
+      'decode AdvertPush (0x80) carries pubkey only — name and type are empty',
+      () {
+        final builder = BytesBuilder();
+        builder.add(Uint8List.fromList(List.generate(32, (i) => i)));
+        // pushAdvert is pubkey-only; extra bytes are ignored by the decoder.
+        builder.addByte(1);
+        builder.add(Uint8List.fromList(utf8.encode('NewNode')));
+        final payload = Uint8List.fromList([pushAdvert, ...builder.toBytes()]);
+        final resp = CompanionDecoder.decode(payload);
+        expect(resp, isA<AdvertPush>());
+        final advert = resp as AdvertPush;
+        expect(advert.publicKey.length, 32);
+        expect(advert.name, '');
+        expect(advert.type, 0);
+        expect(advert.isNew, false);
+      },
+    );
 
-    test('decode NewAdvert uses same parser as Advert', () {
+    test('decode NewAdvert (0x8A) full contact frame carries name and type', () {
+      // Full RESP_CODE_CONTACT layout:
+      //   pubkey[32], type[1], flags[1], path_len[1], out_path[64], name[32 null-padded]
+      final nameBytes = utf8.encode('Repeater1');
       final builder = BytesBuilder();
-      builder.add(Uint8List(32));
-      builder.addByte(2);
-      builder.add(Uint8List.fromList(utf8.encode('Repeater1')));
+      builder.add(Uint8List(32)); // pubkey
+      builder.addByte(2); // type
+      builder.addByte(0); // flags
+      builder.addByte(0); // path_len
+      builder.add(Uint8List(64)); // out_path
+      builder.add(nameBytes); // name (offset 99)
+      builder.add(Uint8List(32 - nameBytes.length)); // null-pad to 32 bytes
       final payload = Uint8List.fromList([pushNewAdvert, ...builder.toBytes()]);
       final resp = CompanionDecoder.decode(payload);
       expect(resp, isA<AdvertPush>());
-      expect((resp as AdvertPush).name, 'Repeater1');
+      final advert = resp as AdvertPush;
+      expect(advert.name, 'Repeater1');
+      expect(advert.type, 2);
+      expect(advert.isNew, true);
     });
 
     test('decode AdvertPush with short data returns null', () {
