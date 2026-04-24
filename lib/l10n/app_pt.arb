@@ -639,5 +639,10 @@
         "type": "int"
       }
     }
-  }
+  },
+  "signalNone": "Sem sinal (nenhum pacote recebido nos últimos 5 min)",
+  "signalWeak": "Sinal muito fraco",
+  "signalFair": "Sinal fraco",
+  "signalGood": "Bom sinal",
+  "signalExcellent": "Sinal excelente"
 }

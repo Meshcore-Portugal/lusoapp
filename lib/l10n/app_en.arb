@@ -590,5 +590,10 @@
   "plan333RadioOff": "Radio off — cannot send",
   "plan333ChannelSheetTitle": "MeshCore Channel  #plano333",
   "plan333ChannelSheetDesc": "Add the channel to the connected radio or consult the data manually.",
-  "plan333ChannelAdded": "Channel #plano333 added in slot {slot}"
+  "plan333ChannelAdded": "Channel #plano333 added in slot {slot}",
+  "signalNone": "No signal (no packets in last 5 min)",
+  "signalWeak": "Very weak signal",
+  "signalFair": "Weak signal",
+  "signalGood": "Good signal",
+  "signalExcellent": "Excellent signal"
 }

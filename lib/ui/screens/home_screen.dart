@@ -104,6 +104,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ],
                   ),
           actions: [
+            // Signal bars indicator — best SNR from last 5 min of RX log
+            const _SignalIndicator(),
             // Battery indicator — tap to toggle % / voltage
             if (batteryMv > 0)
               Padding(
@@ -299,5 +301,126 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (mv > 3600) return Colors.green;
     if (mv > 3300) return AppTheme.primary;
     return Colors.red;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Signal bars indicator (best LoRa SNR from last 5 min of received packets)
+// ---------------------------------------------------------------------------
+
+class _SignalIndicator extends ConsumerWidget {
+  const _SignalIndicator();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final snr = ref.watch(bestSignalSnrProvider);
+    return GestureDetector(
+      onTap: () {
+        ref.read(telemetryScrollToRfProvider.notifier).state = true;
+        context.go('/apps/telemetry');
+      },
+      child: _SignalBarsIcon(snr: snr),
+    );
+  }
+}
+
+class _SignalBarsIcon extends StatelessWidget {
+  const _SignalBarsIcon({required this.snr});
+  final double? snr;
+
+  /// Map LoRa SNR → 0-4 bar count.
+  /// LoRa SNR range: typically -20 dB (marginal) to +10 dB (excellent).
+  static int _bars(double snr) {
+    if (snr >= 0) return 4; // excellent
+    if (snr >= -5) return 3; // good
+    if (snr >= -10) return 2; // fair
+    return 1; // weak
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final snrValue =
+        snr; // local copy — required for null promotion of public field
+
+    if (snrValue == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Tooltip(
+          message: context.l10n.signalNone,
+          child: _SignalBars(
+            bars: 0,
+            color: theme.colorScheme.onSurface.withAlpha(80),
+          ),
+        ),
+      );
+    }
+
+    final bars = _bars(snrValue);
+    final Color color;
+    final String quality;
+
+    switch (bars) {
+      case 4:
+        color = Colors.green;
+        quality = context.l10n.signalExcellent;
+      case 3:
+        color = Colors.lightGreen;
+        quality = context.l10n.signalGood;
+      case 2:
+        color = Colors.orange;
+        quality = context.l10n.signalFair;
+      default:
+        color = Colors.red;
+        quality = context.l10n.signalWeak;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Tooltip(
+        message: '$quality — SNR ${snrValue.toStringAsFixed(1)} dB',
+        child: _SignalBars(bars: bars, color: color),
+      ),
+    );
+  }
+}
+
+/// Draws 4 vertical bars of increasing height — like a phone signal indicator.
+/// [bars] = 0 means all bars are hollow (no signal).
+class _SignalBars extends StatelessWidget {
+  const _SignalBars({required this.bars, required this.color});
+  final int bars; // 0–4
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    const totalBars = 4;
+    const maxHeight = 18.0;
+    const barWidth = 4.0;
+
+    return SizedBox(
+      width: totalBars * barWidth + (totalBars - 1) * 1.5,
+      height: maxHeight,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: List.generate(totalBars, (i) {
+          final barH = maxHeight * (i + 1) / totalBars;
+          final filled = i < bars;
+          return SizedBox(
+            width: barWidth,
+            height: barH,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: filled ? color : color.withAlpha(55),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(1.5),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
   }
 }

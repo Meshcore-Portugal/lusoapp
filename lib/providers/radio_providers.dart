@@ -2467,8 +2467,29 @@ final rxLogProvider = StateNotifierProvider<RxLogNotifier, List<RxLogEntry>>(
 );
 
 // ---------------------------------------------------------------------------
-// Contacts screen persistent UI state (survives app restarts)
+// Best recent signal — derived from the 0x88 RX log.
+//
+// Returns the highest (least negative) SNR in dB from packets received in
+// the last 5 minutes, or null when disconnected / no packets yet received.
+// Used by the AppBar signal indicator in HomeScreen.
 // ---------------------------------------------------------------------------
+
+/// Set to true before navigating to /apps/telemetry to auto-scroll to RF section.
+final telemetryScrollToRfProvider = StateProvider<bool>((_) => false);
+
+final bestSignalSnrProvider = Provider<double?>((ref) {
+  final isConnected = ref.watch(connectionProvider) == TransportState.connected;
+  if (!isConnected) return null;
+
+  final log = ref.watch(rxLogProvider);
+  if (log.isEmpty) return null;
+
+  final cutoff = DateTime.now().subtract(const Duration(minutes: 5));
+  final recent = log.where((e) => e.receivedAt.isAfter(cutoff));
+  if (recent.isEmpty) return null;
+
+  return recent.map((e) => e.snr).reduce((a, b) => a > b ? a : b);
+});
 
 enum ContactFilter {
   todos,

@@ -1792,4 +1792,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String plan333ChannelAdded(int slot) {
     return 'Channel #plano333 added in slot $slot';
   }
+
+  @override
+  String get signalNone => 'No signal (no packets in last 5 min)';
+
+  @override
+  String get signalWeak => 'Very weak signal';
+
+  @override
+  String get signalFair => 'Weak signal';
+
+  @override
+  String get signalGood => 'Good signal';
+
+  @override
+  String get signalExcellent => 'Excellent signal';
 }

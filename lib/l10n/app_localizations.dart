@@ -3519,6 +3519,36 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Canal #plano333 adicionado no slot {slot}'**
   String plan333ChannelAdded(int slot);
+
+  /// No description provided for @signalNone.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sem sinal (nenhum pacote recebido nos últimos 5 min)'**
+  String get signalNone;
+
+  /// No description provided for @signalWeak.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sinal muito fraco'**
+  String get signalWeak;
+
+  /// No description provided for @signalFair.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sinal fraco'**
+  String get signalFair;
+
+  /// No description provided for @signalGood.
+  ///
+  /// In pt, this message translates to:
+  /// **'Bom sinal'**
+  String get signalGood;
+
+  /// No description provided for @signalExcellent.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sinal excelente'**
+  String get signalExcellent;
 }
 
 class _AppLocalizationsDelegate

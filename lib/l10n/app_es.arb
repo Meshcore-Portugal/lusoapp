@@ -590,5 +590,10 @@
   "plan333RadioOff": "Radio apagada — no se puede enviar",
   "plan333ChannelSheetTitle": "Canal MeshCore  #plano333",
   "plan333ChannelSheetDesc": "Añade el canal a la radio conectada o consulta los datos manualmente.",
-  "plan333ChannelAdded": "Canal #plano333 añadido en ranura {slot}"
+  "plan333ChannelAdded": "Canal #plano333 añadido en ranura {slot}",
+  "signalNone": "Sin señal (sin paquetes en los últimos 5 min)",
+  "signalWeak": "Señal muy débil",
+  "signalFair": "Señal débil",
+  "signalGood": "Buena señal",
+  "signalExcellent": "Señal excelente"
 }

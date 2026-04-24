@@ -10,11 +10,38 @@ import '../../providers/radio_providers.dart';
 
 /// Telemetry dashboard — battery history chart, CayenneLPP sensor readings,
 /// and network statistics.
-class TelemetryScreen extends ConsumerWidget {
+class TelemetryScreen extends ConsumerStatefulWidget {
   const TelemetryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TelemetryScreen> createState() => _TelemetryScreenState();
+}
+
+class _TelemetryScreenState extends ConsumerState<TelemetryScreen> {
+  final _rfSectionKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final scrollToRf = ref.read(telemetryScrollToRfProvider);
+      if (scrollToRf) {
+        ref.read(telemetryScrollToRfProvider.notifier).state = false;
+        final ctx = _rfSectionKey.currentContext;
+        if (ctx != null) {
+          Scrollable.ensureVisible(
+            ctx,
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeInOut,
+            alignment: 0.0,
+          );
+        }
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final batteryMv = ref.watch(batteryProvider);
     final battHistoryRaw = ref.watch(batteryHistoryProvider);
     final stats = ref.watch(networkStatsProvider);
@@ -67,6 +94,7 @@ class TelemetryScreen extends ConsumerWidget {
 
         // ---- Radio RF stats section ----
         _SectionHeader(
+          key: _rfSectionKey,
           label: context.l10n.telemetryRadioRF,
           icon: Icons.cell_tower,
         ),
@@ -830,7 +858,7 @@ class _RadioPacketStatsCard extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.label, required this.icon});
+  const _SectionHeader({super.key, required this.label, required this.icon});
 
   final String label;
   final IconData icon;
