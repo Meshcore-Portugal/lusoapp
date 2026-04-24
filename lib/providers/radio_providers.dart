@@ -61,6 +61,11 @@ final contactsSyncedProvider = StateProvider<bool>((_) => false);
 
 final lastDeviceProvider = StateProvider<LastDevice?>((_) => null);
 
+/// All recently connected devices, most-recent first (up to 5).
+/// Superset of [lastDeviceProvider]; used by the connect screen to let
+/// users with multiple radios reconnect without scanning.
+final recentDevicesProvider = StateProvider<List<LastDevice>>((_) => []);
+
 // ---------------------------------------------------------------------------
 // Connection manager
 // ---------------------------------------------------------------------------
@@ -110,16 +115,13 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
             (radioNodeName != null && radioNodeName.isNotEmpty)
                 ? radioNodeName
                 : deviceName;
-        await StorageService.instance.saveLastDevice(
+        final recentList = await StorageService.instance.upsertRecentDevice(
           id: deviceId,
           type: 'ble',
           name: displayName,
         );
-        _ref.read(lastDeviceProvider.notifier).state = LastDevice(
-          id: deviceId,
-          type: 'ble',
-          name: displayName,
-        );
+        _ref.read(recentDevicesProvider.notifier).state = recentList;
+        _ref.read(lastDeviceProvider.notifier).state = recentList.first;
         _setupAutoReconnect(service, () => connectBle(deviceId, deviceName));
         _startBatteryPolling(service);
         _pushWidget();
@@ -174,16 +176,13 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
             (radioNodeName != null && radioNodeName.isNotEmpty)
                 ? radioNodeName
                 : deviceName;
-        await StorageService.instance.saveLastDevice(
+        final recentList = await StorageService.instance.upsertRecentDevice(
           id: deviceId,
           type: typeStr,
           name: displayName,
         );
-        _ref.read(lastDeviceProvider.notifier).state = LastDevice(
-          id: deviceId,
-          type: typeStr,
-          name: displayName,
-        );
+        _ref.read(recentDevicesProvider.notifier).state = recentList;
+        _ref.read(lastDeviceProvider.notifier).state = recentList.first;
         _startBatteryPolling(service);
         _pushWidget();
         return true;
@@ -503,8 +502,13 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
                 name: info.name,
               );
               _ref.read(lastDeviceProvider.notifier).state = updated;
+              // Also update the name in the recent devices list.
+              final recent = _ref.read(recentDevicesProvider);
+              _ref.read(recentDevicesProvider.notifier).state = [
+                for (final d in recent) d.id == last.id ? updated : d,
+              ];
               unawaited(
-                StorageService.instance.saveLastDevice(
+                StorageService.instance.upsertRecentDevice(
                   id: last.id,
                   type: last.type,
                   name: info.name,

@@ -54,6 +54,128 @@ class StorageService {
   }
 
   // ---------------------------------------------------------------------------
+  // Recent devices — ordered most-recent first, capped at [maxRecentDevices].
+  // ---------------------------------------------------------------------------
+
+  static const _keyRecentDevices = 'recent_devices_v1';
+  static const int maxRecentDevices = 5;
+
+  /// Inserts or moves the device to the front of the recent list, writes the
+  /// legacy single-device keys for backward compat, and persists.
+  /// Returns the updated list (most-recent first).
+  Future<List<LastDevice>> upsertRecentDevice({
+    required String id,
+    required String type,
+    required String name,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Keep legacy keys in sync so loadLastDevice() still works.
+      await prefs.setString(_keyLastDeviceId, id);
+      await prefs.setString(_keyLastDeviceType, type);
+      await prefs.setString(_keyLastDeviceName, name);
+      // Prepend, dedup by id, cap.
+      final existing = _parseRecentDevices(prefs);
+      final updated =
+          [
+            LastDevice(id: id, type: type, name: name),
+            ...existing.where((d) => d.id != id),
+          ].take(maxRecentDevices).toList();
+      await prefs.setString(
+        _keyRecentDevices,
+        jsonEncode(
+          updated
+              .map((d) => {'id': d.id, 'type': d.type, 'name': d.name})
+              .toList(),
+        ),
+      );
+      return updated;
+    } catch (_) {
+      return [LastDevice(id: id, type: type, name: name)];
+    }
+  }
+
+  /// Removes the device with [id] from the recent list and persists.
+  /// Also updates the legacy single-device keys to reflect the new head
+  /// of the list (or clears them if the list becomes empty).
+  /// Returns the updated list.
+  Future<List<LastDevice>> removeRecentDevice(String id) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final existing = _parseRecentDevices(prefs);
+      final updated = existing.where((d) => d.id != id).toList();
+      await prefs.setString(
+        _keyRecentDevices,
+        jsonEncode(
+          updated
+              .map((d) => {'id': d.id, 'type': d.type, 'name': d.name})
+              .toList(),
+        ),
+      );
+      // Sync legacy keys.
+      if (updated.isNotEmpty) {
+        final first = updated.first;
+        await prefs.setString(_keyLastDeviceId, first.id);
+        await prefs.setString(_keyLastDeviceType, first.type);
+        await prefs.setString(_keyLastDeviceName, first.name);
+      } else {
+        await prefs.remove(_keyLastDeviceId);
+        await prefs.remove(_keyLastDeviceType);
+        await prefs.remove(_keyLastDeviceName);
+      }
+      return updated;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Loads the recent-devices list.  On first call after an upgrade migrates
+  /// the legacy single-device keys into a one-element list.
+  Future<List<LastDevice>> loadRecentDevices() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_keyRecentDevices);
+      if (raw != null) return _parseRecentDevices(prefs);
+      // Migration: seed from legacy last_device keys.
+      final id = prefs.getString(_keyLastDeviceId);
+      final type = prefs.getString(_keyLastDeviceType);
+      final name = prefs.getString(_keyLastDeviceName);
+      if (id == null || type == null) return [];
+      final seeded = [LastDevice(id: id, type: type, name: name ?? id)];
+      await prefs.setString(
+        _keyRecentDevices,
+        jsonEncode(
+          seeded
+              .map((d) => {'id': d.id, 'type': d.type, 'name': d.name})
+              .toList(),
+        ),
+      );
+      return seeded;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static List<LastDevice> _parseRecentDevices(SharedPreferences prefs) {
+    try {
+      final raw = prefs.getString(_keyRecentDevices);
+      if (raw == null) return [];
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list
+          .map(
+            (e) => LastDevice(
+              id: e['id'] as String,
+              type: e['type'] as String,
+              name: e['name'] as String,
+            ),
+          )
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Messages  (key = 'contact_<hex6>' or 'ch_<index>')
   // ---------------------------------------------------------------------------
 

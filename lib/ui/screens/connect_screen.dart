@@ -390,6 +390,18 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     }
   }
 
+  Future<void> _removeRecentDevice(LastDevice device) async {
+    final updated = await StorageService.instance.removeRecentDevice(device.id);
+    if (!mounted) return;
+    ref.read(recentDevicesProvider.notifier).state = updated;
+    // If the removed device was the most-recent, update lastDeviceProvider too.
+    final currentLast = ref.read(lastDeviceProvider);
+    if (currentLast?.id == device.id) {
+      ref.read(lastDeviceProvider.notifier).state =
+          updated.isNotEmpty ? updated.first : null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(connectionProvider);
@@ -478,17 +490,21 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               else ...[
                 Builder(
                   builder: (context) {
-                    final lastDevice = ref.watch(lastDeviceProvider);
-                    if (lastDevice == null) return const SizedBox.shrink();
+                    final recent = ref.watch(recentDevicesProvider);
+                    if (recent.isEmpty) return const SizedBox.shrink();
+                    final last = recent.first;
+                    final others = recent.skip(1).toList();
                     return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // Primary reconnect card — most recently connected radio.
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.only(bottom: 8),
                           child: Card(
                             color: theme.colorScheme.primaryContainer,
                             child: ListTile(
                               leading: Icon(
-                                lastDevice.type == 'ble'
+                                last.type == 'ble'
                                     ? Icons.bluetooth
                                     : Icons.usb,
                                 color: theme.colorScheme.onPrimaryContainer,
@@ -501,29 +517,118 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                                 ),
                               ),
                               subtitle: Text(
-                                lastDevice.name,
+                                last.name,
                                 style: TextStyle(
                                   color: theme.colorScheme.onPrimaryContainer
                                       .withAlpha(180),
                                 ),
                               ),
-                              trailing: Icon(
-                                Icons.arrow_forward_ios,
-                                size: 16,
-                                color: theme.colorScheme.onPrimaryContainer,
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.arrow_forward_ios,
+                                    size: 16,
+                                    color: theme.colorScheme.onPrimaryContainer,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  IconButton(
+                                    icon: Icon(
+                                      Icons.close,
+                                      size: 16,
+                                      color: theme
+                                          .colorScheme
+                                          .onPrimaryContainer
+                                          .withAlpha(160),
+                                    ),
+                                    onPressed: () => _removeRecentDevice(last),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    visualDensity: VisualDensity.compact,
+                                    tooltip: 'Remover da lista',
+                                  ),
+                                ],
                               ),
-                              onTap: () => _connectToLastDevice(lastDevice),
+                              onTap: () => _connectToLastDevice(last),
                             ),
                           ),
                         ),
+                        // Additional recent radios.
+                        if (others.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              left: 4,
+                              top: 4,
+                              bottom: 4,
+                            ),
+                            child: Text(
+                              'OUTROS RÁDIOS',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurface.withAlpha(
+                                  120,
+                                ),
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ),
+                          ...others.map(
+                            (d) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Card(
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor:
+                                        theme
+                                            .colorScheme
+                                            .surfaceContainerHighest,
+                                    child: Icon(
+                                      d.type == 'ble'
+                                          ? Icons.bluetooth
+                                          : Icons.usb,
+                                    ),
+                                  ),
+                                  title: Text(d.name),
+                                  subtitle: Text(
+                                    d.type == 'ble'
+                                        ? 'Bluetooth LE'
+                                        : d.type == 'serialKiss'
+                                        ? 'KISS TNC'
+                                        : 'Série USB',
+                                    style: theme.textTheme.bodySmall,
+                                  ),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.arrow_forward_ios,
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      IconButton(
+                                        icon: const Icon(Icons.close, size: 16),
+                                        onPressed: () => _removeRecentDevice(d),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        visualDensity: VisualDensity.compact,
+                                        tooltip: 'Remover da lista',
+                                      ),
+                                    ],
+                                  ),
+                                  onTap: () => _connectToLastDevice(d),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.only(top: 4, bottom: 8),
                           child: TextButton.icon(
                             icon: const Icon(Icons.wifi_off, size: 18),
                             label: Text(context.l10n.connectContinueOffline),
                             onPressed: () => context.go('/channels'),
                           ),
                         ),
+                        const SizedBox(height: 8),
                       ],
                     );
                   },

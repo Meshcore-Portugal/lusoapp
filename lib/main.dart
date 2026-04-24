@@ -64,10 +64,15 @@ class _McAppPtState extends ConsumerState<McAppPt> {
     // Restore persisted message paths so path details are available after reboot.
     await ref.read(packetHeardProvider.notifier).loadFromStorage();
 
-    // Restore last connected device for the quick-connect card.
-    final last = await StorageService.instance.loadLastDevice();
-    if (last != null && mounted) {
-      ref.read(lastDeviceProvider.notifier).state = last;
+    // Restore the recent-devices list (most-recent first) for the
+    // multi-radio quick-connect section.  loadRecentDevices() handles
+    // one-time migration from the legacy single-device keys.
+    final recent = await StorageService.instance.loadRecentDevices();
+    if (mounted) {
+      ref.read(recentDevicesProvider.notifier).state = recent;
+      if (recent.isNotEmpty) {
+        ref.read(lastDeviceProvider.notifier).state = recent.first;
+      }
     }
 
     // Initialise the local notification service and load saved settings.
