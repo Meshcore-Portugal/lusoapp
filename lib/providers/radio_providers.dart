@@ -56,6 +56,14 @@ final radioContactsSnapshotProvider = StateProvider<Set<String>>((_) => {});
 final contactsSyncedProvider = StateProvider<bool>((_) => false);
 
 // ---------------------------------------------------------------------------
+// Current radio device ID — set when a connection is established, cleared
+// on disconnect. Used to scope channel and message storage per radio so
+// that data from different radios never bleeds into each other.
+// ---------------------------------------------------------------------------
+
+final currentRadioIdProvider = StateProvider<String?>((_) => null);
+
+// ---------------------------------------------------------------------------
 // Last connected device (loaded on app start from SharedPreferences)
 // ---------------------------------------------------------------------------
 
@@ -106,6 +114,23 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
       _setupListeners(service);
       final ok = await service.connect();
       if (ok) {
+        // Scope channel data to this radio device.  If we're switching to a
+        // different radio, clear stale channel messages and channels from
+        // memory so data from the previous radio never bleeds through.
+        final prevDeviceId = _ref.read(currentRadioIdProvider);
+        if (prevDeviceId != deviceId) {
+          _ref.read(messagesProvider.notifier).clearChannelMessages();
+          _ref.read(channelsProvider.notifier).clearChannels();
+          _ref.read(unreadCountsProvider.notifier).resetChannels();
+        }
+        _ref.read(currentRadioIdProvider.notifier).state = deviceId;
+        // Pre-load cached channels and mute state for this radio before the
+        // live fetch so the UI shows something while waiting for responses.
+        await _ref
+            .read(channelsProvider.notifier)
+            .loadFromStorageForRadio(deviceId);
+        await _ref.read(mutedChannelsProvider.notifier).loadForRadio(deviceId);
+
         await _fetchInitialData(service);
         state = TransportState.connected;
         // Prefer the radio's configured node name; fall back to the BLE
@@ -165,6 +190,19 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
       _setupListeners(service);
       final ok = await service.connect();
       if (ok) {
+        // Scope channel data to this radio device.
+        final prevDeviceId = _ref.read(currentRadioIdProvider);
+        if (prevDeviceId != deviceId) {
+          _ref.read(messagesProvider.notifier).clearChannelMessages();
+          _ref.read(channelsProvider.notifier).clearChannels();
+          _ref.read(unreadCountsProvider.notifier).resetChannels();
+        }
+        _ref.read(currentRadioIdProvider.notifier).state = deviceId;
+        await _ref
+            .read(channelsProvider.notifier)
+            .loadFromStorageForRadio(deviceId);
+        await _ref.read(mutedChannelsProvider.notifier).loadForRadio(deviceId);
+
         await _fetchInitialData(service);
         state = TransportState.connected;
         final typeStr =
@@ -217,6 +255,9 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     // by the disconnected radio's keys on the next connection.
     _ref.read(radioContactsSnapshotProvider.notifier).state = {};
     _ref.read(contactsSyncedProvider.notifier).state = false;
+    // Clear the current radio ID so channel storage is not accidentally
+    // written to the disconnected radio's scope.
+    _ref.read(currentRadioIdProvider.notifier).state = null;
     _setStep(0, '');
     state = TransportState.disconnected;
     _pushWidget();
@@ -1181,8 +1222,11 @@ final contactsProvider = StateNotifierProvider<ContactsNotifier, List<Contact>>(
 
 // Channels
 class ChannelsNotifier extends StateNotifier<List<ChannelInfo>> {
-  ChannelsNotifier() : super([]);
+  ChannelsNotifier(this._ref) : super([]);
+  final Ref _ref;
 
+  /// Load channels for the last known device at startup (offline cache).
+  /// Only populates state if there is data — does not clear existing state.
   Future<void> loadFromStorage() async {
     final stored = await StorageService.instance.loadChannels();
     if (stored.isNotEmpty) {
@@ -1190,15 +1234,34 @@ class ChannelsNotifier extends StateNotifier<List<ChannelInfo>> {
     }
   }
 
+  /// Load channels scoped to a specific radio device.
+  /// Replaces any previously loaded channels in state.
+  Future<void> loadFromStorageForRadio(String deviceId) async {
+    final stored = await StorageService.instance.loadChannelsForRadio(deviceId);
+    state = List.from(stored)..sort((a, b) => a.index.compareTo(b.index));
+  }
+
+  /// Clear in-memory channels without touching storage.
+  /// Called when switching to a different radio before the new radio's
+  /// channels have been fetched, to prevent stale data showing in the UI.
+  void clearChannels() {
+    state = [];
+  }
+
   void refresh(List<ChannelInfo> channels) {
     state = List.from(channels)..sort((a, b) => a.index.compareTo(b.index));
-    StorageService.instance.saveChannels(state);
+    final deviceId = _ref.read(currentRadioIdProvider);
+    if (deviceId != null) {
+      StorageService.instance.saveChannelsForRadio(deviceId, state);
+    } else {
+      StorageService.instance.saveChannels(state);
+    }
   }
 }
 
 final channelsProvider =
     StateNotifierProvider<ChannelsNotifier, List<ChannelInfo>>((ref) {
-      return ChannelsNotifier();
+      return ChannelsNotifier(ref);
     });
 
 // Messages
@@ -1355,14 +1418,35 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     _mergeStored(stored);
   }
 
+  /// Returns the device-scoped storage key for a channel message conversation.
+  /// Falls back to the unscoped key when no radio is connected (e.g. on cold
+  /// startup before a connection is established).
+  String _channelKey(int index) {
+    final deviceId = _ref.read(currentRadioIdProvider);
+    if (deviceId != null) {
+      return 'ch_${StorageService.sanitizeId(deviceId)}_$index';
+    }
+    return 'ch_$index';
+  }
+
   /// Lazily load persisted messages for a channel index.
   Future<void> ensureLoadedForChannel(int index) async {
-    final key = 'ch_$index';
+    final key = _channelKey(index);
     if (_loadedKeys.contains(key)) return;
     _loadedKeys.add(key);
     final stored = await StorageService.instance.loadMessages(key);
     if (stored.isEmpty) return;
     _mergeStored(stored);
+  }
+
+  /// Remove all channel messages from in-memory state without touching storage.
+  /// Called when connecting to a different radio so that stale channel messages
+  /// from the previous radio are not visible before the new radio's history loads.
+  void clearChannelMessages() {
+    state = state.where((m) => m.channelIndex == null).toList();
+    // Remove channel-keyed entries from the loaded-keys set so that the new
+    // radio's channel messages can be loaded fresh.
+    _loadedKeys.removeWhere((k) => k.startsWith('ch_'));
   }
 
   void _mergeStored(List<ChatMessage> stored) {
@@ -1394,7 +1478,7 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   void _saveForMessage(ChatMessage msg) {
     final String storageKey;
     if (msg.channelIndex != null) {
-      storageKey = 'ch_${msg.channelIndex}';
+      storageKey = _channelKey(msg.channelIndex!);
     } else if (msg.senderKey != null) {
       storageKey = 'contact_${_hex6(msg.senderKey!)}';
     } else {
@@ -1459,7 +1543,10 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     if (msg.channelIndex != null) {
       final forKey =
           state.where((m) => m.channelIndex == msg.channelIndex).toList();
-      StorageService.instance.saveMessages('ch_${msg.channelIndex}', forKey);
+      StorageService.instance.saveMessages(
+        _channelKey(msg.channelIndex!),
+        forKey,
+      );
     } else if (msg.senderKey != null) {
       final key = 'contact_${_hex6(msg.senderKey!)}';
       final forKey =
@@ -1477,7 +1564,7 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   /// Delete all messages for a channel from state and storage.
   Future<void> deleteChannelHistory(int channelIndex) async {
     state = state.where((m) => m.channelIndex != channelIndex).toList();
-    await StorageService.instance.clearMessages('ch_$channelIndex');
+    await StorageService.instance.clearMessages(_channelKey(channelIndex));
   }
 
   bool _prefixMatch(Uint8List a, Uint8List b) {
@@ -1508,11 +1595,19 @@ class MutedChannelsNotifier extends StateNotifier<Set<int>> {
   }
 
   static const _key = 'muted_channels_v1';
+  String? _activeDeviceId;
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final list = prefs.getStringList(_key) ?? [];
     state = list.map(int.parse).toSet();
+  }
+
+  /// Load muted channels scoped to a specific radio device.
+  /// Replaces the current mute set with the device-specific one.
+  Future<void> loadForRadio(String deviceId) async {
+    _activeDeviceId = deviceId;
+    state = await StorageService.instance.loadMutedChannelsForRadio(deviceId);
   }
 
   Future<void> toggle(int channelIndex) async {
@@ -1527,8 +1622,15 @@ class MutedChannelsNotifier extends StateNotifier<Set<int>> {
   }
 
   Future<void> _save() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_key, state.map((i) => '$i').toList());
+    if (_activeDeviceId != null) {
+      await StorageService.instance.saveMutedChannelsForRadio(
+        _activeDeviceId!,
+        state,
+      );
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_key, state.map((i) => '$i').toList());
+    }
   }
 }
 
@@ -1625,6 +1727,14 @@ class UnreadCountsNotifier extends StateNotifier<UnreadCounts> {
     if ((state.contacts[hex6] ?? 0) == 0) return;
     final co = Map<String, int>.from(state.contacts)..remove(hex6);
     state = UnreadCounts(channels: state.channels, contacts: co);
+    _save();
+  }
+
+  /// Reset only channel unread counts. Called when connecting to a different
+  /// radio so that slot-index-based counts from the previous radio don't
+  /// carry over to the new radio's channels.
+  void resetChannels() {
+    state = UnreadCounts(channels: {}, contacts: state.contacts);
     _save();
   }
 

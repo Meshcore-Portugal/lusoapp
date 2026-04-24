@@ -55,9 +55,6 @@ class _McAppPtState extends ConsumerState<McAppPt> {
     // before the user connects to a radio.
     await ref.read(contactsProvider.notifier).loadFromStorage();
 
-    // Restore cached channels for offline browsing.
-    await ref.read(channelsProvider.notifier).loadFromStorage();
-
     // Restore persisted unread counts so badges survive app restarts.
     await ref.read(unreadCountsProvider.notifier).loadFromStorage();
 
@@ -73,6 +70,18 @@ class _McAppPtState extends ConsumerState<McAppPt> {
       if (recent.isNotEmpty) {
         ref.read(lastDeviceProvider.notifier).state = recent.first;
       }
+    }
+
+    // Restore cached channels for offline browsing.
+    // Load from the device-scoped store when a previous device is known,
+    // so that channels are correctly associated with the last radio used.
+    if (recent.isNotEmpty) {
+      await ref
+          .read(channelsProvider.notifier)
+          .loadFromStorageForRadio(recent.first.id);
+    } else {
+      // Fallback: no known device yet — load from the legacy global key.
+      await ref.read(channelsProvider.notifier).loadFromStorage();
     }
 
     // Initialise the local notification service and load saved settings.

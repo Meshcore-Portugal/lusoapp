@@ -245,7 +245,52 @@ class StorageService {
   // ---------------------------------------------------------------------------
 
   static const _keyChannels = 'channels_v1';
+  static const _keyChannelsV2Prefix = 'channels_v2_';
+  static const _keyMutedChannelsV2Prefix = 'muted_channels_v2_';
 
+  /// Sanitise a device ID for use as a storage key suffix.
+  /// Replaces any non-alphanumeric characters (colons, slashes, etc.) with '_'.
+  static String sanitizeId(String deviceId) =>
+      deviceId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+
+  // ---------------------------------------------------------------------------
+  // Channels — radio-scoped (v2) and legacy global (v1) storage.
+  // ---------------------------------------------------------------------------
+
+  /// Save channels scoped to a specific radio device ID.
+  Future<void> saveChannelsForRadio(
+    String deviceId,
+    List<ChannelInfo> channels,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final json = jsonEncode(channels.map((c) => c.toJson()).toList());
+      await prefs.setString(
+        '$_keyChannelsV2Prefix${sanitizeId(deviceId)}',
+        json,
+      );
+    } catch (_) {}
+  }
+
+  /// Load channels scoped to a specific radio device ID.
+  /// Falls back to the legacy global key on first use so existing users don't
+  /// lose their channel list after upgrading.
+  Future<List<ChannelInfo>> loadChannelsForRadio(String deviceId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final scopedKey = '$_keyChannelsV2Prefix${sanitizeId(deviceId)}';
+      final json = prefs.getString(scopedKey) ?? prefs.getString(_keyChannels);
+      if (json == null) return [];
+      final list = jsonDecode(json) as List<dynamic>;
+      return list
+          .map((e) => ChannelInfo.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // Legacy global channel methods kept for migration / offline startup.
   Future<void> saveChannels(List<ChannelInfo> channels) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -265,6 +310,39 @@ class StorageService {
           .toList();
     } catch (_) {
       return [];
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Muted channels — radio-scoped (v2) storage.
+  // ---------------------------------------------------------------------------
+
+  Future<void> saveMutedChannelsForRadio(
+    String deviceId,
+    Set<int> indices,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        '$_keyMutedChannelsV2Prefix${sanitizeId(deviceId)}',
+        indices.map((i) => '$i').toList(),
+      );
+    } catch (_) {}
+  }
+
+  /// Load muted channel indices for a specific radio device.
+  /// Falls back to the legacy global key on first use.
+  Future<Set<int>> loadMutedChannelsForRadio(String deviceId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final scopedKey = '$_keyMutedChannelsV2Prefix${sanitizeId(deviceId)}';
+      final list =
+          prefs.getStringList(scopedKey) ??
+          prefs.getStringList('muted_channels_v1') ??
+          [];
+      return list.map(int.parse).toSet();
+    } catch (_) {
+      return {};
     }
   }
 
