@@ -213,7 +213,7 @@ class _DiscoveredContactTile extends ConsumerWidget {
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         subtitle: Text(
-          '${context.l10n.discoverHeard}: $lastSeen  |  ${context.l10n.commonPath}: ${_pathLabel(context, contact.pathLen)}  |  ${context.l10n.commonHops}: ${contact.pathLen}',
+          '${context.l10n.discoverHeard}: $lastSeen  |  ${context.l10n.commonPath}: ${_pathLabel(context, contact.pathLen)}',
           style: theme.textTheme.bodySmall,
         ),
         trailing: const Icon(Icons.arrow_forward, size: 18),
@@ -320,7 +320,7 @@ class _DiscoveredContactTile extends ConsumerWidget {
                       const SizedBox(height: 8),
                       _infoRow(
                         context.l10n.commonPath,
-                        '${contact.pathLen} ${contact.pathLen == 1 ? context.l10n.commonSingularHop : context.l10n.commonPluralHops}',
+                        _pathLabel(context, contact.pathLen),
                         theme,
                       ),
                       const SizedBox(height: 16),
@@ -457,9 +457,11 @@ class _DiscoveredContactTile extends ConsumerWidget {
   }
 
   String _pathLabel(BuildContext context, int pathLen) {
-    if (pathLen == 0) return context.l10n.commonDirect;
-    if (pathLen == 1) return context.l10n.discoverPathNear;
-    return '$pathLen ${context.l10n.commonPluralHops}';
+    if (pathLen == 0xFF) return context.l10n.commonFlood;
+    final hops = pathLen & 0x3F; // lower 6 bits = actual hop count
+    if (hops == 0) return context.l10n.commonDirect;
+    if (hops == 1) return '1 ${context.l10n.commonSingularHop}';
+    return '$hops ${context.l10n.commonPluralHops}';
   }
 
   String _formatTimestamp(BuildContext context, int ts) {

@@ -130,6 +130,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
             .read(channelsProvider.notifier)
             .loadFromStorageForRadio(deviceId);
         await _ref.read(mutedChannelsProvider.notifier).loadForRadio(deviceId);
+        await _ref.read(advertAutoAddProvider.notifier).loadForRadio(deviceId);
 
         await _fetchInitialData(service);
         state = TransportState.connected;
@@ -202,6 +203,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
             .read(channelsProvider.notifier)
             .loadFromStorageForRadio(deviceId);
         await _ref.read(mutedChannelsProvider.notifier).loadForRadio(deviceId);
+        await _ref.read(advertAutoAddProvider.notifier).loadForRadio(deviceId);
 
         await _fetchInitialData(service);
         state = TransportState.connected;
@@ -2105,47 +2107,81 @@ class AdvertAutoAddSettings {
 class AdvertAutoAddNotifier extends StateNotifier<AdvertAutoAddSettings> {
   AdvertAutoAddNotifier(this._getService)
     : super(const AdvertAutoAddSettings()) {
-    _load();
+    _load(null); // load global defaults on startup (before any radio connects)
   }
 
   final RadioService? Function() _getService;
 
-  static const _key = 'advert_autoadd_v1';
+  /// The device ID of the currently connected radio; null before first connect.
+  String? _radioId;
 
-  Future<void> _load() async {
+  // Legacy global key (all radios shared one setting before per-radio scoping).
+  static const _keyV1 = 'advert_autoadd_v1';
+  // Per-radio key prefix:  advert_autoadd_v2_<sanitizedId>_<field>
+  static const _keyV2Prefix = 'advert_autoadd_v2_';
+
+  /// Returns the storage key prefix for [radioId] (scoped) or the legacy
+  /// global prefix when [radioId] is null.
+  String _prefix(String? radioId) =>
+      radioId != null
+          ? '$_keyV2Prefix${StorageService.sanitizeId(radioId)}'
+          : _keyV1;
+
+  Future<void> _load(String? radioId) async {
     final prefs = await SharedPreferences.getInstance();
-    final maxHopsRaw = prefs.getInt('${_key}_maxHops');
+    final p = '${_prefix(radioId)}_';
+    final legacy = '${_keyV1}_';
+
+    // Helper: read scoped key, fall back to legacy global (migration path),
+    // then fall back to the provided default.
+    bool _b(String field, bool def) =>
+        prefs.getBool('$p$field') ??
+        (radioId != null ? prefs.getBool('$legacy$field') : null) ??
+        def;
+    int? _i(String field) =>
+        prefs.getInt('$p$field') ??
+        (radioId != null ? prefs.getInt('$legacy$field') : null);
+
     state = AdvertAutoAddSettings(
-      addAll: prefs.getBool('${_key}_addAll') ?? true,
-      addChat: prefs.getBool('${_key}_chat') ?? true,
-      addRepeater: prefs.getBool('${_key}_repeater') ?? true,
-      addRoom: prefs.getBool('${_key}_room') ?? true,
-      addSensor: prefs.getBool('${_key}_sensor') ?? true,
-      overwriteOldest: prefs.getBool('${_key}_overwriteOldest') ?? false,
-      maxHops: maxHopsRaw,
-      pullToRefresh: prefs.getBool('${_key}_pullToRefresh') ?? true,
-      showPublicKeys: prefs.getBool('${_key}_showPublicKeys') ?? true,
+      addAll: _b('addAll', true),
+      addChat: _b('chat', true),
+      addRepeater: _b('repeater', true),
+      addRoom: _b('room', true),
+      addSensor: _b('sensor', true),
+      overwriteOldest: _b('overwriteOldest', false),
+      maxHops: _i('maxHops'),
+      pullToRefresh: _b('pullToRefresh', true),
+      showPublicKeys: _b('showPublicKeys', true),
     );
   }
 
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
+    final p = '${_prefix(_radioId)}_';
     final futures = <Future<void>>[
-      prefs.setBool('${_key}_addAll', state.addAll),
-      prefs.setBool('${_key}_chat', state.addChat),
-      prefs.setBool('${_key}_repeater', state.addRepeater),
-      prefs.setBool('${_key}_room', state.addRoom),
-      prefs.setBool('${_key}_sensor', state.addSensor),
-      prefs.setBool('${_key}_overwriteOldest', state.overwriteOldest),
-      prefs.setBool('${_key}_pullToRefresh', state.pullToRefresh),
-      prefs.setBool('${_key}_showPublicKeys', state.showPublicKeys),
+      prefs.setBool('${p}addAll', state.addAll),
+      prefs.setBool('${p}chat', state.addChat),
+      prefs.setBool('${p}repeater', state.addRepeater),
+      prefs.setBool('${p}room', state.addRoom),
+      prefs.setBool('${p}sensor', state.addSensor),
+      prefs.setBool('${p}overwriteOldest', state.overwriteOldest),
+      prefs.setBool('${p}pullToRefresh', state.pullToRefresh),
+      prefs.setBool('${p}showPublicKeys', state.showPublicKeys),
     ];
     if (state.maxHops != null) {
-      futures.add(prefs.setInt('${_key}_maxHops', state.maxHops!));
+      futures.add(prefs.setInt('${p}maxHops', state.maxHops!));
     } else {
-      futures.add(prefs.remove('${_key}_maxHops'));
+      futures.add(prefs.remove('${p}maxHops'));
     }
     await Future.wait(futures);
+  }
+
+  /// Called when connecting to a specific radio.
+  /// Loads per-radio settings (with legacy migration fallback) and marks all
+  /// subsequent saves as scoped to this radio.
+  Future<void> loadForRadio(String deviceId) async {
+    _radioId = deviceId;
+    await _load(deviceId);
   }
 
   /// Push current state to the radio.  No-op when not connected.
