@@ -595,5 +595,7 @@
   "signalWeak": "Very weak signal",
   "signalFair": "Weak signal",
   "signalGood": "Good signal",
-  "signalExcellent": "Excellent signal"
+  "signalExcellent": "Excellent signal",
+  "urlOpenTitle": "Open external link?",
+  "urlOpenConfirm": "Open"
 }

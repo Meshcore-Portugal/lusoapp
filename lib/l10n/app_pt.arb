@@ -644,5 +644,7 @@
   "signalWeak": "Sinal muito fraco",
   "signalFair": "Sinal fraco",
   "signalGood": "Bom sinal",
-  "signalExcellent": "Sinal excelente"
+  "signalExcellent": "Sinal excelente",
+  "urlOpenTitle": "Abrir link externo?",
+  "urlOpenConfirm": "Abrir"
 }

@@ -3549,6 +3549,18 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Sinal excelente'**
   String get signalExcellent;
+
+  /// No description provided for @urlOpenTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Abrir link externo?'**
+  String get urlOpenTitle;
+
+  /// No description provided for @urlOpenConfirm.
+  ///
+  /// In pt, this message translates to:
+  /// **'Abrir'**
+  String get urlOpenConfirm;
 }
 
 class _AppLocalizationsDelegate

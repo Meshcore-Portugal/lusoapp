@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
@@ -543,7 +545,40 @@ String _sanitizeUtf16(String s) {
 /// Renders text with all `@[name]` mentions as pill chips anywhere in the message.
 /// Mentions matching [selfName] use [selfMentionColor] (or the theme tertiary);
 /// all other mentions use [otherMentionColor] (or the theme primary).
+Future<void> _launchUrl(BuildContext context, String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null) return;
+  if (!context.mounted) return;
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder:
+        (ctx) => AlertDialog(
+          title: Text(ctx.l10n.urlOpenTitle),
+          content: Text(
+            url,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(ctx.l10n.commonCancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(ctx.l10n.urlOpenConfirm),
+            ),
+          ],
+        ),
+  );
+  if (confirmed == true) {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+}
+
 Widget _buildMentionText(
+  BuildContext context,
   String text,
   ThemeData theme,
   TextStyle? style, {
@@ -552,7 +587,7 @@ Widget _buildMentionText(
   Color? otherMentionColor,
 }) {
   text = _sanitizeUtf16(text);
-  final pattern = RegExp(r'@\[([^\]]+)\]');
+  final pattern = RegExp(r'@\[([^\]]+)\]|((https?://)[^\s]+)');
   final matches = pattern.allMatches(text).toList();
   if (matches.isEmpty) return Text(text, style: style);
 
@@ -565,35 +600,56 @@ Widget _buildMentionText(
         TextSpan(text: text.substring(cursor, match.start), style: style),
       );
     }
-    final name = match.group(1)!;
-    final isSelf =
-        selfName != null &&
-        name.trim().toLowerCase() == selfName.trim().toLowerCase();
-    final pillColor =
-        isSelf
-            ? (selfMentionColor ?? theme.colorScheme.tertiary)
-            : (otherMentionColor ?? theme.colorScheme.primary);
-    final textColor = _pillTextColor(pillColor);
-    spans.add(
-      WidgetSpan(
-        alignment: PlaceholderAlignment.middle,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 1),
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          decoration: BoxDecoration(
-            color: pillColor,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            '@$name',
-            style: (theme.textTheme.labelSmall ?? const TextStyle()).copyWith(
-              color: textColor,
-              fontWeight: FontWeight.bold,
+    if (match.group(1) != null) {
+      final name = match.group(1)!;
+      final isSelf =
+          selfName != null &&
+          name.trim().toLowerCase() == selfName.trim().toLowerCase();
+      final pillColor =
+          isSelf
+              ? (selfMentionColor ?? theme.colorScheme.tertiary)
+              : (otherMentionColor ?? theme.colorScheme.primary);
+      final textColor = _pillTextColor(pillColor);
+      spans.add(
+        WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 1),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: pillColor,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '@$name',
+              style: (theme.textTheme.labelSmall ?? const TextStyle()).copyWith(
+                color: textColor,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
+    } else if (match.group(2) != null) {
+      // ── https:// URL ─────────────────────────────────────────────────────
+      final url = match.group(2)!;
+      spans.add(
+        WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: GestureDetector(
+            onTap: () => _launchUrl(context, url),
+            child: Text(
+              url,
+              style: (style ?? const TextStyle()).copyWith(
+                color: Colors.lightBlue,
+                decoration: TextDecoration.underline,
+                decorationColor: Colors.lightBlue,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     cursor = match.end;
   }
 
@@ -892,6 +948,7 @@ class _PrivateMessageBubble extends StatelessWidget {
                     ),
                   ),
                   child: _buildMentionText(
+                    context,
                     message.text,
                     theme,
                     theme.textTheme.bodyMedium,
@@ -1008,6 +1065,7 @@ class _PrivateMessageBubble extends StatelessWidget {
                     ),
                   ),
                   child: _buildMentionText(
+                    context,
                     message.text,
                     theme,
                     theme.textTheme.bodyMedium,

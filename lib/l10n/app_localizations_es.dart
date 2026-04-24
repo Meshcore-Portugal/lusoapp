@@ -1818,4 +1818,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get signalExcellent => 'Señal excelente';
+
+  @override
+  String get urlOpenTitle => '¿Abrir enlace externo?';
+
+  @override
+  String get urlOpenConfirm => 'Abrir';
 }

@@ -1815,4 +1815,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get signalExcellent => 'Sinal excelente';
+
+  @override
+  String get urlOpenTitle => 'Abrir link externo?';
+
+  @override
+  String get urlOpenConfirm => 'Abrir';
 }
