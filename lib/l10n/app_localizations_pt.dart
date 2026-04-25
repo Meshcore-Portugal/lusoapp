@@ -1780,6 +1780,50 @@ class AppLocalizationsPt extends AppLocalizations {
   String get plan333AlertsActive => 'Alertas ativos às 20:50 e 20:55.';
 
   @override
+  String get plan333StationsHeard => 'Estações Ouvidas';
+
+  @override
+  String get plan333ShareLog => 'Partilhar log';
+
+  @override
+  String get plan333ClearLog => 'Limpar log';
+
+  @override
+  String get plan333NoStationsYet =>
+      'Nenhuma estação ouvida ainda. Os CQs recebidos no canal aparecem aqui automaticamente.';
+
+  @override
+  String get plan333ClearQslTitle => 'Limpar log?';
+
+  @override
+  String get plan333ClearQslContent =>
+      'Todas as estações registadas serão apagadas.';
+
+  @override
+  String get plan333AddQslTitle => 'Adicionar estação';
+
+  @override
+  String get plan333StationLabel => 'Estação *';
+
+  @override
+  String get plan333StationHint => 'ex: Daytona';
+
+  @override
+  String get plan333HopsLabel => 'Hops:';
+
+  @override
+  String get plan333DirectOption => 'Direto';
+
+  @override
+  String get plan333LocationLabel => 'Localização';
+
+  @override
+  String get plan333LocationHint => 'ex: Tomar';
+
+  @override
+  String get plan333NotesLabel => 'Notas (opcional)';
+
+  @override
   String get plan333AbortAutoSend => 'Abortar auto-envio';
 
   @override

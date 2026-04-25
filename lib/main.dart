@@ -90,6 +90,7 @@ class _McAppPtState extends ConsumerState<McAppPt> {
       await ref.read(notificationSettingsProvider.notifier).loadFromStorage();
       await ref.read(plan333EnabledProvider.notifier).loadFromStorage();
       await ref.read(plan333ConfigProvider.notifier).loadFromStorage();
+      await ref.read(qslLogProvider.notifier).loadFromStorage();
       // Eagerly initialize the auto-send notifier (starts background timer).
       ref.read(plan333AutoSendProvider);
     }

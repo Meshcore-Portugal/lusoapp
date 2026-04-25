@@ -3490,6 +3490,90 @@ abstract class AppLocalizations {
   /// **'Alertas ativos às 20:50 e 20:55.'**
   String get plan333AlertsActive;
 
+  /// No description provided for @plan333StationsHeard.
+  ///
+  /// In pt, this message translates to:
+  /// **'Estações Ouvidas'**
+  String get plan333StationsHeard;
+
+  /// No description provided for @plan333ShareLog.
+  ///
+  /// In pt, this message translates to:
+  /// **'Partilhar log'**
+  String get plan333ShareLog;
+
+  /// No description provided for @plan333ClearLog.
+  ///
+  /// In pt, this message translates to:
+  /// **'Limpar log'**
+  String get plan333ClearLog;
+
+  /// No description provided for @plan333NoStationsYet.
+  ///
+  /// In pt, this message translates to:
+  /// **'Nenhuma estação ouvida ainda. Os CQs recebidos no canal aparecem aqui automaticamente.'**
+  String get plan333NoStationsYet;
+
+  /// No description provided for @plan333ClearQslTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Limpar log?'**
+  String get plan333ClearQslTitle;
+
+  /// No description provided for @plan333ClearQslContent.
+  ///
+  /// In pt, this message translates to:
+  /// **'Todas as estações registadas serão apagadas.'**
+  String get plan333ClearQslContent;
+
+  /// No description provided for @plan333AddQslTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Adicionar estação'**
+  String get plan333AddQslTitle;
+
+  /// No description provided for @plan333StationLabel.
+  ///
+  /// In pt, this message translates to:
+  /// **'Estação *'**
+  String get plan333StationLabel;
+
+  /// No description provided for @plan333StationHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'ex: Daytona'**
+  String get plan333StationHint;
+
+  /// No description provided for @plan333HopsLabel.
+  ///
+  /// In pt, this message translates to:
+  /// **'Hops:'**
+  String get plan333HopsLabel;
+
+  /// No description provided for @plan333DirectOption.
+  ///
+  /// In pt, this message translates to:
+  /// **'Direto'**
+  String get plan333DirectOption;
+
+  /// No description provided for @plan333LocationLabel.
+  ///
+  /// In pt, this message translates to:
+  /// **'Localização'**
+  String get plan333LocationLabel;
+
+  /// No description provided for @plan333LocationHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'ex: Tomar'**
+  String get plan333LocationHint;
+
+  /// No description provided for @plan333NotesLabel.
+  ///
+  /// In pt, this message translates to:
+  /// **'Notas (opcional)'**
+  String get plan333NotesLabel;
+
   /// No description provided for @plan333AbortAutoSend.
   ///
   /// In pt, this message translates to:

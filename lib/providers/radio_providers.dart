@@ -480,6 +480,39 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
             }
           }
           _ref.read(messagesProvider.notifier).addMessage(finalMessage);
+          // Auto-log incoming CQ Plano 333 messages on the #plano333 channel
+          // as stations heard.
+          if (!finalMessage.isOutgoing && finalMessage.channelIndex != null) {
+            final channels = _ref.read(channelsProvider);
+            final plan333Ch =
+                channels
+                    .where((c) => c.name.trim().toLowerCase() == '#plano333')
+                    .firstOrNull;
+            if (plan333Ch != null &&
+                finalMessage.channelIndex == plan333Ch.index) {
+              final cq = Plan333Service.tryParseCq(
+                finalMessage.text,
+                pathLen: finalMessage.pathLen,
+              );
+              if (cq != null) {
+                // Skip own CQ (echo from the radio).
+                final myStation =
+                    _ref.read(plan333ConfigProvider).stationName.trim();
+                if (myStation.isEmpty ||
+                    cq.stationName.toLowerCase() != myStation.toLowerCase()) {
+                  // Deduplicate — same station sends up to 3 CQs per event.
+                  final log = _ref.read(qslLogProvider);
+                  if (!log.any(
+                    (r) =>
+                        r.stationName.toLowerCase() ==
+                        cq.stationName.toLowerCase(),
+                  )) {
+                    _ref.read(qslLogProvider.notifier).add(cq);
+                  }
+                }
+              }
+            }
+          }
           if (!finalMessage.isOutgoing) {
             _ref.read(networkStatsProvider.notifier).incrementRx();
             final isMuted =
