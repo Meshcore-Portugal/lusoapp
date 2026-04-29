@@ -1672,6 +1672,48 @@ class AppLocalizationsEn extends AppLocalizations {
   String get radioSettingsResetValues => 'Reset to current values';
 
   @override
+  String get radioSettingsExperimentalTitle => 'Experimental';
+
+  @override
+  String get radioSettingsExperimentalWarning =>
+      'Use with caution — these settings affect on-air compatibility with other nodes.';
+
+  @override
+  String get radioSettingsPathHashMode => 'Path hash size';
+
+  @override
+  String get radioSettingsPathHashModeDesc =>
+      'Number of bytes used per hop in the routing path. Larger values lower the chance of two distant nodes colliding on the same hash. Requires firmware v10+. Default: 1 byte.';
+
+  @override
+  String get radioSettingsPathHashMode1 => '1 byte';
+
+  @override
+  String get radioSettingsPathHashMode2 => '2 bytes';
+
+  @override
+  String get radioSettingsPathHashMode3 => '3 bytes';
+
+  @override
+  String get radioSettingsPathHashModeCaptionDefault =>
+      '1 byte per hop — default, compatible with all firmwares.';
+
+  @override
+  String get radioSettingsPathHashModeCaptionExperimental =>
+      'Experimental — only nodes running firmware v10+ will route this packet correctly.';
+
+  @override
+  String get radioSettingsPathHashModeUnsupported =>
+      'Not supported by this firmware.';
+
+  @override
+  String get radioSettingsPathHashModeSaved => 'Path hash size updated';
+
+  @override
+  String get radioSettingsPathHashModeFailed =>
+      'Failed to update path hash size';
+
+  @override
   String get radioSettingsAutoAddTitle => 'Contact Settings';
 
   @override

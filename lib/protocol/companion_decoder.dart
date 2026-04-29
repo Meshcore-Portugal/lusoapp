@@ -467,6 +467,12 @@ class CompanionDecoder {
       final versionStr =
           _decodeRadioString(data.sublist(59, versionEnd)).trim();
 
+      // Optional trailing prefs bytes (firmware companion_radio):
+      //   data[79] = client_repeat (v9+)
+      //   data[80] = path_hash_mode (v10+)
+      final clientRepeat = data.length >= 80 ? data[79] : null;
+      final pathHashMode = data.length >= 81 ? data[80] : null;
+
       return DeviceInfoResponse(
         DeviceInfo(
           firmwareVersion: version,
@@ -478,6 +484,8 @@ class CompanionDecoder {
           firmwareBuild: fwBuild,
           model: model,
           versionString: versionStr,
+          clientRepeat: clientRepeat,
+          pathHashMode: pathHashMode,
         ),
       );
     }

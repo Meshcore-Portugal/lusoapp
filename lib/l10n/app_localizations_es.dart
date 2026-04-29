@@ -1687,6 +1687,48 @@ class AppLocalizationsEs extends AppLocalizations {
   String get radioSettingsResetValues => 'Restablecer valores actuales';
 
   @override
+  String get radioSettingsExperimentalTitle => 'Experimental';
+
+  @override
+  String get radioSettingsExperimentalWarning =>
+      'Usar com cuidado — estas opções afectam a compatibilidade no ar com outros nós.';
+
+  @override
+  String get radioSettingsPathHashMode => 'Tamanho do hash de caminho';
+
+  @override
+  String get radioSettingsPathHashModeDesc =>
+      'Número de bytes usados por salto no caminho de encaminhamento. Valores maiores reduzem a probabilidade de colisão entre nós distantes. Requer firmware v10+. Predefinição: 1 byte.';
+
+  @override
+  String get radioSettingsPathHashMode1 => '1 byte';
+
+  @override
+  String get radioSettingsPathHashMode2 => '2 bytes';
+
+  @override
+  String get radioSettingsPathHashMode3 => '3 bytes';
+
+  @override
+  String get radioSettingsPathHashModeCaptionDefault =>
+      '1 byte por salto — predefinição, compatível com todos os firmwares.';
+
+  @override
+  String get radioSettingsPathHashModeCaptionExperimental =>
+      'Experimental — só nós com firmware v10+ encaminham este pacote correctamente.';
+
+  @override
+  String get radioSettingsPathHashModeUnsupported =>
+      'Não suportado por este firmware.';
+
+  @override
+  String get radioSettingsPathHashModeSaved => 'Tamanho do hash actualizado';
+
+  @override
+  String get radioSettingsPathHashModeFailed =>
+      'Falha ao actualizar o tamanho do hash';
+
+  @override
   String get radioSettingsAutoAddTitle => 'Adición automática de contactos';
 
   @override

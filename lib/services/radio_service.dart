@@ -125,6 +125,13 @@ class RadioService {
     await _send(CompanionEncoder.setTxPower(powerDbm));
   }
 
+  /// Experimental: change the wire-level path hash size used by sendFlood.
+  /// [mode] is 0 (1-byte hops, default), 1 (2-byte), 2 (3-byte).
+  /// Firmware v10+ only — older firmwares answer with ERR.
+  Future<void> setPathHashMode(int mode) async {
+    await _send(CompanionEncoder.setPathHashMode(mode));
+  }
+
   Future<void> requestDeviceInfo({int appVersion = 3}) async {
     await _send(CompanionEncoder.deviceQuery(appVersion: appVersion));
   }

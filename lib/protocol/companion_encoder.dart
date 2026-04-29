@@ -128,6 +128,13 @@ class CompanionEncoder {
     return _frame(cmdSetTxPower, Uint8List.fromList([powerDbm & 0xFF]));
   }
 
+  /// SET_PATH_HASH_MODE — experimental path hash width.
+  /// [mode] is 0 (1-byte), 1 (2-byte) or 2 (3-byte). Firmware rejects >= 3.
+  /// Wire format: `[cmd, 0x00 reserved, mode]`.
+  static Uint8List setPathHashMode(int mode) {
+    return _frame(cmdSetPathHashMode, Uint8List.fromList([0x00, mode & 0xFF]));
+  }
+
   /// GET_BATT_AND_STORAGE — query battery and storage info.
   static Uint8List getBattAndStorage() => _frame(cmdGetBattAndStorage);
 

@@ -431,6 +431,8 @@ class DeviceInfo extends Equatable {
     this.firmwareBuild,
     this.model,
     this.versionString,
+    this.clientRepeat,
+    this.pathHashMode,
   });
 
   final int firmwareVersion;
@@ -444,6 +446,14 @@ class DeviceInfo extends Equatable {
   final String? firmwareBuild;
   final String? model;
   final String? versionString;
+
+  /// Radio's `client_repeat` byte (firmware v9+).
+  final int? clientRepeat;
+
+  /// Radio's `path_hash_mode` byte (firmware v10+).
+  /// 0 = 1-byte hop hashes (default), 1 = 2-byte, 2 = 3-byte.
+  /// Effective bytes on the wire = `pathHashMode + 1`.
+  final int? pathHashMode;
 
   double get batteryVolts => batteryMillivolts / 1000.0;
 

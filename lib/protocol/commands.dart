@@ -60,6 +60,11 @@ const int cmdGetStats = 0x38;
 const int cmdSetAutoAddConfig = 0x3A; // 58 — write autoadd bitmask + max-hops
 const int cmdGetAutoAddConfig = 0x3B; // 59 — read  autoadd bitmask + max-hops
 
+/// Experimental: set the wire-level path hash size used by sendFlood().
+/// Mode 0 = 1-byte hashes (default, all firmwares), 1 = 2-byte, 2 = 3-byte.
+/// Reported back in the device-info response at byte 80 (firmware v10+).
+const int cmdSetPathHashMode = 0x3D; // 61 — frame: [cmd, 0x00, mode]
+
 // ---------------------------------------------------------------------------
 // CMD_GET_STATS sub-types
 // ---------------------------------------------------------------------------

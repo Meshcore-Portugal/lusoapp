@@ -460,6 +460,10 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
               // ----- Advert auto-add settings -----
               const SizedBox(height: 24),
               const _AdvertAutoAddCard(),
+
+              // ----- Experimental settings -----
+              const SizedBox(height: 24),
+              const _ExperimentalCard(),
             ],
           ),
         ),
@@ -468,3 +472,177 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
   }
 }
 
+/// Experimental, firmware-specific settings. Currently exposes the
+/// `path_hash_mode` byte (firmware v10+, companion radio firmware) which
+/// switches the per-hop path hash size between 1, 2 or 3 bytes.
+class _ExperimentalCard extends ConsumerStatefulWidget {
+  const _ExperimentalCard();
+
+  @override
+  ConsumerState<_ExperimentalCard> createState() => _ExperimentalCardState();
+}
+
+class _ExperimentalCardState extends ConsumerState<_ExperimentalCard> {
+  bool _saving = false;
+
+  Future<void> _setPathHashMode(int mode) async {
+    final l10n = context.l10n;
+    final service = ref.read(radioServiceProvider);
+    if (service == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.commonRadioDisconnected)));
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await service.setPathHashMode(mode);
+      // Optimistically update the cached DeviceInfo so the chooser reflects
+      // the new value without waiting for a fresh DeviceQuery roundtrip.
+      final current = ref.read(deviceInfoProvider);
+      if (current != null) {
+        ref.read(deviceInfoProvider.notifier).state = DeviceInfo(
+          firmwareVersion: current.firmwareVersion,
+          deviceName: current.deviceName,
+          batteryMillivolts: current.batteryMillivolts,
+          storageUsed: current.storageUsed,
+          storageTotal: current.storageTotal,
+          maxContacts: current.maxContacts,
+          maxChannels: current.maxChannels,
+          blePin: current.blePin,
+          firmwareBuild: current.firmwareBuild,
+          model: current.model,
+          versionString: current.versionString,
+          clientRepeat: current.clientRepeat,
+          pathHashMode: mode,
+        );
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.radioSettingsPathHashModeSaved)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.radioSettingsPathHashModeFailed)),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final theme = Theme.of(context);
+    final deviceInfo = ref.watch(deviceInfoProvider);
+    // path_hash_mode is reported only by firmware v10+ companion radio.
+    final supported = deviceInfo?.pathHashMode != null;
+    final mode = deviceInfo?.pathHashMode ?? 0;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.science_outlined,
+                  size: 18,
+                  color: theme.colorScheme.tertiary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  l10n.radioSettingsExperimentalTitle,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.tertiary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.radioSettingsExperimentalWarning,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const Divider(height: 24),
+            Text(
+              l10n.radioSettingsPathHashMode,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              l10n.radioSettingsPathHashModeDesc,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (!supported)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  l10n.radioSettingsPathHashModeUnsupported,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              )
+            else ...[
+              SegmentedButton<int>(
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment(
+                    value: 0,
+                    label: Text(l10n.radioSettingsPathHashMode1),
+                  ),
+                  ButtonSegment(
+                    value: 1,
+                    label: Text(l10n.radioSettingsPathHashMode2),
+                  ),
+                  ButtonSegment(
+                    value: 2,
+                    label: Text(l10n.radioSettingsPathHashMode3),
+                  ),
+                ],
+                selected: {mode},
+                onSelectionChanged:
+                    _saving
+                        ? null
+                        : (sel) {
+                          if (sel.isNotEmpty && sel.first != mode) {
+                            _setPathHashMode(sel.first);
+                          }
+                        },
+              ),
+              const SizedBox(height: 6),
+              Text(
+                mode == 0
+                    ? l10n.radioSettingsPathHashModeCaptionDefault
+                    : l10n.radioSettingsPathHashModeCaptionExperimental,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color:
+                      mode == 0
+                          ? theme.colorScheme.onSurfaceVariant
+                          : theme.colorScheme.tertiary,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+            if (_saving) ...[
+              const SizedBox(height: 8),
+              const LinearProgressIndicator(),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}

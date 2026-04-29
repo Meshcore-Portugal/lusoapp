@@ -3250,6 +3250,78 @@ abstract class AppLocalizations {
   /// **'Repor valores actuais'**
   String get radioSettingsResetValues;
 
+  /// No description provided for @radioSettingsExperimentalTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Experimental'**
+  String get radioSettingsExperimentalTitle;
+
+  /// No description provided for @radioSettingsExperimentalWarning.
+  ///
+  /// In pt, this message translates to:
+  /// **'Usar com cuidado — estas opções afectam a compatibilidade no ar com outros nós.'**
+  String get radioSettingsExperimentalWarning;
+
+  /// No description provided for @radioSettingsPathHashMode.
+  ///
+  /// In pt, this message translates to:
+  /// **'Tamanho do hash de caminho'**
+  String get radioSettingsPathHashMode;
+
+  /// No description provided for @radioSettingsPathHashModeDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Número de bytes usados por salto no caminho de encaminhamento. Valores maiores reduzem a probabilidade de colisão entre nós distantes. Requer firmware v10+. Predefinição: 1 byte.'**
+  String get radioSettingsPathHashModeDesc;
+
+  /// No description provided for @radioSettingsPathHashMode1.
+  ///
+  /// In pt, this message translates to:
+  /// **'1 byte'**
+  String get radioSettingsPathHashMode1;
+
+  /// No description provided for @radioSettingsPathHashMode2.
+  ///
+  /// In pt, this message translates to:
+  /// **'2 bytes'**
+  String get radioSettingsPathHashMode2;
+
+  /// No description provided for @radioSettingsPathHashMode3.
+  ///
+  /// In pt, this message translates to:
+  /// **'3 bytes'**
+  String get radioSettingsPathHashMode3;
+
+  /// No description provided for @radioSettingsPathHashModeCaptionDefault.
+  ///
+  /// In pt, this message translates to:
+  /// **'1 byte por salto — predefinição, compatível com todos os firmwares.'**
+  String get radioSettingsPathHashModeCaptionDefault;
+
+  /// No description provided for @radioSettingsPathHashModeCaptionExperimental.
+  ///
+  /// In pt, this message translates to:
+  /// **'Experimental — só nós com firmware v10+ encaminham este pacote correctamente.'**
+  String get radioSettingsPathHashModeCaptionExperimental;
+
+  /// No description provided for @radioSettingsPathHashModeUnsupported.
+  ///
+  /// In pt, this message translates to:
+  /// **'Não suportado por este firmware.'**
+  String get radioSettingsPathHashModeUnsupported;
+
+  /// No description provided for @radioSettingsPathHashModeSaved.
+  ///
+  /// In pt, this message translates to:
+  /// **'Tamanho do hash actualizado'**
+  String get radioSettingsPathHashModeSaved;
+
+  /// No description provided for @radioSettingsPathHashModeFailed.
+  ///
+  /// In pt, this message translates to:
+  /// **'Falha ao actualizar o tamanho do hash'**
+  String get radioSettingsPathHashModeFailed;
+
   /// No description provided for @radioSettingsAutoAddTitle.
   ///
   /// In pt, this message translates to:
