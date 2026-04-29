@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import 'qr_scanner_screen.dart';
-
 /// App launcher grid — shown when the user taps the "Apps" bottom tab.
 ///
 /// Each tile navigates to a sub-route within the shell (so the bottom nav
-/// stays visible) except for the QR scanner, which is pushed as a modal.
+/// stays visible).
 class AppsScreen extends StatelessWidget {
   const AppsScreen({super.key});
 
@@ -59,14 +57,6 @@ class AppsScreen extends StatelessWidget {
       color: Color(0xFF22C55E),
       route: '/apps/noisefloor',
     ),
-    _AppEntry(
-      id: 'qr',
-      title: 'Leitor QR',
-      subtitle: 'Digitalizar código QR',
-      icon: Icons.qr_code_scanner,
-      color: Color(0xFF9C6FFF),
-      route: null, // modal — handled separately
-    ),
   ];
 
   @override
@@ -96,14 +86,7 @@ class AppsScreen extends StatelessWidget {
   }
 
   void _launch(BuildContext context, _AppEntry app) {
-    if (app.route != null) {
-      context.push(app.route!);
-    } else {
-      // QR scanner is a modal that returns the scanned value.
-      Navigator.of(context).push<String>(
-        MaterialPageRoute(builder: (_) => const QrScannerScreen()),
-      );
-    }
+    context.push(app.route);
   }
 }
 
@@ -127,8 +110,8 @@ class _AppEntry {
   final IconData icon;
   final Color color;
 
-  /// Shell route to navigate to, or null for a modal push.
-  final String? route;
+  /// Shell route to navigate to.
+  final String route;
 }
 
 // ---------------------------------------------------------------------------
