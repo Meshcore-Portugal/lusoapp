@@ -132,6 +132,12 @@
 - [x] Android home screen widget
   - [x] Shows radio name, connection state, battery %, contact/channel counts, last-updated timestamp
   - [x] Updated on every state change via `WidgetService`
+  - [x] Quick-action buttons: 📡 Send Advert · 💬 Chats · 🗺 Map · 🔌 Connect (via deep-link URIs handled by `HomeWidget.widgetClicked` stream)
+  - [x] 🆘 SOS button broadcasts the user-flagged emergency canned message on channel 0
+- [x] Canned messages library
+  - [x] Persisted via `cannedMessagesProvider` (SharedPreferences); 8 ham/mesh defaults seeded on first launch (SOS, QRT, QRX, 73, CQ, OK, QTH?, ETA)
+  - [x] Manage in Settings → Mensagens rápidas (add / edit / delete / reorder / reset, single emergency-flag enforced)
+  - [x] Quick-pick ⚡ icon in private + channel chat composers inserts text into the input
 - [x] Event Program screen (hidden)
   - [x] Hardcoded MeshCore PT summit schedule; route wired but tile disabled in Apps screen
 

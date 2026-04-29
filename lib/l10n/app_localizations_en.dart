@@ -63,6 +63,68 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonRename => 'Rename';
 
   @override
+  String get commonReset => 'Reset';
+
+  @override
+  String get cannedMessagesTitle => 'Canned messages';
+
+  @override
+  String get cannedMessagesSubtitle =>
+      'Library of pre-written replies to send with one tap (or from the widget\'s SOS button).';
+
+  @override
+  String get cannedMessagesAdd => 'Add message';
+
+  @override
+  String get cannedMessagesAddTitle => 'New canned message';
+
+  @override
+  String get cannedMessagesEditTitle => 'Edit canned message';
+
+  @override
+  String get cannedMessagesEmpty => 'No saved messages. Tap + to add one.';
+
+  @override
+  String get cannedMessagesReset => 'Reset to defaults';
+
+  @override
+  String get cannedMessagesResetTitle => 'Reset messages?';
+
+  @override
+  String get cannedMessagesResetConfirm =>
+      'You\'ll lose all changes and restore the original list.';
+
+  @override
+  String get cannedMessagesDeleteTitle => 'Delete message?';
+
+  @override
+  String cannedMessagesDeleteConfirm(Object label) {
+    return 'You will delete “$label”.';
+  }
+
+  @override
+  String get cannedMessagesLabelHint => 'Label (optional)';
+
+  @override
+  String get cannedMessagesTextHint => 'Message text';
+
+  @override
+  String get cannedMessagesEmergencyToggle => 'Emergency message';
+
+  @override
+  String get cannedMessagesEmergencyDesc =>
+      'Used by the widget\'s SOS button. Only one can be flagged.';
+
+  @override
+  String get cannedMessagesPickerTooltip => 'Canned messages';
+
+  @override
+  String get cannedMessagesPickerTitle => 'Insert canned message';
+
+  @override
+  String get cannedMessagesPickerSubtitle => 'Tap to put it into the composer.';
+
+  @override
   String get commonConfirm => 'Confirm';
 
   @override

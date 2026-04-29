@@ -208,6 +208,120 @@ abstract class AppLocalizations {
   /// **'Renomear'**
   String get commonRename;
 
+  /// No description provided for @commonReset.
+  ///
+  /// In pt, this message translates to:
+  /// **'Repor'**
+  String get commonReset;
+
+  /// No description provided for @cannedMessagesTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Mensagens rápidas'**
+  String get cannedMessagesTitle;
+
+  /// No description provided for @cannedMessagesSubtitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Biblioteca de respostas pré-gravadas para enviar com um toque (ou pelo botão SOS do widget).'**
+  String get cannedMessagesSubtitle;
+
+  /// No description provided for @cannedMessagesAdd.
+  ///
+  /// In pt, this message translates to:
+  /// **'Adicionar mensagem'**
+  String get cannedMessagesAdd;
+
+  /// No description provided for @cannedMessagesAddTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Nova mensagem rápida'**
+  String get cannedMessagesAddTitle;
+
+  /// No description provided for @cannedMessagesEditTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Editar mensagem rápida'**
+  String get cannedMessagesEditTitle;
+
+  /// No description provided for @cannedMessagesEmpty.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sem mensagens guardadas. Toca em + para adicionar.'**
+  String get cannedMessagesEmpty;
+
+  /// No description provided for @cannedMessagesReset.
+  ///
+  /// In pt, this message translates to:
+  /// **'Repor por defeito'**
+  String get cannedMessagesReset;
+
+  /// No description provided for @cannedMessagesResetTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Repor mensagens?'**
+  String get cannedMessagesResetTitle;
+
+  /// No description provided for @cannedMessagesResetConfirm.
+  ///
+  /// In pt, this message translates to:
+  /// **'Vais perder todas as alterações e voltar à lista original.'**
+  String get cannedMessagesResetConfirm;
+
+  /// No description provided for @cannedMessagesDeleteTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Apagar mensagem?'**
+  String get cannedMessagesDeleteTitle;
+
+  /// No description provided for @cannedMessagesDeleteConfirm.
+  ///
+  /// In pt, this message translates to:
+  /// **'Vais apagar “{label}”.'**
+  String cannedMessagesDeleteConfirm(Object label);
+
+  /// No description provided for @cannedMessagesLabelHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Rótulo (opcional)'**
+  String get cannedMessagesLabelHint;
+
+  /// No description provided for @cannedMessagesTextHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Texto da mensagem'**
+  String get cannedMessagesTextHint;
+
+  /// No description provided for @cannedMessagesEmergencyToggle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Mensagem de emergência'**
+  String get cannedMessagesEmergencyToggle;
+
+  /// No description provided for @cannedMessagesEmergencyDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'É a mensagem usada pelo botão SOS do widget. Só uma pode estar marcada.'**
+  String get cannedMessagesEmergencyDesc;
+
+  /// No description provided for @cannedMessagesPickerTooltip.
+  ///
+  /// In pt, this message translates to:
+  /// **'Mensagens rápidas'**
+  String get cannedMessagesPickerTooltip;
+
+  /// No description provided for @cannedMessagesPickerTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Inserir mensagem rápida'**
+  String get cannedMessagesPickerTitle;
+
+  /// No description provided for @cannedMessagesPickerSubtitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Toca para colocar no campo de texto.'**
+  String get cannedMessagesPickerSubtitle;
+
   /// No description provided for @commonConfirm.
   ///
   /// In pt, this message translates to:

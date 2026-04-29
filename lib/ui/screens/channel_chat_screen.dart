@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
+import '../widgets/canned_message_picker.dart';
 
 part 'parts/channel_message_bubble.dart';
 part 'parts/channel_paths_sheet.dart';
@@ -941,7 +942,6 @@ class _UnreadDivider extends StatelessWidget {
   }
 }
 
-
 class _ChatInputBar extends StatefulWidget {
   const _ChatInputBar({
     required this.controller,
@@ -1101,7 +1101,16 @@ class _ChatInputBarState extends State<_ChatInputBar> {
                           maxLength: 140,
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      CannedMessagePicker(
+                        onPick: (text) {
+                          widget.controller.text = text;
+                          widget
+                              .controller
+                              .selection = TextSelection.fromPosition(
+                            TextPosition(offset: text.length),
+                          );
+                        },
+                      ),
                       IconButton.filled(
                         onPressed: widget.onSend,
                         icon: const Icon(Icons.send),

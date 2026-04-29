@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
+import '../../providers/canned_messages_provider.dart';
 import '../../providers/radio_providers.dart';
 import '../../services/notification_service.dart';
 import '../../services/storage_service.dart';
@@ -15,6 +16,7 @@ import '../../transport/radio_transport.dart';
 import '../theme.dart';
 
 part 'parts/settings_appearance.dart';
+part 'parts/settings_canned_messages.dart';
 part 'parts/settings_notifications.dart';
 part 'parts/settings_keybackup.dart';
 
@@ -216,6 +218,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           // Appearance
           const _AppearanceCard(),
+          const SizedBox(height: 16),
+
+          // Canned messages
+          const _CannedMessagesCard(),
           const SizedBox(height: 16),
 
           // About

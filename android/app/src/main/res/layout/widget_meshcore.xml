@@ -5,11 +5,11 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_background"
-    android:padding="12dp"
-    android:gravity="center_vertical">
+    android:padding="10dp">
 
-    <!-- Row 1: Radio name + connection status -->
+    <!-- Row 1: Radio name + connection status (tap = open app) -->
     <LinearLayout
+        android:id="@+id/widget_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -22,7 +22,7 @@
             android:layout_weight="1"
             android:text="—"
             android:textColor="#FFFFFFFF"
-            android:textSize="16sp"
+            android:textSize="15sp"
             android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end" />
@@ -33,17 +33,17 @@
             android:layout_height="wrap_content"
             android:text="● OFFLINE"
             android:textColor="#FFFF5252"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:textStyle="bold" />
 
     </LinearLayout>
 
-    <!-- Divider (bare View is not in RemoteViews whitelist; use LinearLayout) -->
+    <!-- Divider -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:layout_marginTop="6dp"
-        android:layout_marginBottom="6dp"
+        android:layout_marginTop="5dp"
+        android:layout_marginBottom="5dp"
         android:background="#2200E676"
         android:orientation="horizontal" />
 
@@ -61,7 +61,7 @@
             android:layout_weight="1"
             android:text="Bat: 0%"
             android:textColor="#FFAAAAAA"
-            android:textSize="12sp" />
+            android:textSize="11sp" />
 
         <TextView
             android:id="@+id/widget_updated"
@@ -69,7 +69,7 @@
             android:layout_height="wrap_content"
             android:text="--:--"
             android:textColor="#FF888888"
-            android:textSize="11sp" />
+            android:textSize="10sp" />
 
     </LinearLayout>
 
@@ -79,24 +79,122 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginTop="4dp">
+        android:layout_marginTop="2dp">
 
         <TextView
             android:id="@+id/widget_contacts"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="0 contacts"
+            android:text="0 contactos"
             android:textColor="#FF00E676"
-            android:textSize="12sp" />
+            android:textSize="11sp" />
 
         <TextView
             android:id="@+id/widget_channels"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="0 ch"
+            android:text="0 canais"
             android:textColor="#FF00E676"
-            android:textSize="12sp" />
+            android:textSize="11sp" />
+
+    </LinearLayout>
+
+    <!-- Spacer pushes the button row to the bottom on tall widgets;
+         small min-height keeps the layout tight when the user resizes down -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:minHeight="6dp"
+        android:orientation="horizontal" />
+
+    <!-- SOS row — broadcasts the configured emergency canned message to ch 0 -->
+    <TextView
+        android:id="@+id/widget_btn_sos"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/widget_button_sos_bg"
+        android:gravity="center"
+        android:paddingTop="9dp"
+        android:paddingBottom="9dp"
+        android:text="🆘  SOS — Emergência"
+        android:textColor="#FFFF8888"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <!-- Action button row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="6dp"
+        android:gravity="center">
+
+        <!-- Send Advert (highlighted in orange) -->
+        <TextView
+            android:id="@+id/widget_btn_advert"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/widget_button_advert_bg"
+            android:gravity="center"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:text="📡  Anúncio"
+            android:textColor="#FFFFCC88"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <!-- Open Chats -->
+        <TextView
+            android:id="@+id/widget_btn_chats"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/widget_button_bg"
+            android:gravity="center"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:text="💬  Chats"
+            android:textColor="#FFFFFFFF"
+            android:textSize="11sp" />
+
+        <!-- Open Map -->
+        <TextView
+            android:id="@+id/widget_btn_map"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/widget_button_bg"
+            android:gravity="center"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:text="🗺  Mapa"
+            android:textColor="#FFFFFFFF"
+            android:textSize="11sp" />
+
+        <!-- Connect / Devices — colour + label change based on connection state -->
+        <TextView
+            android:id="@+id/widget_btn_connect"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/widget_button_connect_off_bg"
+            android:gravity="center"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:text="🔌  Ligar"
+            android:textColor="#FFFF8888"
+            android:textSize="11sp"
+            android:textStyle="bold" />
 
     </LinearLayout>
 

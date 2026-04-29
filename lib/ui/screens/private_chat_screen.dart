@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
+import '../widgets/canned_message_picker.dart';
 import '../widgets/path_sheet.dart';
 
 part 'parts/private_message_bubble.dart';
@@ -680,7 +681,6 @@ Widget _buildMentionText(
   return Text.rich(TextSpan(children: spans));
 }
 
-
 class _ChatInputBar extends StatelessWidget {
   const _ChatInputBar({
     required this.controller,
@@ -740,7 +740,14 @@ class _ChatInputBar extends StatelessWidget {
                     maxLength: 140,
                   ),
                 ),
-                const SizedBox(width: 8),
+                CannedMessagePicker(
+                  onPick: (text) {
+                    controller.text = text;
+                    controller.selection = TextSelection.fromPosition(
+                      TextPosition(offset: text.length),
+                    );
+                  },
+                ),
                 IconButton.filled(
                   onPressed: onSend,
                   icon: const Icon(Icons.send),

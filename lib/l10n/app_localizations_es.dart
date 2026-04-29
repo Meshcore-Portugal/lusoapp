@@ -63,6 +63,70 @@ class AppLocalizationsEs extends AppLocalizations {
   String get commonRename => 'Renombrar';
 
   @override
+  String get commonReset => 'Restablecer';
+
+  @override
+  String get cannedMessagesTitle => 'Mensajes rápidos';
+
+  @override
+  String get cannedMessagesSubtitle =>
+      'Biblioteca de respuestas predefinidas para enviar con un toque (o desde el botón SOS del widget).';
+
+  @override
+  String get cannedMessagesAdd => 'Añadir mensaje';
+
+  @override
+  String get cannedMessagesAddTitle => 'Nuevo mensaje rápido';
+
+  @override
+  String get cannedMessagesEditTitle => 'Editar mensaje rápido';
+
+  @override
+  String get cannedMessagesEmpty =>
+      'Sin mensajes guardados. Toca + para añadir.';
+
+  @override
+  String get cannedMessagesReset => 'Restablecer por defecto';
+
+  @override
+  String get cannedMessagesResetTitle => '¿Restablecer mensajes?';
+
+  @override
+  String get cannedMessagesResetConfirm =>
+      'Perderás todos los cambios y volverás a la lista original.';
+
+  @override
+  String get cannedMessagesDeleteTitle => '¿Borrar mensaje?';
+
+  @override
+  String cannedMessagesDeleteConfirm(Object label) {
+    return 'Vas a borrar “$label”.';
+  }
+
+  @override
+  String get cannedMessagesLabelHint => 'Etiqueta (opcional)';
+
+  @override
+  String get cannedMessagesTextHint => 'Texto del mensaje';
+
+  @override
+  String get cannedMessagesEmergencyToggle => 'Mensaje de emergencia';
+
+  @override
+  String get cannedMessagesEmergencyDesc =>
+      'Usado por el botón SOS del widget. Solo uno puede estar marcado.';
+
+  @override
+  String get cannedMessagesPickerTooltip => 'Mensajes rápidos';
+
+  @override
+  String get cannedMessagesPickerTitle => 'Insertar mensaje rápido';
+
+  @override
+  String get cannedMessagesPickerSubtitle =>
+      'Toca para ponerlo en el campo de texto.';
+
+  @override
   String get commonConfirm => 'Confirmar';
 
   @override

@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 
 import 'providers/radio_providers.dart';
+import 'providers/canned_messages_provider.dart';
+import 'protocol/protocol.dart' show ChatMessage;
+import 'transport/radio_transport.dart' show TransportState;
 import 'services/notification_service.dart';
 import 'services/plan333_service.dart';
 import 'services/storage_service.dart';
@@ -113,6 +116,7 @@ class _McAppPtState extends ConsumerState<McAppPt> {
       await ref.read(plan333EnabledProvider.notifier).loadFromStorage();
       await ref.read(plan333ConfigProvider.notifier).loadFromStorage();
       await ref.read(qslLogProvider.notifier).loadFromStorage();
+      await ref.read(cannedMessagesProvider.notifier).loadFromStorage();
       // Eagerly initialize the auto-send notifier (starts background timer).
       ref.read(plan333AutoSendProvider);
     }
@@ -130,6 +134,102 @@ class _McAppPtState extends ConsumerState<McAppPt> {
         contactCount: contacts.length,
         channelCount: channels.where((c) => !c.isEmpty).length,
       );
+    }
+
+    // Wire home-screen widget button taps → in-app actions.
+    WidgetService.onAction = _handleWidgetAction;
+    await WidgetService.registerClickHandlers();
+  }
+
+  void _handleWidgetAction(WidgetAction action) {
+    if (!mounted) return;
+    final router = ref.read(routerProvider);
+    switch (action) {
+      case WidgetAction.open:
+        // Just bring the app to the foreground — no navigation change.
+        break;
+      case WidgetAction.openChats:
+        router.go('/channels');
+      case WidgetAction.openMap:
+        router.go('/map');
+      case WidgetAction.openConnect:
+        router.go('/connect');
+      case WidgetAction.sendAdvert:
+        final svc = ref.read(radioServiceProvider);
+        final connected =
+            ref.read(connectionProvider) == TransportState.connected;
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        if (svc != null && connected) {
+          svc.sendAdvert(flood: false);
+          messenger?.showSnackBar(
+            const SnackBar(
+              content: Text('📡 Anúncio enviado'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          messenger?.showSnackBar(
+            const SnackBar(
+              content: Text('Rádio desligado — liga primeiro'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+          router.go('/connect');
+        }
+      case WidgetAction.sendEmergency:
+        final svc = ref.read(radioServiceProvider);
+        final connected =
+            ref.read(connectionProvider) == TransportState.connected;
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        final emergency = ref.read(cannedMessagesProvider.notifier).emergency;
+        if (emergency == null) {
+          messenger?.showSnackBar(
+            const SnackBar(
+              content: Text(
+                '🆘 Sem mensagem de emergência configurada — abre Definições',
+              ),
+              duration: Duration(seconds: 3),
+            ),
+          );
+          router.go('/settings');
+          break;
+        }
+        if (svc == null || !connected) {
+          messenger?.showSnackBar(
+            const SnackBar(
+              content: Text('Rádio desligado — liga para enviar SOS'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+          router.go('/connect');
+          break;
+        }
+        final ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        ref
+            .read(messagesProvider.notifier)
+            .addOutgoing(
+              ChatMessage(
+                text: emergency.text,
+                timestamp: ts,
+                isOutgoing: true,
+                channelIndex: 0,
+              ),
+            );
+        svc.sendChannelMessage(0, emergency.text, timestamp: ts);
+        messenger?.showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFD32F2F),
+            content: Text(
+              '🆘 Emergência enviada: ${emergency.text}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        router.go('/channels');
     }
   }
 
