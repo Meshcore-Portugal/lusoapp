@@ -717,5 +717,37 @@
         "type": "int"
       }
     }
-  }
+  },
+  "repeaterTitle": "Gerir Repetidor",
+  "repeaterConfig": "Configuração Remota",
+  "repeaterApply": "Aplicar",
+  "repeaterNodeName": "Nome do nó",
+  "repeaterTxPower": "Potência TX",
+  "repeaterForwarding": "Repetição de pacotes",
+  "repeaterForwardingDesc": "Activa ou desactiva o reencaminhamento de pacotes",
+  "repeaterAdvertInterval": "Intervalo anúncio local",
+  "repeaterAdvertZeroHop": "Anúncio Auto (Zero Hop)",
+  "repeaterAdvertFlood": "Anúncio Auto (Flood)",
+  "repeaterIntervalMinutes": "Intervalo (minutos)",
+  "repeaterIntervalHours": "Intervalo (horas)",
+  "repeaterMinimalTrafficHint": "Para usar tráfego mínimo na rede, use os ícones de refrescar para pedir apenas a informação que precisa.",
+  "repeaterValueNotLoaded": "—",
+  "repeaterFloodMax": "Flood máximo (saltos)",
+  "repeaterClearStats": "Limpar Estatísticas",
+  "repeaterClearStatsDesc": "Reinicia contadores de pacotes e erros",
+  "repeaterNoStats": "Autentique-se e prima \"Actualizar\" para obter as estatísticas.",
+  "repeaterFetchStats": "Actualizar",
+  "repeaterAuthenticated": "Autenticado",
+  "repeaterTabStatus": "Estado",
+  "repeaterTabCommandLine": "Linha de comandos",
+  "repeaterTabSettings": "Definições",
+  "repeaterCmdHint": "Enviar um comando...",
+  "repeaterCmdEmpty": "Sem comandos enviados. Use o campo abaixo para enviar comandos CLI directamente.",
+  "repeaterCmdClear": "Limpar histórico",
+  "repeaterMenuHelp": "Ajuda de Comandos",
+  "repeaterMenuClearHistory": "Apagar Histórico de Comandos",
+  "repeaterHelpTitle": "Ajuda",
+  "repeaterHelpSubtitle": "Comandos do Repetidor",
+  "repeaterHelpFirmwareNote": "Alguns comandos requerem firmware recente.",
+  "repeaterHelpSearchHint": "Pesquisar"
 }

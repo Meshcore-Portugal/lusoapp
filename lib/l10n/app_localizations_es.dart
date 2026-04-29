@@ -1945,4 +1945,106 @@ class AppLocalizationsEs extends AppLocalizations {
   String topologyWeeksAgo(int w) {
     return 'hace $w sem.';
   }
+
+  @override
+  String get repeaterTitle => 'Gestionar Repetidor';
+
+  @override
+  String get repeaterConfig => 'Configuración Remota';
+
+  @override
+  String get repeaterApply => 'Aplicar';
+
+  @override
+  String get repeaterNodeName => 'Nombre del nodo';
+
+  @override
+  String get repeaterTxPower => 'Potencia TX';
+
+  @override
+  String get repeaterForwarding => 'Reenvío de paquetes';
+
+  @override
+  String get repeaterForwardingDesc =>
+      'Activar o desactivar el reenvío de paquetes';
+
+  @override
+  String get repeaterAdvertInterval => 'Intervalo anuncio local';
+
+  @override
+  String get repeaterAdvertZeroHop => 'Anuncio Auto (Zero Hop)';
+
+  @override
+  String get repeaterAdvertFlood => 'Anuncio Auto (Flood)';
+
+  @override
+  String get repeaterIntervalMinutes => 'Intervalo (minutos)';
+
+  @override
+  String get repeaterIntervalHours => 'Intervalo (horas)';
+
+  @override
+  String get repeaterMinimalTrafficHint =>
+      'Para usar tráfico mínimo de malla, utilice los iconos de actualizar para solicitar solo la información que necesita.';
+
+  @override
+  String get repeaterValueNotLoaded => '—';
+
+  @override
+  String get repeaterFloodMax => 'Flood máximo (saltos)';
+
+  @override
+  String get repeaterClearStats => 'Limpiar Estadísticas';
+
+  @override
+  String get repeaterClearStatsDesc =>
+      'Reinicia contadores de paquetes y errores';
+
+  @override
+  String get repeaterNoStats =>
+      'Autentícate y pulsa \"Actualizar\" para obtener las estadísticas.';
+
+  @override
+  String get repeaterFetchStats => 'Actualizar';
+
+  @override
+  String get repeaterAuthenticated => 'Autenticado';
+
+  @override
+  String get repeaterTabStatus => 'Estado';
+
+  @override
+  String get repeaterTabCommandLine => 'Línea de comandos';
+
+  @override
+  String get repeaterTabSettings => 'Ajustes';
+
+  @override
+  String get repeaterCmdHint => 'Enviar un comando...';
+
+  @override
+  String get repeaterCmdEmpty =>
+      'Sin comandos enviados. Use el campo de abajo para enviar comandos CLI directamente.';
+
+  @override
+  String get repeaterCmdClear => 'Limpiar historial';
+
+  @override
+  String get repeaterMenuHelp => 'Ayuda de Comandos';
+
+  @override
+  String get repeaterMenuClearHistory => 'Borrar Historial de Comandos';
+
+  @override
+  String get repeaterHelpTitle => 'Ayuda';
+
+  @override
+  String get repeaterHelpSubtitle => 'Comandos del Repetidor';
+
+  @override
+  String get repeaterHelpFirmwareNote =>
+      'Algunos comandos requieren firmware reciente.';
+
+  @override
+  String get repeaterHelpSearchHint => 'Buscar';
 }

@@ -881,14 +881,6 @@ class _ContactTile extends ConsumerWidget {
     WidgetsBinding.instance.addPostFrameCallback((_) => ctrl.dispose());
   }
 
-  void _showAdminSheet(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _RepeaterAdminSheet(contact: contact),
-    );
-  }
-
   void _showPathSheet(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
@@ -1111,11 +1103,11 @@ class _ContactTile extends ConsumerWidget {
                   ),
                 if (contact.isRepeater)
                   ListTile(
-                    leading: const Icon(Icons.admin_panel_settings),
+                    leading: const Icon(Icons.cell_tower),
                     title: Text(context.l10n.contactsRemoteAdmin),
                     onTap: () {
                       Navigator.pop(ctx);
-                      _showAdminSheet(context, ref);
+                      context.push('/repeater/$keyHex');
                     },
                   ),
                 // Path management — available for all node types

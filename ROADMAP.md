@@ -172,9 +172,9 @@
 - [x] Mesh topology viewer
   - [x] Visual network graph (interactive pan/zoom; concentric rings by hop distance; SNR-coded edges from trace history; tap-to-contact sheet)
   - [x] Node discovery timeline (contacts sorted by last-heard timestamp)
-- [ ] Repeater management
-  - [ ] View repeater status
-  - [ ] Configure repeater settings (if admin)
+- [x] Repeater management
+  - [x] View repeater status
+  - [x] Configure repeater settings (if admin)
 - [ ] Channel management
   - [x] Create/edit channels on radio (FAB + bottom sheet, Phase 2)
   - [ ] Channel encryption key rotation UI

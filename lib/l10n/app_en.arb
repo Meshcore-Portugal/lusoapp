@@ -668,5 +668,37 @@
         "type": "int"
       }
     }
-  }
+  },
+  "repeaterTitle": "Manage Repeater",
+  "repeaterConfig": "Remote Configuration",
+  "repeaterApply": "Apply",
+  "repeaterNodeName": "Node name",
+  "repeaterTxPower": "TX Power",
+  "repeaterForwarding": "Packet forwarding",
+  "repeaterForwardingDesc": "Enable or disable packet forwarding",
+  "repeaterAdvertInterval": "Local advert interval",
+  "repeaterAdvertZeroHop": "Auto Advert (Zero Hop)",
+  "repeaterAdvertFlood": "Auto Advert (Flood)",
+  "repeaterIntervalMinutes": "Interval (minutes)",
+  "repeaterIntervalHours": "Interval (hours)",
+  "repeaterMinimalTrafficHint": "To use minimal mesh traffic, please use the refresh icons to request the info you need.",
+  "repeaterValueNotLoaded": "—",
+  "repeaterFloodMax": "Max flood hops",
+  "repeaterClearStats": "Clear Statistics",
+  "repeaterClearStatsDesc": "Resets packet and error counters",
+  "repeaterNoStats": "Authenticate and press \"Refresh\" to fetch repeater statistics.",
+  "repeaterFetchStats": "Refresh",
+  "repeaterAuthenticated": "Authenticated",
+  "repeaterTabStatus": "Status",
+  "repeaterTabCommandLine": "Command Line",
+  "repeaterTabSettings": "Settings",
+  "repeaterCmdHint": "Send a command...",
+  "repeaterCmdEmpty": "No commands sent yet. Use the input below to send raw CLI commands.",
+  "repeaterCmdClear": "Clear history",
+  "repeaterMenuHelp": "Command Help",
+  "repeaterMenuClearHistory": "Delete Command History",
+  "repeaterHelpTitle": "Help",
+  "repeaterHelpSubtitle": "Repeater Commands",
+  "repeaterHelpFirmwareNote": "Some commands require the latest firmware.",
+  "repeaterHelpSearchHint": "Search"
 }

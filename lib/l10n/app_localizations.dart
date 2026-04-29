@@ -3777,6 +3777,198 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'há {w} sem.'**
   String topologyWeeksAgo(int w);
+
+  /// No description provided for @repeaterTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Gerir Repetidor'**
+  String get repeaterTitle;
+
+  /// No description provided for @repeaterConfig.
+  ///
+  /// In pt, this message translates to:
+  /// **'Configuração Remota'**
+  String get repeaterConfig;
+
+  /// No description provided for @repeaterApply.
+  ///
+  /// In pt, this message translates to:
+  /// **'Aplicar'**
+  String get repeaterApply;
+
+  /// No description provided for @repeaterNodeName.
+  ///
+  /// In pt, this message translates to:
+  /// **'Nome do nó'**
+  String get repeaterNodeName;
+
+  /// No description provided for @repeaterTxPower.
+  ///
+  /// In pt, this message translates to:
+  /// **'Potência TX'**
+  String get repeaterTxPower;
+
+  /// No description provided for @repeaterForwarding.
+  ///
+  /// In pt, this message translates to:
+  /// **'Repetição de pacotes'**
+  String get repeaterForwarding;
+
+  /// No description provided for @repeaterForwardingDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Activa ou desactiva o reencaminhamento de pacotes'**
+  String get repeaterForwardingDesc;
+
+  /// No description provided for @repeaterAdvertInterval.
+  ///
+  /// In pt, this message translates to:
+  /// **'Intervalo anúncio local'**
+  String get repeaterAdvertInterval;
+
+  /// No description provided for @repeaterAdvertZeroHop.
+  ///
+  /// In pt, this message translates to:
+  /// **'Anúncio Auto (Zero Hop)'**
+  String get repeaterAdvertZeroHop;
+
+  /// No description provided for @repeaterAdvertFlood.
+  ///
+  /// In pt, this message translates to:
+  /// **'Anúncio Auto (Flood)'**
+  String get repeaterAdvertFlood;
+
+  /// No description provided for @repeaterIntervalMinutes.
+  ///
+  /// In pt, this message translates to:
+  /// **'Intervalo (minutos)'**
+  String get repeaterIntervalMinutes;
+
+  /// No description provided for @repeaterIntervalHours.
+  ///
+  /// In pt, this message translates to:
+  /// **'Intervalo (horas)'**
+  String get repeaterIntervalHours;
+
+  /// No description provided for @repeaterMinimalTrafficHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Para usar tráfego mínimo na rede, use os ícones de refrescar para pedir apenas a informação que precisa.'**
+  String get repeaterMinimalTrafficHint;
+
+  /// No description provided for @repeaterValueNotLoaded.
+  ///
+  /// In pt, this message translates to:
+  /// **'—'**
+  String get repeaterValueNotLoaded;
+
+  /// No description provided for @repeaterFloodMax.
+  ///
+  /// In pt, this message translates to:
+  /// **'Flood máximo (saltos)'**
+  String get repeaterFloodMax;
+
+  /// No description provided for @repeaterClearStats.
+  ///
+  /// In pt, this message translates to:
+  /// **'Limpar Estatísticas'**
+  String get repeaterClearStats;
+
+  /// No description provided for @repeaterClearStatsDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Reinicia contadores de pacotes e erros'**
+  String get repeaterClearStatsDesc;
+
+  /// No description provided for @repeaterNoStats.
+  ///
+  /// In pt, this message translates to:
+  /// **'Autentique-se e prima \"Actualizar\" para obter as estatísticas.'**
+  String get repeaterNoStats;
+
+  /// No description provided for @repeaterFetchStats.
+  ///
+  /// In pt, this message translates to:
+  /// **'Actualizar'**
+  String get repeaterFetchStats;
+
+  /// No description provided for @repeaterAuthenticated.
+  ///
+  /// In pt, this message translates to:
+  /// **'Autenticado'**
+  String get repeaterAuthenticated;
+
+  /// No description provided for @repeaterTabStatus.
+  ///
+  /// In pt, this message translates to:
+  /// **'Estado'**
+  String get repeaterTabStatus;
+
+  /// No description provided for @repeaterTabCommandLine.
+  ///
+  /// In pt, this message translates to:
+  /// **'Linha de comandos'**
+  String get repeaterTabCommandLine;
+
+  /// No description provided for @repeaterTabSettings.
+  ///
+  /// In pt, this message translates to:
+  /// **'Definições'**
+  String get repeaterTabSettings;
+
+  /// No description provided for @repeaterCmdHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Enviar um comando...'**
+  String get repeaterCmdHint;
+
+  /// No description provided for @repeaterCmdEmpty.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sem comandos enviados. Use o campo abaixo para enviar comandos CLI directamente.'**
+  String get repeaterCmdEmpty;
+
+  /// No description provided for @repeaterCmdClear.
+  ///
+  /// In pt, this message translates to:
+  /// **'Limpar histórico'**
+  String get repeaterCmdClear;
+
+  /// No description provided for @repeaterMenuHelp.
+  ///
+  /// In pt, this message translates to:
+  /// **'Ajuda de Comandos'**
+  String get repeaterMenuHelp;
+
+  /// No description provided for @repeaterMenuClearHistory.
+  ///
+  /// In pt, this message translates to:
+  /// **'Apagar Histórico de Comandos'**
+  String get repeaterMenuClearHistory;
+
+  /// No description provided for @repeaterHelpTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Ajuda'**
+  String get repeaterHelpTitle;
+
+  /// No description provided for @repeaterHelpSubtitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Comandos do Repetidor'**
+  String get repeaterHelpSubtitle;
+
+  /// No description provided for @repeaterHelpFirmwareNote.
+  ///
+  /// In pt, this message translates to:
+  /// **'Alguns comandos requerem firmware recente.'**
+  String get repeaterHelpFirmwareNote;
+
+  /// No description provided for @repeaterHelpSearchHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Pesquisar'**
+  String get repeaterHelpSearchHint;
 }
 
 class _AppLocalizationsDelegate

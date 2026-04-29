@@ -19,6 +19,7 @@ import 'screens/discover_contacts_screen.dart';
 import 'screens/noise_floor_screen.dart';
 import 'screens/rx_log_screen.dart';
 import 'screens/topology_screen.dart';
+import 'screens/repeater_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -91,6 +92,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) {
               final keyHex = state.pathParameters['keyHex']!;
               return RoomScreen(contactKeyHex: keyHex);
+            },
+          ),
+          GoRoute(
+            path: '/repeater/:keyHex',
+            builder: (context, state) {
+              final keyHex = state.pathParameters['keyHex']!;
+              return RepeaterScreen(contactKeyHex: keyHex);
             },
           ),
           GoRoute(

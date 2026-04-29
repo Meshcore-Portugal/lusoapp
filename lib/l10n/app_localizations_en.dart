@@ -1933,4 +1933,104 @@ class AppLocalizationsEn extends AppLocalizations {
   String topologyWeeksAgo(int w) {
     return '${w}w ago';
   }
+
+  @override
+  String get repeaterTitle => 'Manage Repeater';
+
+  @override
+  String get repeaterConfig => 'Remote Configuration';
+
+  @override
+  String get repeaterApply => 'Apply';
+
+  @override
+  String get repeaterNodeName => 'Node name';
+
+  @override
+  String get repeaterTxPower => 'TX Power';
+
+  @override
+  String get repeaterForwarding => 'Packet forwarding';
+
+  @override
+  String get repeaterForwardingDesc => 'Enable or disable packet forwarding';
+
+  @override
+  String get repeaterAdvertInterval => 'Local advert interval';
+
+  @override
+  String get repeaterAdvertZeroHop => 'Auto Advert (Zero Hop)';
+
+  @override
+  String get repeaterAdvertFlood => 'Auto Advert (Flood)';
+
+  @override
+  String get repeaterIntervalMinutes => 'Interval (minutes)';
+
+  @override
+  String get repeaterIntervalHours => 'Interval (hours)';
+
+  @override
+  String get repeaterMinimalTrafficHint =>
+      'To use minimal mesh traffic, please use the refresh icons to request the info you need.';
+
+  @override
+  String get repeaterValueNotLoaded => '—';
+
+  @override
+  String get repeaterFloodMax => 'Max flood hops';
+
+  @override
+  String get repeaterClearStats => 'Clear Statistics';
+
+  @override
+  String get repeaterClearStatsDesc => 'Resets packet and error counters';
+
+  @override
+  String get repeaterNoStats =>
+      'Authenticate and press \"Refresh\" to fetch repeater statistics.';
+
+  @override
+  String get repeaterFetchStats => 'Refresh';
+
+  @override
+  String get repeaterAuthenticated => 'Authenticated';
+
+  @override
+  String get repeaterTabStatus => 'Status';
+
+  @override
+  String get repeaterTabCommandLine => 'Command Line';
+
+  @override
+  String get repeaterTabSettings => 'Settings';
+
+  @override
+  String get repeaterCmdHint => 'Send a command...';
+
+  @override
+  String get repeaterCmdEmpty =>
+      'No commands sent yet. Use the input below to send raw CLI commands.';
+
+  @override
+  String get repeaterCmdClear => 'Clear history';
+
+  @override
+  String get repeaterMenuHelp => 'Command Help';
+
+  @override
+  String get repeaterMenuClearHistory => 'Delete Command History';
+
+  @override
+  String get repeaterHelpTitle => 'Help';
+
+  @override
+  String get repeaterHelpSubtitle => 'Repeater Commands';
+
+  @override
+  String get repeaterHelpFirmwareNote =>
+      'Some commands require the latest firmware.';
+
+  @override
+  String get repeaterHelpSearchHint => 'Search';
 }
