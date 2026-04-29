@@ -1,6 +1,5 @@
 part of '../plan333_screen.dart';
 
-
 // ============================================================================
 // CQ log card (stations heard)
 // ============================================================================
@@ -32,6 +31,25 @@ class _QslCard extends ConsumerWidget {
                       fontWeight: FontWeight.bold,
                     ),
                     overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withAlpha(30),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.primary.withAlpha(120)),
+                  ),
+                  child: Text(
+                    '${log.length}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: AppTheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
