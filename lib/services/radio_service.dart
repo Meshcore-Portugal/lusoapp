@@ -79,9 +79,15 @@ class RadioService {
     Uint8List recipientPrefix,
     String text, {
     int attempt = 0,
+    int? timestamp,
   }) async {
     await _send(
-      CompanionEncoder.sendMessage(recipientPrefix, text, attempt: attempt),
+      CompanionEncoder.sendMessage(
+        recipientPrefix,
+        text,
+        attempt: attempt,
+        timestamp: timestamp,
+      ),
     );
   }
 

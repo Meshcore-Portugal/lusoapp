@@ -86,6 +86,28 @@ class _McAppPtState extends ConsumerState<McAppPt> {
 
     // Initialise the local notification service and load saved settings.
     await NotificationService.instance.init();
+
+    // Wire notification tap → in-app navigation (foreground / background).
+    NotificationService.onTap = (payload) {
+      final router = ref.read(routerProvider);
+      if (payload.startsWith('private:')) {
+        final keyHex = payload.substring('private:'.length);
+        router.go('/chat/$keyHex');
+      } else if (payload.startsWith('channel:')) {
+        final index = int.tryParse(payload.substring('channel:'.length));
+        if (index != null) router.go('/channels/$index');
+      }
+    };
+
+    // Handle cold-start: app was launched by tapping a notification.
+    final launchPayload =
+        await NotificationService.instance.getAppLaunchPayload();
+    if (launchPayload != null && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        NotificationService.onTap?.call(launchPayload);
+      });
+    }
+
     if (mounted) {
       await ref.read(notificationSettingsProvider.notifier).loadFromStorage();
       await ref.read(plan333EnabledProvider.notifier).loadFromStorage();

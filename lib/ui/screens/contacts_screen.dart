@@ -198,7 +198,10 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     final radioKeys = ref.watch(radioContactsSnapshotProvider);
     final transportState = ref.watch(connectionProvider);
     final contactsSynced = ref.watch(contactsSyncedProvider);
-    final messages = ref.watch(messagesProvider);
+    // Watch the stable per-contact last-message timestamp map instead of the
+    // full messages list — channel messages no longer cause this screen to
+    // rebuild and re-sort (#3 perf fix).
+    final lastMsgTs = ref.watch(contactLastMsgTsProvider);
     final autoAddSettings = ref.watch(advertAutoAddProvider);
 
     // Only show contacts actually stored on the radio. Advert-heard contacts
@@ -236,25 +239,10 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     }
 
     if (_query.isNotEmpty) {
-      filtered =
-          filtered
-              .where(
-                (c) =>
-                    c.displayName.toLowerCase().contains(_query) ||
-                    c.name.toLowerCase().contains(_query) ||
-                    c.shortId.toLowerCase().contains(_query),
-              )
-              .toList();
+      filtered = filtered.where((c) => c.searchKey.contains(_query)).toList();
     }
 
-    // Build last-message timestamp index keyed by 6-byte public-key prefix.
-    final lastMsgTs = <String, int>{};
-    for (final msg in messages) {
-      if (msg.senderKey != null && msg.senderKey!.length >= 6) {
-        final k = _hex6(msg.senderKey!);
-        if (msg.timestamp > (lastMsgTs[k] ?? 0)) lastMsgTs[k] = msg.timestamp;
-      }
-    }
+    // lastMsgTs is already computed by contactLastMsgTsProvider — no scan here.
 
     filtered = [...filtered];
     switch (sort) {

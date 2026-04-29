@@ -85,6 +85,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   StreamSubscription<void>? _connectionLostSub;
   StreamSubscription<CompanionResponse>? _responseSub;
   Timer? _batteryPollTimer;
+  Timer? _keepaliveTimer;
 
   /// Set to true in [disconnect] to abort any in-progress reconnect loop.
   bool _reconnectCancelled = false;
@@ -150,6 +151,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         _ref.read(lastDeviceProvider.notifier).state = recentList.first;
         _setupAutoReconnect(service, () => connectBle(deviceId, deviceName));
         _startBatteryPolling(service);
+        _startKeepalive(service);
         _pushWidget();
         return true;
       }
@@ -224,6 +226,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         _ref.read(recentDevicesProvider.notifier).state = recentList;
         _ref.read(lastDeviceProvider.notifier).state = recentList.first;
         _startBatteryPolling(service);
+        _startKeepalive(service);
         _pushWidget();
         return true;
       }
@@ -242,6 +245,8 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     _reconnectCancelled = true;
     _batteryPollTimer?.cancel();
     _batteryPollTimer = null;
+    _keepaliveTimer?.cancel();
+    _keepaliveTimer = null;
     await _connectionLostSub?.cancel();
     _connectionLostSub = null;
     await _responseSub?.cancel();
@@ -311,6 +316,21 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     });
   }
 
+  /// Send a lightweight ping every 15 s to keep the BLE link alive.
+  ///
+  /// Android (and some iOS) BLE stacks drop idle connections after ~20–30 s of
+  /// no ATT traffic. A periodic requestBattAndStorage() is cheap (1-byte write)
+  /// and its response is already handled by the normal response stream, so it
+  /// produces no extra UI rebuilds. Errors are silently swallowed — if the
+  /// radio is gone the connectionState listener will fire connectionLost.
+  void _startKeepalive(RadioService service) {
+    _keepaliveTimer?.cancel();
+    _keepaliveTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (state != TransportState.connected) return;
+      service.requestBattAndStorage().catchError((_) {});
+    });
+  }
+
   /// Subscribe to unexpected connection loss and attempt auto-reconnect with
   /// exponential back-off (2 s → 4 s → 8 s → 16 s → 30 s, then 30 s forever)
   /// until the connection is restored or the user calls [disconnect].
@@ -327,6 +347,8 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
 
       _batteryPollTimer?.cancel();
       _batteryPollTimer = null;
+      _keepaliveTimer?.cancel();
+      _keepaliveTimer = null;
       _ref.read(radioServiceProvider.notifier).state = null;
       _reconnectCancelled = false;
 
@@ -434,17 +456,18 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
             }
             final senderHex6 =
                 message.senderKey != null ? _hex6(message.senderKey!) : null;
-            final contacts = _ref.read(contactsProvider);
+            // O(1) lookup via the internal index instead of O(n) list scan.
             final contact =
                 senderHex6 != null
-                    ? contacts
-                        .where((c) => _hex6(c.publicKey) == senderHex6)
-                        .firstOrNull
+                    ? _ref
+                        .read(contactsProvider.notifier)
+                        .lookupByHex6(senderHex6)
                     : null;
             final senderName = contact?.name ?? senderHex6 ?? 'Desconhecido';
             NotificationService.instance.showPrivateMessage(
               senderName: senderName,
               text: message.text,
+              senderKeyHex: senderHex6,
               isAppInForeground: AppLifecycleObserver.isInForeground,
             );
           }
@@ -558,6 +581,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
                 channelName: channelName,
                 senderName: notifSender,
                 text: notifBody,
+                channelIndex: idx,
                 isAppInForeground: AppLifecycleObserver.isInForeground,
               );
             }
@@ -1063,48 +1087,89 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
   ContactsNotifier() : super([]);
   bool _loaded = false;
 
+  // Internal index: hex6 of first 6 bytes → (list index, Contact).
+  // Kept in sync on every state write so upsertFromAdvert / touchLastHeard
+  // are O(1) lookups instead of O(n) scans.
+  final Map<String, (int, Contact)> _byHex6 = {};
+
+  // Debounce timer for saves triggered by high-frequency events (adverts,
+  // incoming messages).  User-triggered mutations (setCustomName, remove, …)
+  // still save immediately.
+  Timer? _saveDebounce;
+
+  @override
+  void dispose() {
+    _saveDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _rebuildIndex(List<Contact> contacts) {
+    _byHex6.clear();
+    for (var i = 0; i < contacts.length; i++) {
+      final c = contacts[i];
+      if (c.publicKey.length >= 6) {
+        _byHex6[_hex6(c.publicKey)] = (i, c);
+      }
+    }
+  }
+
+  void _scheduleSave(List<Contact> contacts) {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(seconds: 2), () {
+      StorageService.instance.saveContacts(contacts);
+    });
+  }
+
+  /// O(1) contact lookup by 6-byte key prefix hex (used by notification handler).
+  Contact? lookupByHex6(String hex6) => _byHex6[hex6]?.$2;
+
   /// Load cached contacts from storage (called once on app start).
   Future<void> loadFromStorage() async {
     if (_loaded) return;
     _loaded = true;
     final stored = await StorageService.instance.loadContacts();
-    if (stored.isNotEmpty) state = stored;
+    if (stored.isNotEmpty) {
+      state = stored;
+      _rebuildIndex(stored);
+    }
   }
 
   void refresh(List<Contact> contacts) {
-    // Contacts from the radio — carry over local-only fields (customName,
-    // lastAdvertTimestamp) from the cache.  The radio doesn't track when we
-    // last heard an advert from a node, so without this merge a background
-    // sync (e.g. after auto-add or path update) would wipe lastAdvertTimestamp
-    // and the discover screen would lose the contact.
+    // Build O(1) lookup map from current cache so the merge is O(n) not O(n²).
+    final currentByKeyHex = <String, Contact>{
+      for (final c in state) _keyHex(c.publicKey): c,
+    };
+    // Also track which full-key hexes came from the radio for the
+    // preserve-local-only pass below.
+    final radioKeys = <String>{};
+
     final merged =
         contacts.map((incoming) {
-          final existing = state.firstWhere(
-            (c) => _keysEqual(c.publicKey, incoming.publicKey),
-            orElse: () => incoming,
-          );
-          // Identical instance — no local cache hit, nothing to preserve.
-          if (identical(existing, incoming)) return incoming;
-          var merged =
+          final kh = _keyHex(incoming.publicKey);
+          radioKeys.add(kh);
+          final existing = currentByKeyHex[kh];
+          // No local cache hit — nothing to preserve.
+          if (existing == null) return incoming;
+          var out =
               existing.customName != null
                   ? incoming.withCustomName(existing.customName)
                   : incoming;
           // Preserve the most recent advert timestamp seen locally.
-          if (existing.lastAdvertTimestamp > merged.lastAdvertTimestamp) {
-            merged = Contact(
-              publicKey: merged.publicKey,
-              type: merged.type,
-              flags: merged.flags,
-              pathLen: merged.pathLen,
-              name: merged.name,
+          if (existing.lastAdvertTimestamp > out.lastAdvertTimestamp) {
+            out = Contact(
+              publicKey: out.publicKey,
+              type: out.type,
+              flags: out.flags,
+              pathLen: out.pathLen,
+              name: out.name,
               lastAdvertTimestamp: existing.lastAdvertTimestamp,
-              latitude: merged.latitude,
-              longitude: merged.longitude,
-              lastModified: merged.lastModified,
-              customName: merged.customName,
+              latitude: out.latitude,
+              longitude: out.longitude,
+              lastModified: out.lastModified,
+              customName: out.customName,
             );
           }
-          return merged;
+          return out;
         }).toList();
 
     // Preserve locally-cached contacts that are not in the radio's list.
@@ -1112,12 +1177,13 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
     // yet formally stored in the radio's contacts table.  Dropping them on
     // every refresh causes the node to "disappear" after an app restart.
     for (final local in state) {
-      if (!merged.any((c) => _keysEqual(c.publicKey, local.publicKey))) {
+      if (!radioKeys.contains(_keyHex(local.publicKey))) {
         merged.add(local);
       }
     }
 
     state = merged;
+    _rebuildIndex(merged);
     StorageService.instance.saveContacts(merged);
   }
 
@@ -1132,6 +1198,7 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
             )
             .toList();
     state = next;
+    _rebuildIndex(next);
     StorageService.instance.saveContacts(next);
   }
 
@@ -1150,6 +1217,7 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
             )
             .toList();
     state = next;
+    _rebuildIndex(next);
     StorageService.instance.saveContacts(next);
   }
 
@@ -1157,27 +1225,21 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
     final next =
         state.where((c) => !_keysEqual(c.publicKey, publicKey)).toList();
     state = next;
+    _rebuildIndex(next);
     StorageService.instance.saveContacts(next);
   }
 
-  /// Called when an AdvertPush is received over the mesh.
-  /// Update lastModified on a contact matched by key prefix (6 bytes).
-  /// Called when any incoming private message (chat or CLI) is received.
+  /// Update lastModified on the contact matched by the 6-byte key prefix.
+  /// Called on every incoming private message and every 0x88 advert frame.
+  /// Uses the O(1) hex6 index so it never scans the list.
+  /// Save is debounced — high-frequency adverts coalesce into one write.
   void touchLastHeard(Uint8List senderKey) {
+    if (senderKey.length < 6) return;
+    final hex6 = _hex6(senderKey);
+    final entry = _byHex6[hex6];
+    if (entry == null) return;
+    final (idx, existing) = entry;
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final idx = state.indexWhere(
-      (c) =>
-          c.publicKey.length >= 6 &&
-          senderKey.length >= 6 &&
-          c.publicKey[0] == senderKey[0] &&
-          c.publicKey[1] == senderKey[1] &&
-          c.publicKey[2] == senderKey[2] &&
-          c.publicKey[3] == senderKey[3] &&
-          c.publicKey[4] == senderKey[4] &&
-          c.publicKey[5] == senderKey[5],
-    );
-    if (idx < 0) return;
-    final existing = state[idx];
     final next = [...state];
     next[idx] = Contact(
       publicKey: existing.publicKey,
@@ -1192,16 +1254,19 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
       customName: existing.customName,
     );
     state = next;
-    StorageService.instance.saveContacts(next);
+    _rebuildIndex(next);
+    _scheduleSave(next);
   }
 
   /// Adds a new contact if unseen, or refreshes the name/type/timestamp if already known.
+  /// Uses the O(1) hex6 index and debounces the storage write.
   void upsertFromAdvert(Uint8List publicKey, int type, String name) {
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final idx = state.indexWhere((c) => _keysEqual(c.publicKey, publicKey));
+    final hex6 = _hex6(publicKey);
+    final entry = _byHex6[hex6];
     List<Contact> next;
-    if (idx >= 0) {
-      final existing = state[idx];
+    if (entry != null) {
+      final (idx, existing) = entry;
       next = [...state];
       next[idx] = Contact(
         publicKey: existing.publicKey,
@@ -1237,7 +1302,8 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
       ];
     }
     state = next;
-    StorageService.instance.saveContacts(next);
+    _rebuildIndex(next);
+    _scheduleSave(next);
   }
 
   static bool _keysEqual(Uint8List a, Uint8List b) {
@@ -1310,6 +1376,37 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   /// slower earlier save never overwrites a faster later save.
   final Map<String, Future<void>> _saveLocks = {};
 
+  // Internal partition: partitionKey → messages for that conversation.
+  // Maintained alongside state so addMessage() dedup and forContact/forChannel
+  // queries are O(bucket_size) instead of O(all_messages).
+  Map<String, List<ChatMessage>> _partitioned = {};
+
+  /// Compute the partition key for a message.
+  ///   'c_<hex6>'  — private contact (outgoing or incoming)
+  ///   'ch_<idx>'  — channel
+  static String _partitionKey(ChatMessage m) {
+    if (m.channelIndex != null) return 'ch_${m.channelIndex}';
+    if (m.senderKey != null) return 'c_${_hex6(m.senderKey!)}';
+    return 'other';
+  }
+
+  void _rebuildPartitioned(List<ChatMessage> msgs) {
+    final Map<String, List<ChatMessage>> map = {};
+    for (final m in msgs) {
+      (map[_partitionKey(m)] ??= []).add(m);
+    }
+    _partitioned = map;
+  }
+
+  /// Bump the per-key version counter so scoped provider watchers rebuild.
+  void _bumpVersion(String key) {
+    final current = _ref.read(messageVersionsProvider);
+    _ref.read(messageVersionsProvider.notifier).state = {
+      ...current,
+      key: (current[key] ?? 0) + 1,
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // Send-failure timer: arm when a private outgoing message is added; cancel
   // when the radio confirms it was sent (SentResponse). If the timer fires
@@ -1348,6 +1445,9 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
 
   /// Reset [msg] to pending state and re-arm the send timer. Returns the
   /// updated message (with retryCount incremented) for the caller to resend.
+  /// A fresh timestamp is generated so the radio does not deduplicate the
+  /// retry, and the message is moved to the end of the list so the positional
+  /// SentResponse match always lands on it.
   ChatMessage? markMessageRetrying(ChatMessage msg) {
     for (var i = state.length - 1; i >= 0; i--) {
       final m = state[i];
@@ -1355,29 +1455,36 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
           m.isPrivate &&
           m.timestamp == msg.timestamp &&
           _senderKeyMatch(m, msg)) {
-        // Reconstruct with all fields reset for retry; sentRouteFlag cleared.
+        // New timestamp so the radio treats this as a fresh packet and the
+        // per-message failure timer is keyed correctly.
+        final newTs = DateTime.now().millisecondsSinceEpoch ~/ 1000;
         final updated = ChatMessage(
           text: m.text,
-          timestamp: m.timestamp,
+          timestamp: newTs,
           isOutgoing: true,
           senderKey: m.senderKey,
           channelIndex: null,
           senderName: m.senderName,
           confirmed: false,
-          snr: m.snr,
-          pathLen: m.pathLen,
-          heardCount: m.heardCount,
+          snr: null,
+          pathLen: null,
+          heardCount: 0,
           sentRouteFlag: null,
-          packetHashHex: m.packetHashHex,
+          packetHashHex: null,
           isCliResponse: m.isCliResponse,
           failed: false,
           retryCount: m.retryCount + 1,
         );
-        final newList = List<ChatMessage>.from(state);
-        newList[i] = updated;
+        // Remove from old position and append so it becomes the list tail.
+        // markLastOutgoingRoute searches from the end, so the SentResponse
+        // will land on this message rather than a newer failed one.
+        final newList = List<ChatMessage>.from(state)..removeAt(i);
+        newList.add(updated);
         state = newList;
+        _rebuildPartitioned(state);
+        _bumpVersion(_partitionKey(updated));
         _saveForMessage(updated);
-        _armSendTimer(updated.timestamp);
+        _armSendTimer(newTs);
         return updated;
       }
     }
@@ -1394,10 +1501,12 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   }
 
   void addMessage(ChatMessage message) {
-    // Dedup: skip if an identical message already exists in state.
+    // Dedup: check only the bucket for this conversation — O(bucket) not O(all).
     // Include senderKey prefix so messages from different contacts with
     // identical text+timestamp are never wrongly merged.
-    final dominated = state.any(
+    final key = _partitionKey(message);
+    final bucket = _partitioned[key] ?? const [];
+    final dominated = bucket.any(
       (m) =>
           m.timestamp == message.timestamp &&
           m.channelIndex == message.channelIndex &&
@@ -1407,11 +1516,16 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     );
     if (dominated) return;
     state = [...state, message];
+    _rebuildPartitioned(state);
+    _bumpVersion(key);
     _saveForMessage(message);
   }
 
   void addOutgoing(ChatMessage message) {
     state = [...state, message];
+    final key = _partitionKey(message);
+    _rebuildPartitioned(state);
+    _bumpVersion(key);
     _saveForMessage(message);
     _ref.read(networkStatsProvider.notifier).incrementTx();
     // Arm failure timer for private messages (no timer for channel messages —
@@ -1456,6 +1570,7 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
           final newList = List<ChatMessage>.from(state);
           newList[i] = updated;
           state = newList;
+          _bumpVersion(_partitionKey(updated));
           _saveForMessage(updated);
         }
         return true;
@@ -1478,6 +1593,8 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
       final newList = List<ChatMessage>.from(state);
       newList[i] = updated;
       state = newList;
+      _rebuildPartitioned(state);
+      _bumpVersion(_partitionKey(updated));
       _saveForMessage(updated);
       return true;
     }
@@ -1519,6 +1636,7 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
         final newList = List<ChatMessage>.from(state);
         newList[i] = updated;
         state = newList;
+        _bumpVersion(_partitionKey(updated));
         _saveForMessage(updated);
         return;
       }
@@ -1533,7 +1651,8 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
       final msg = state[i];
       if (msg.isOutgoing &&
           msg.sentRouteFlag == null &&
-          msg.channelIndex == null) {
+          msg.channelIndex == null &&
+          !msg.failed) {
         // Cancel the failure timer — radio confirmed it sent the packet.
         _sendTimers[msg.timestamp]?.cancel();
         _sendTimers.remove(msg.timestamp);
@@ -1541,6 +1660,7 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
         final newList = List<ChatMessage>.from(state);
         newList[i] = updated;
         state = newList;
+        _bumpVersion(_partitionKey(updated));
         _saveForMessage(updated);
         return;
       }
@@ -1584,6 +1704,7 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   /// from the previous radio are not visible before the new radio's history loads.
   void clearChannelMessages() {
     state = state.where((m) => m.channelIndex == null).toList();
+    _rebuildPartitioned(state);
     // Remove channel-keyed entries from the loaded-keys set so that the new
     // radio's channel messages can be loaded fresh.
     _loadedKeys.removeWhere((k) => k.startsWith('ch_'));
@@ -1598,6 +1719,12 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     final merged = [...incoming, ...state]
       ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
     state = merged;
+    _rebuildPartitioned(state);
+    // Bump versions for all keys touched by the newly merged messages.
+    final touchedKeys = incoming.map(_partitionKey).toSet();
+    for (final k in touchedKeys) {
+      _bumpVersion(k);
+    }
   }
 
   String _msgId(ChatMessage m) {
@@ -1624,15 +1751,9 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     } else {
       return;
     }
-    // Collect all messages for this key (snapshot current state).
-    final forKey =
-        state.where((m) {
-          if (msg.channelIndex != null) {
-            return m.channelIndex == msg.channelIndex;
-          }
-          if (m.senderKey == null) return false;
-          return _prefixMatch6(m.senderKey!, msg.senderKey!);
-        }).toList();
+    // Use the partition to get messages for this key — O(1) instead of O(n).
+    final partKey = _partitionKey(msg);
+    final forKey = List<ChatMessage>.from(_partitioned[partKey] ?? const []);
 
     // Serialise saves per key: chain each save behind the previous one so
     // a slower earlier future never overwrites a faster later snapshot.
@@ -1657,29 +1778,23 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   }
 
   /// Get messages for a specific contact (private).
+  /// O(1) via _partitioned map — no list scan needed.
   List<ChatMessage> forContact(Uint8List? contactKey) {
-    if (contactKey == null) return [];
-    return state.where((m) {
-      if (m.isChannel) return false;
-      if (m.senderKey == null) return false;
-      // Match on the first 6 bytes (prefix)
-      final prefix =
-          contactKey.length >= 6 ? contactKey.sublist(0, 6) : contactKey;
-      final msgPrefix =
-          m.senderKey!.length >= 6 ? m.senderKey!.sublist(0, 6) : m.senderKey!;
-      return _prefixMatch(prefix, msgPrefix);
-    }).toList();
+    if (contactKey == null) return const [];
+    return _partitioned['c_${_hex6(contactKey)}'] ?? const [];
   }
 
   /// Get messages for a specific channel.
+  /// O(1) via _partitioned map — no list scan needed.
   List<ChatMessage> forChannel(int channelIndex) {
-    return state.where((m) => m.channelIndex == channelIndex).toList();
+    return _partitioned['ch_$channelIndex'] ?? const [];
   }
 
   /// Delete a single message from state and re-persist its conversation.
   void deleteMessage(ChatMessage msg) {
     final targetId = _msgId(msg);
     state = state.where((m) => _msgId(m) != targetId).toList();
+    _rebuildPartitioned(state);
     if (msg.channelIndex != null) {
       final forKey =
           state.where((m) => m.channelIndex == msg.channelIndex).toList();
@@ -1704,6 +1819,7 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   /// Delete all messages for a channel from state and storage.
   Future<void> deleteChannelHistory(int channelIndex) async {
     state = state.where((m) => m.channelIndex != channelIndex).toList();
+    _rebuildPartitioned(state);
     await StorageService.instance.clearMessages(_channelKey(channelIndex));
   }
 
@@ -1720,6 +1836,58 @@ final messagesProvider =
     StateNotifierProvider<MessagesNotifier, List<ChatMessage>>((ref) {
       return MessagesNotifier(ref);
     });
+
+// Per-key message version counters: key → bump count.
+// Incremented each time any message for that key is added/updated.
+// Keys follow the same scheme as MessagesNotifier._partitionKey:
+//   'c_<hex6>'  for private contacts
+//   'ch_<idx>'  for channels
+// Screens watch this with .select((vs) => vs[key] ?? 0) to rebuild only
+// when their specific conversation changes, not on every message app-wide.
+final messageVersionsProvider = StateProvider<Map<String, int>>(
+  (_) => const {},
+);
+
+// Stable snapshot of (contact hex6 → last private message timestamp).
+// Uses custom equality so that a channel message arriving does NOT cause
+// contacts_screen to rebuild; only actual private-message ts changes do.
+class _MsgTsSnapshot {
+  const _MsgTsSnapshot(this.data);
+  final Map<String, int> data;
+
+  @override
+  bool operator ==(Object other) {
+    if (other is! _MsgTsSnapshot) return false;
+    if (data.length != other.data.length) return false;
+    for (final e in data.entries) {
+      if (other.data[e.key] != e.value) return false;
+    }
+    return true;
+  }
+
+  @override
+  int get hashCode =>
+      Object.hashAll(data.entries.map((e) => Object.hash(e.key, e.value)));
+}
+
+final contactLastMsgTsProvider = Provider<Map<String, int>>((ref) {
+  return ref
+      .watch(
+        messagesProvider.select((msgs) {
+          final result = <String, int>{};
+          for (final m in msgs) {
+            if (m.senderKey != null &&
+                m.senderKey!.length >= 6 &&
+                m.channelIndex == null) {
+              final k = _hex6(m.senderKey!);
+              if (m.timestamp > (result[k] ?? 0)) result[k] = m.timestamp;
+            }
+          }
+          return _MsgTsSnapshot(result);
+        }),
+      )
+      .data;
+});
 
 // ---------------------------------------------------------------------------
 // Unread message counts

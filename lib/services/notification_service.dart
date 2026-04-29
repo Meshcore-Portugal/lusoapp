@@ -37,6 +37,12 @@ class NotificationService {
   bool _initialized = false;
   int _nextId = 0;
 
+  /// Called when the user taps a notification while the app is running or
+  /// resumes from background.  Set this from main.dart after the router is
+  /// ready.  Receives the payload string, e.g. "private:<keyHex>" or
+  /// "channel:<index>".
+  static void Function(String payload)? onTap;
+
   /// Notification settings, loaded from storage and kept in sync by
   /// [NotificationSettingsNotifier].  Updated externally via [settings].
   NotificationSettings _settings = const NotificationSettings();
@@ -89,7 +95,15 @@ class NotificationService {
         return;
     }
 
-    await _plugin.initialize(initSettings);
+    await _plugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (details) {
+        final payload = details.payload;
+        if (payload != null && payload.isNotEmpty) {
+          NotificationService.onTap?.call(payload);
+        }
+      },
+    );
 
     // Create Android notification channels once.
     if (defaultTargetPlatform == TargetPlatform.android) {
@@ -182,11 +196,14 @@ class NotificationService {
   ///
   /// [senderName] — display name of the sender.
   /// [text] — message body (may be empty for non-text messages).
+  /// [senderKeyHex] — full hex public key of the sender; used as navigation
+  ///   payload so tapping the notification opens the correct chat.
   /// [isAppInForeground] — pass the current app lifecycle state to honour the
   ///   "only when background" setting.
   Future<void> showPrivateMessage({
     required String senderName,
     required String text,
+    String? senderKeyHex,
     bool isAppInForeground = false,
   }) async {
     if (!_shouldSend(
@@ -199,18 +216,21 @@ class NotificationService {
     await _show(
       title: senderName,
       body: text.isNotEmpty ? text : '(mensagem recebida)',
+      payload: senderKeyHex != null ? 'private:$senderKeyHex' : null,
     );
   }
 
   /// Show a notification for an incoming channel message.
   ///
   /// [channelName] — name of the channel (may be 'Canal N' if unnamed).
+  /// [channelIndex] — channel slot index; used as navigation payload.
   /// [senderName] — display name of the sender.
   /// [text] — message body.
   Future<void> showChannelMessage({
     required String channelName,
     required String senderName,
     required String text,
+    int? channelIndex,
     bool isAppInForeground = false,
   }) async {
     if (!_shouldSend(
@@ -223,6 +243,7 @@ class NotificationService {
     await _show(
       title: channelName,
       body: '$senderName: ${text.isNotEmpty ? text : "(mensagem)"}',
+      payload: channelIndex != null ? 'channel:$channelIndex' : null,
     );
   }
 
@@ -345,6 +366,16 @@ class NotificationService {
     );
   }
 
+  /// Returns the payload string from the notification that launched the app
+  /// (cold-start / killed-state tap), or null if the app was not launched via
+  /// a notification.  Call this once during startup, after [init].
+  Future<String?> getAppLaunchPayload() async {
+    if (!_initialized || kIsWeb) return null;
+    final details = await _plugin.getNotificationAppLaunchDetails();
+    if (details == null || !details.didNotificationLaunchApp) return null;
+    return details.notificationResponse?.payload;
+  }
+
   /// Cancel all Plan 3-3-3 scheduled notifications.
   Future<void> cancelPlan333Alerts() async {
     if (!_initialized || kIsWeb) return;
@@ -369,8 +400,12 @@ class NotificationService {
     return true;
   }
 
-  Future<void> _show({required String title, required String body}) async {
-    const androidDetails = AndroidNotificationDetails(
+  Future<void> _show({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    final androidDetails = AndroidNotificationDetails(
       _androidChannelId,
       _androidChannelName,
       channelDescription: _androidChannelDesc,
@@ -381,13 +416,13 @@ class NotificationService {
       presentAlert: true,
       presentSound: true,
     );
-    const details = NotificationDetails(
+    final details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
       macOS: iosDetails,
     );
 
-    await _plugin.show(_nextId++, title, body, details);
+    await _plugin.show(_nextId++, title, body, details, payload: payload);
   }
 }
 

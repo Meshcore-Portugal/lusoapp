@@ -3,6 +3,49 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
 
+/// Sanitize a string that may have been stored with lone UTF-16 surrogates
+/// (WTF-8 artefacts from the radio) or embedded null bytes.
+/// Flutter's TextPainter throws "not well-formed UTF-16" on lone surrogates;
+/// this function replaces them with U+FFFD and strips null bytes.
+String _san(String s) {
+  // Fast path: scan once — most strings are clean.
+  bool dirty = false;
+  for (var i = 0; i < s.length; i++) {
+    final c = s.codeUnitAt(i);
+    if (c == 0 || (c >= 0xD800 && c <= 0xDFFF)) {
+      dirty = true;
+      break;
+    }
+  }
+  if (!dirty) return s;
+
+  final buf = StringBuffer();
+  for (var i = 0; i < s.length; i++) {
+    final u = s.codeUnitAt(i);
+    if (u == 0) continue; // strip null bytes
+    if (u >= 0xD800 && u <= 0xDBFF) {
+      // High surrogate — valid only when immediately followed by a low surrogate.
+      if (i + 1 < s.length) {
+        final u2 = s.codeUnitAt(i + 1);
+        if (u2 >= 0xDC00 && u2 <= 0xDFFF) {
+          buf.write(s[i]);
+          buf.write(s[i + 1]);
+          i++;
+          continue;
+        }
+      }
+      buf.writeCharCode(0xFFFD); // lone high surrogate
+    } else if (u >= 0xDC00 && u <= 0xDFFF) {
+      buf.writeCharCode(0xFFFD); // lone low surrogate
+    } else {
+      buf.write(s[i]);
+    }
+  }
+  return buf.toString();
+}
+
+String? _sanOpt(String? s) => s == null ? null : _san(s);
+
 /// Derives the 16-byte hashtag channel key used by MeshCore firmware.
 /// Key = first 16 bytes of SHA-256("#name"), where [name] gets a '#' prefix
 /// if it does not already start with one.
@@ -19,12 +62,12 @@ class Contact extends Equatable {
     type: json['type'] as int,
     flags: json['flags'] as int,
     pathLen: json['pathLen'] as int,
-    name: json['name'] as String,
+    name: _san(json['name'] as String),
     lastAdvertTimestamp: json['lastAdvertTimestamp'] as int,
     latitude: (json['latitude'] as num?)?.toDouble(),
     longitude: (json['longitude'] as num?)?.toDouble(),
     lastModified: json['lastModified'] as int?,
-    customName: json['customName'] as String?,
+    customName: _sanOpt(json['customName'] as String?),
   );
   const Contact({
     required this.publicKey,
@@ -83,6 +126,11 @@ class Contact extends Equatable {
         .map((b) => b.toRadixString(16).padLeft(2, '0'))
         .join();
   }
+
+  /// Lowercased search string combining displayName, name, and shortId.
+  /// Use this for filtering to avoid repeated toLowerCase() calls per field.
+  String get searchKey =>
+      '${displayName.toLowerCase()} ${name.toLowerCase()} ${shortId.toLowerCase()}';
 
   bool get isChat => type == 0x01;
   bool get isRepeater => type == 0x02;
@@ -184,7 +232,7 @@ class MessagePath {
 /// A chat message (private or channel).
 class ChatMessage extends Equatable {
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
-    text: json['text'] as String,
+    text: _san(json['text'] as String),
     timestamp: json['timestamp'] as int,
     isOutgoing: json['isOutgoing'] as bool,
     senderKey:
@@ -192,7 +240,7 @@ class ChatMessage extends Equatable {
             ? base64Decode(json['senderKey'] as String)
             : null,
     channelIndex: json['channelIndex'] as int?,
-    senderName: json['senderName'] as String?,
+    senderName: _sanOpt(json['senderName'] as String?),
     confirmed: json['confirmed'] as bool? ?? false,
     snr: (json['snr'] as num?)?.toDouble(),
     pathLen: json['pathLen'] as int?,
@@ -588,7 +636,7 @@ class ChannelInfo extends Equatable {
 
   factory ChannelInfo.fromJson(Map<String, dynamic> json) => ChannelInfo(
     index: json['index'] as int,
-    name: json['name'] as String,
+    name: _san(json['name'] as String),
     secret:
         json['secret'] != null ? base64Decode(json['secret'] as String) : null,
   );

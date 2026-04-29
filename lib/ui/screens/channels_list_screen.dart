@@ -102,7 +102,9 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen> {
       _loadAllChannelMessages(next);
     });
     final unread = ref.watch(unreadCountsProvider);
-    final allMessages = ref.watch(messagesProvider);
+    // Watch overall message count so the sort updates when messages arrive;
+    // the actual per-channel lookup is O(1) via the notifier partition.
+    ref.watch(messagesProvider.select((msgs) => msgs.length));
     final maxChannels = ref.watch(deviceInfoProvider)?.maxChannels ?? 8;
 
     final configured = channels.where((c) => c.name.isNotEmpty).toList();
@@ -114,10 +116,12 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen> {
             ? configured.where((c) => unread.forChannel(c.index) > 0).toList()
             : List<ChannelInfo>.from(configured);
 
+    final notifier = ref.read(messagesProvider.notifier);
     filtered.sort((a, b) {
-      int lastTs(ChannelInfo ch) => allMessages
-          .where((m) => m.channelIndex == ch.index)
-          .fold(0, (ts, m) => m.timestamp > ts ? m.timestamp : ts);
+      int lastTs(ChannelInfo ch) {
+        final msgs = notifier.forChannel(ch.index);
+        return msgs.fold(0, (ts, m) => m.timestamp > ts ? m.timestamp : ts);
+      }
 
       final ta = lastTs(a);
       final tb = lastTs(b);
@@ -1284,9 +1288,14 @@ class _ChannelTile extends ConsumerWidget {
       mutedChannelsProvider.select((s) => s.contains(channel.index)),
     );
 
-    final allMessages = ref.watch(messagesProvider);
-    final channelMessages =
-        allMessages.where((m) => m.channelIndex == channel.index).toList();
+    // Watch only this channel's version so the card rebuilds only when
+    // messages arrive on this specific channel (#2 perf fix).
+    ref.watch(
+      messageVersionsProvider.select((vs) => vs['ch_${channel.index}'] ?? 0),
+    );
+    final channelMessages = ref
+        .read(messagesProvider.notifier)
+        .forChannel(channel.index);
     final lastMessage =
         channelMessages.isNotEmpty ? channelMessages.last : null;
     final hasUnread = unreadCount > 0;

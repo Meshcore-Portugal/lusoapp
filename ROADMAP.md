@@ -36,7 +36,7 @@
 
 ---
 
-### Phase 2 — Persistence & Reliability (Current: v0.2.x)
+### Phase 2 — Persistence & Reliability (Complete: v0.2.x)
 
 **Goal:** Message history, offline support, robust reconnection.
 
@@ -75,7 +75,7 @@
 
 ---
 
-### Phase 3 — Advanced Features (v0.3.x)
+### Phase 3 — Advanced Features (Complete: v0.3.x)
 
 **Goal:** Full companion app parity with richer UX.
 
@@ -116,17 +116,35 @@
 - [ ] Multi-radio support
   - [ ] Connect to multiple radios simultaneously
   - [ ] Radio selector in UI
+- [x] Discover Contacts screen
+  - [x] Lists all mesh-heard contacts (via advert timestamps) not yet in radio storage
+  - [x] Search / filter, add-to-radio, send message, join room actions
+- [x] Noise Floor / RSSI real-time chart
+  - [x] Polls `CMD_GET_STATS` (radio stats) every 2 s
+  - [x] Dual-series area chart (RSSI + Noise Floor, −120…−60 dBm range), toggle each series
+- [x] RX Log screen + PCAP export
+  - [x] Captures raw `0x88 LOG_RX` frames in a live scrolling list
+  - [x] Exports captured frames as `.pcap` file via `share_plus`
+- [x] Plan 3-3-3 emergency CQ tool
+  - [x] Configurable station name, city, locality
+  - [x] Auto-sends CQ on mesh channel during configured event window with live countdown
+  - [x] Parses incoming CQ messages and displays heard-stations list
+- [x] Android home screen widget
+  - [x] Shows radio name, connection state, battery %, contact/channel counts, last-updated timestamp
+  - [x] Updated on every state change via `WidgetService`
+- [x] Event Program screen (hidden)
+  - [x] Hardcoded MeshCore PT summit schedule; route wired but tile disabled in Apps screen
 
 ---
 
-### Phase 4 — Community & Polish (v0.4.x)
+### Phase 4 — Community & Polish (Current: v0.4.x)
 
 **Goal:** Community features, localization, and release readiness.
 
-- [ ] Full i18n framework (all UI text currently hard-coded PT-PT literals; no ARB files)
-  - [ ] Portuguese (Portugal) — primary (inline strings to be externalized)
-  - [ ] English — secondary
-  - [ ] Spanish — community contribution
+- [x] Full i18n framework (ARB files generated, `app_localizations` wired via `context.l10n`)
+  - [x] Portuguese (Portugal) — primary
+  - [x] English — secondary
+  - [x] Spanish — community contribution
 - [ ] QR code sharing
   - [x] Share own contact via QR (Settings screen)
   - [x] Share any contact via QR (contact tile icon)
@@ -134,7 +152,7 @@
   - [x] Scan QR to add contact
   - [x] Scan QR to add/configure channel
 - [ ] Theme customization
-  - [ ] Light/dark mode toggle (dark theme defined, no user toggle yet)
+  - [ ] Light/dark mode toggle (both themes defined in `theme.dart`; hardcoded dark — no user toggle yet)
   - [ ] Custom accent colors
 - [ ] Accessibility
   - [ ] Screen reader support
@@ -169,7 +187,7 @@
 - [ ] Data export
   - [ ] CSV export of contacts and messages
   - [ ] KML export for map data
-  - [ ] Protocol log export for debugging
+  - [x] Protocol log export for debugging (RX Log + PCAP — implemented in Phase 3)
 
 ---
 
@@ -181,7 +199,7 @@
   - [ ] Incoming message webhooks
   - [ ] IFTTT/Home Assistant integration
 - [ ] Widget support
-  - [ ] Android home screen widget (last messages, battery)
+  - [x] Android home screen widget (implemented in Phase 3)
   - [ ] iOS widget
 - [ ] Desktop support
   - [ ] Windows (serial + BLE)

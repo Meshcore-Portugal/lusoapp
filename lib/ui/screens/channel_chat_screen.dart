@@ -58,11 +58,9 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
       if (mounted) {
         if (_unreadOnOpen > 0) {
           // Compute the divider index after messages are loaded.
-          final msgs =
-              ref
-                  .read(messagesProvider)
-                  .where((m) => m.channelIndex == widget.channelIndex)
-                  .toList();
+          final msgs = ref
+              .read(messagesProvider.notifier)
+              .forChannel(widget.channelIndex);
           final idx = (msgs.length - _unreadOnOpen).clamp(0, msgs.length - 1);
           if (idx >= 0 && idx < msgs.length) {
             setState(() => _firstUnreadIndex = idx);
@@ -98,11 +96,9 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
           .ensureLoadedForChannel(widget.channelIndex);
       if (mounted) {
         if (_unreadOnOpen > 0) {
-          final msgs =
-              ref
-                  .read(messagesProvider)
-                  .where((m) => m.channelIndex == widget.channelIndex)
-                  .toList();
+          final msgs = ref
+              .read(messagesProvider.notifier)
+              .forChannel(widget.channelIndex);
           final idx = (msgs.length - _unreadOnOpen).clamp(0, msgs.length - 1);
           if (idx >= 0 && idx < msgs.length) {
             setState(() => _firstUnreadIndex = idx);
@@ -200,11 +196,9 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
       if (_scrollController.hasClients) {
         final max = _scrollController.position.maxScrollExtent;
         if (max > 0) {
-          final msgs =
-              ref
-                  .read(messagesProvider)
-                  .where((m) => m.channelIndex == widget.channelIndex)
-                  .toList();
+          final msgs = ref
+              .read(messagesProvider.notifier)
+              .forChannel(widget.channelIndex);
           if (msgs.isNotEmpty) {
             final fraction = _firstUnreadIndex / (msgs.length + 1);
             _scrollController.jumpTo((fraction * max).clamp(0.0, max));
@@ -253,26 +247,36 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // While this screen is visible, clear unread badge for this channel
-    // whenever new messages arrive, and tail-scroll to the latest message.
-    ref.listen<List<ChatMessage>>(messagesProvider, (prev, next) {
-      ref
-          .read(unreadCountsProvider.notifier)
-          .markChannelRead(widget.channelIndex);
-      if (prev != null && next.length > prev.length && _atBottom) {
-        _scrollToBottom();
-      }
-    });
+    // Watch ONLY this channel's message version — rebuild only when a message
+    // arrives for this specific channel, not on every message app-wide.
+    ref.watch(
+      messageVersionsProvider.select(
+        (vs) => vs['ch_${widget.channelIndex}'] ?? 0,
+      ),
+    );
+    // When the version ticks up, mark read and tail-scroll.
+    ref.listen<int>(
+      messageVersionsProvider.select(
+        (vs) => vs['ch_${widget.channelIndex}'] ?? 0,
+      ),
+      (prev, next) {
+        if (prev != null && next > prev) {
+          ref
+              .read(unreadCountsProvider.notifier)
+              .markChannelRead(widget.channelIndex);
+          if (_atBottom) _scrollToBottom();
+        }
+      },
+    );
 
     final selfName = ref.watch(selfInfoProvider)?.name;
     final selfMentionColor = ref.watch(selfMentionColorProvider);
     final otherMentionColor = ref.watch(otherMentionColorProvider);
     final channels = ref.watch(channelsProvider);
-    final allMessages = ref.watch(messagesProvider);
-    final channelMessages =
-        allMessages
-            .where((m) => m.channelIndex == widget.channelIndex)
-            .toList();
+    // O(1) partition lookup — no filter scan over all messages (#7 perf fix).
+    final channelMessages = ref
+        .read(messagesProvider.notifier)
+        .forChannel(widget.channelIndex);
     final theme = Theme.of(context);
     final isMuted = ref.watch(
       mutedChannelsProvider.select((s) => s.contains(widget.channelIndex)),
@@ -1674,6 +1678,11 @@ class _MessageBubble extends ConsumerWidget {
                       ),
                     ],
                   ),
+                ),
+                _HeardBadge(
+                  count: message.heardCount,
+                  theme: theme,
+                  confirmed: message.confirmed,
                 ),
                 Padding(
                   padding: const EdgeInsets.only(top: 3, right: 4),

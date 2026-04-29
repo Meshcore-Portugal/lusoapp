@@ -108,7 +108,9 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
       keyPrefix,
       updated.text,
       attempt: updated.retryCount,
+      timestamp: updated.timestamp,
     );
+    _scrollToBottom();
   }
 
   void _scrollToBottom() {
@@ -162,14 +164,21 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // While this screen is visible, clear unread badge for this contact
-    // whenever new messages arrive, and tail-scroll to the latest message.
-    ref.listen<List<ChatMessage>>(messagesProvider, (prev, next) {
-      ref.read(unreadCountsProvider.notifier).markContactRead(_prefix6Hex);
-      if (prev != null && next.length > prev.length && _atBottom) {
-        _scrollToBottom();
-      }
-    });
+    // Watch ONLY this contact's message version — rebuild only when a message
+    // arrives for this specific conversation, not on every message app-wide.
+    ref.watch(
+      messageVersionsProvider.select((vs) => vs['c_$_prefix6Hex'] ?? 0),
+    );
+    // When the version ticks up, mark read and tail-scroll.
+    ref.listen<int>(
+      messageVersionsProvider.select((vs) => vs['c_$_prefix6Hex'] ?? 0),
+      (prev, next) {
+        if (prev != null && next > prev) {
+          ref.read(unreadCountsProvider.notifier).markContactRead(_prefix6Hex);
+          if (_atBottom) _scrollToBottom();
+        }
+      },
+    );
 
     // Show trace result sheet when a new trace arrives
     ref.listen<TraceResult?>(traceResultProvider, (prev, next) {
@@ -185,23 +194,13 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     final selfMentionColor = ref.watch(selfMentionColorProvider);
     final otherMentionColor = ref.watch(otherMentionColorProvider);
     final contacts = ref.watch(contactsProvider);
-    final allMessages = ref.watch(messagesProvider);
     final contact = _findContact(contacts);
     final theme = Theme.of(context);
 
-    // Filter messages for this contact
-    final contactMessages =
-        allMessages.where((m) {
-          if (m.isChannel) return false;
-          if (m.isOutgoing) {
-            // Outgoing messages: match by senderKey we stored
-            if (m.senderKey == null) return false;
-            return _prefixMatch(m.senderKey!, _contactKey);
-          }
-          // Incoming: match senderKey prefix
-          if (m.senderKey == null) return false;
-          return _prefixMatch(m.senderKey!, _contactKey);
-        }).toList();
+    // O(1) partition lookup — no filter scan over all messages (#7 perf fix).
+    final contactMessages = ref
+        .read(messagesProvider.notifier)
+        .forContact(_contactKey);
 
     return Column(
       children: [
