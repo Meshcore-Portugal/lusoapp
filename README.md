@@ -61,7 +61,8 @@ lib/
 │   ├── commands.dart            # Command/response constants
 │   ├── models.dart              # Data models (Contact, Message, RadioConfig)
 │   ├── companion_encoder.dart   # App→Radio frame encoder
-│   └── companion_decoder.dart   # Radio→App frame decoder
+│   ├── companion_decoder.dart   # Radio→App frame decoder
+│   └── companion_responses.dart # Response/push DTO classes
 ├── transport/                   # Communication layer
 │   ├── radio_transport.dart     # Abstract transport interface
 │   ├── ble_transport.dart       # BLE (Nordic UART) transport
@@ -69,19 +70,46 @@ lib/
 ├── services/
 │   └── radio_service.dart       # High-level radio communication coordinator
 ├── providers/
-│   └── radio_providers.dart     # Riverpod state management
+│   ├── radio_providers.dart     # Riverpod state management (entry point)
+│   └── parts/                   # Notifiers split by domain
+│       ├── connection_notifier.dart
+│       ├── messages_notifier.dart
+│       └── advert_auto_add.dart
 └── ui/
     ├── theme.dart               # Material 3 dark/light theme
     ├── router.dart              # GoRouter navigation
-    └── screens/
-        ├── connect_screen.dart      # Device scan & connect
-        ├── home_screen.dart         # Main shell with bottom nav
-        ├── channel_chat_screen.dart # Channel messaging
-        ├── private_chat_screen.dart # 1:1 private chat
-        ├── contacts_screen.dart     # Contact list
-        ├── radio_config_screen.dart # LoRa configuration
-        └── settings_screen.dart     # App settings
+    ├── screens/                 # Core screens (chat, contacts, settings…)
+    │   └── parts/               # Per-screen widget parts
+    └── apps/                    # Self-contained "apps" launched from the Apps tab
+        ├── plan333/
+        ├── telemetry/
+        ├── topology/
+        ├── rx_log/
+        └── noise_floor/
 ```
+
+### Adding a new app
+
+Each entry on the **Apps** tab lives in its own folder under `lib/ui/apps/<name>/`
+so it can grow without bloating shared screens. To add one:
+
+1. **Create the folder and screen** — `lib/ui/apps/<name>/<name>_screen.dart`.
+   Expose a public widget (e.g. `class MyAppScreen extends ConsumerWidget`).
+   Optional sub-widgets go in `lib/ui/apps/<name>/parts/` as Dart `part` files
+   (`part of '../<name>_screen.dart';`).
+2. **Register the route** in [`lib/ui/router.dart`](lib/ui/router.dart):
+   ```dart
+   import 'apps/<name>/<name>_screen.dart';
+   // …
+   GoRoute(path: '/apps/<name>', builder: (_, _) => const MyAppScreen()),
+   ```
+3. **Add the launcher tile** in [`lib/ui/screens/apps_screen.dart`](lib/ui/screens/apps_screen.dart)
+   by appending a new `_AppEntry` to the `_apps` list with `route: '/apps/<name>'`.
+4. **(Optional) localise** any user-visible strings via the ARB files in
+   `lib/l10n/` — see the [Translations](#translations) section.
+
+That's it: the app appears on the Apps grid, is reachable via deep link, and
+keeps its widgets, helpers, and tests isolated from the rest of the codebase.
 
 ## Protocol Support
 

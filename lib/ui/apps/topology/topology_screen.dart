@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../l10n/l10n.dart';
-import '../../protocol/models.dart';
-import '../../providers/radio_providers.dart';
-import '../widgets/path_sheet.dart';
+import '../../../l10n/l10n.dart';
+import '../../../protocol/models.dart';
+import '../../../providers/radio_providers.dart';
+import '../../widgets/path_sheet.dart';
 
 // ─── layout & style constants ─────────────────────────────────────────────────
 const double _kCanvas = 900.0;

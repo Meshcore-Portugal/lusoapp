@@ -3,10 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../protocol/cayenne_lpp.dart';
-import '../../protocol/companion_decoder.dart';
-import '../../l10n/l10n.dart';
-import '../../providers/radio_providers.dart';
+import '../../../protocol/cayenne_lpp.dart';
+import '../../../protocol/companion_decoder.dart';
+import '../../../l10n/l10n.dart';
+import '../../../providers/radio_providers.dart';
 
 part 'parts/telemetry_battery_card.dart';
 part 'parts/telemetry_network_card.dart';

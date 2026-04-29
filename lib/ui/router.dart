@@ -7,18 +7,18 @@ import 'screens/home_screen.dart';
 import 'screens/channels_list_screen.dart';
 import 'screens/channel_chat_screen.dart';
 import 'screens/map_screen.dart';
-import 'screens/plan333_screen.dart';
+import 'apps/plan333/plan333_screen.dart';
 import 'screens/private_chat_screen.dart';
 import 'screens/radio_settings_screen.dart';
 import 'screens/contacts_screen.dart';
 import 'screens/room_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/event_program_screen.dart';
-import 'screens/telemetry_screen.dart';
+import 'apps/telemetry/telemetry_screen.dart';
 import 'screens/discover_contacts_screen.dart';
-import 'screens/noise_floor_screen.dart';
-import 'screens/rx_log_screen.dart';
-import 'screens/topology_screen.dart';
+import 'apps/noise_floor/noise_floor_screen.dart';
+import 'apps/rx_log/rx_log_screen.dart';
+import 'apps/topology/topology_screen.dart';
 import 'screens/repeater_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {

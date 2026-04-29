@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'plan333_screen.dart';
+import '../apps/plan333/plan333_screen.dart';
 
 /// Radio tab — hosts MeshCore apps.
 ///

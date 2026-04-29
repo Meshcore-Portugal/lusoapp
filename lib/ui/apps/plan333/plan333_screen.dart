@@ -5,12 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../l10n/l10n.dart';
-import '../../providers/radio_providers.dart';
-import '../../services/notification_service.dart';
-import '../../services/plan333_service.dart';
-import '../../transport/radio_transport.dart';
-import '../theme.dart';
+import '../../../l10n/l10n.dart';
+import '../../../providers/radio_providers.dart';
+import '../../../services/notification_service.dart';
+import '../../../services/plan333_service.dart';
+import '../../../transport/radio_transport.dart';
+import '../../theme.dart';
 
 
 part 'parts/plan333_status_card.dart';

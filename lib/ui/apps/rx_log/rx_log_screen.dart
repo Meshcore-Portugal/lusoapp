@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../l10n/l10n.dart';
-import '../../providers/radio_providers.dart';
+import '../../../l10n/l10n.dart';
+import '../../../providers/radio_providers.dart';
 
 /// RX log app: captures raw 0x88 RX frames and exports to PCAP.
 class RxLogScreen extends ConsumerStatefulWidget {

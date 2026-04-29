@@ -44,12 +44,12 @@ flutter build apk --release
 
 ### Plataformas Suportadas
 
-| Plataforma | Transporte | Estado |
-|------------|------------|--------|
+| Plataforma | Transporte  | Estado         |
+| ---------- | ----------- | -------------- |
 | Android    | BLE + Serie | Alvo principal |
-| iOS        | BLE | Planeado |
-| Windows    | Serie | Planeado |
-| Linux      | Serie | Planeado |
+| iOS        | BLE         | Planeado       |
+| Windows    | Serie       | Planeado       |
+| Linux      | Serie       | Planeado       |
 
 ## Arquitectura
 
@@ -61,7 +61,8 @@ lib/
 │   ├── commands.dart            # Constantes de comandos/respostas
 │   ├── models.dart              # Modelos de dados (Contacto, Mensagem, ConfigRadio)
 │   ├── companion_encoder.dart   # Codificador de frames App→Radio
-│   └── companion_decoder.dart   # Descodificador de frames Radio→App
+│   ├── companion_decoder.dart   # Descodificador de frames Radio→App
+│   └── companion_responses.dart # Classes DTO de respostas/pushes
 ├── transport/                   # Camada de comunicacao
 │   ├── radio_transport.dart     # Interface abstracta de transporte
 │   ├── ble_transport.dart       # Transporte BLE (Nordic UART)
@@ -69,19 +70,47 @@ lib/
 ├── services/
 │   └── radio_service.dart       # Coordenador de comunicacao radio de alto nivel
 ├── providers/
-│   └── radio_providers.dart     # Gestao de estado Riverpod
+│   ├── radio_providers.dart     # Gestao de estado Riverpod (ponto de entrada)
+│   └── parts/                   # Notifiers divididos por dominio
+│       ├── connection_notifier.dart
+│       ├── messages_notifier.dart
+│       └── advert_auto_add.dart
 └── ui/
     ├── theme.dart               # Tema Material 3 escuro/claro
     ├── router.dart              # Navegacao GoRouter
-    └── screens/
-        ├── connect_screen.dart      # Procura e ligacao a dispositivos
-        ├── home_screen.dart         # Shell principal com navegacao inferior
-        ├── channel_chat_screen.dart # Mensagens de canal
-        ├── private_chat_screen.dart # Chat privado 1:1
-        ├── contacts_screen.dart     # Lista de contactos
-        ├── radio_config_screen.dart # Configuracao LoRa
-        └── settings_screen.dart     # Definicoes da aplicacao
+    ├── screens/                 # Ecras principais (chat, contactos, definicoes…)
+    │   └── parts/               # Widgets parciais por ecra
+    └── apps/                    # "Apps" autonomas lancadas a partir do separador Apps
+        ├── plan333/
+        ├── telemetry/
+        ├── topology/
+        ├── rx_log/
+        └── noise_floor/
 ```
+
+### Adicionar uma nova app
+
+Cada entrada do separador **Apps** vive na sua propria pasta em
+`lib/ui/apps/<nome>/`, para que possa crescer sem inchar os ecras partilhados.
+Para adicionar uma:
+
+1. **Criar a pasta e o ecra** — `lib/ui/apps/<nome>/<nome>_screen.dart`.
+   Exponha um widget publico (ex.: `class MyAppScreen extends ConsumerWidget`).
+   Sub-widgets opcionais ficam em `lib/ui/apps/<nome>/parts/` como ficheiros
+   `part` de Dart (`part of '../<nome>_screen.dart';`).
+2. **Registar a rota** em [`lib/ui/router.dart`](lib/ui/router.dart):
+   ```dart
+   import 'apps/<nome>/<nome>_screen.dart';
+   // …
+   GoRoute(path: '/apps/<nome>', builder: (_, _) => const MyAppScreen()),
+   ```
+3. **Adicionar o tile do lancador** em [`lib/ui/screens/apps_screen.dart`](lib/ui/screens/apps_screen.dart)
+   acrescentando um `_AppEntry` a lista `_apps` com `route: '/apps/<nome>'`.
+4. **(Opcional) traduzir** quaisquer strings visiveis ao utilizador atraves dos
+   ficheiros ARB em `lib/l10n/`.
+
+E pronto: a app aparece na grelha Apps, e acessivel por deep link, e mantem os
+seus widgets, helpers e testes isolados do resto da base de codigo.
 
 ## Suporte de Protocolo
 

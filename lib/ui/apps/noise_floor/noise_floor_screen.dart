@@ -4,8 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../protocol/commands.dart';
-import '../../providers/radio_providers.dart';
+import '../../../protocol/commands.dart';
+import '../../../providers/radio_providers.dart';
 
 /// Real-time RSSI + Noise Floor chart.
 ///
