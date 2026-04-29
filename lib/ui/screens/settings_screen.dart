@@ -12,11 +12,12 @@ import '../../providers/radio_providers.dart';
 import '../../services/notification_service.dart';
 import '../../services/storage_service.dart';
 import '../../transport/radio_transport.dart';
-
+import '../theme.dart';
 
 part 'parts/settings_appearance.dart';
 part 'parts/settings_notifications.dart';
 part 'parts/settings_keybackup.dart';
+
 /// App settings screen.
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -413,4 +414,3 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 }
-

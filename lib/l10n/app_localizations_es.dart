@@ -323,6 +323,33 @@ class AppLocalizationsEs extends AppLocalizations {
   String get settingsAppearance => 'Apariencia';
 
   @override
+  String get settingsTheme => 'Tema';
+
+  @override
+  String get settingsThemeSystem => 'Sistema';
+
+  @override
+  String get settingsThemeLight => 'Claro';
+
+  @override
+  String get settingsThemeDark => 'Oscuro';
+
+  @override
+  String get settingsAccent => 'Color de acento';
+
+  @override
+  String get settingsAccentDefault => 'Predeterminado (naranja de la marca)';
+
+  @override
+  String get settingsAccentCustom => 'Personalizado';
+
+  @override
+  String get settingsAccentReset => 'Restablecer';
+
+  @override
+  String get settingsMentionColors => 'Colores de mención';
+
+  @override
   String get settingsSelfMention => 'Mención propia (@[Tú])';
 
   @override

@@ -718,6 +718,60 @@ abstract class AppLocalizations {
   /// **'Aparência'**
   String get settingsAppearance;
 
+  /// No description provided for @settingsTheme.
+  ///
+  /// In pt, this message translates to:
+  /// **'Tema'**
+  String get settingsTheme;
+
+  /// No description provided for @settingsThemeSystem.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sistema'**
+  String get settingsThemeSystem;
+
+  /// No description provided for @settingsThemeLight.
+  ///
+  /// In pt, this message translates to:
+  /// **'Claro'**
+  String get settingsThemeLight;
+
+  /// No description provided for @settingsThemeDark.
+  ///
+  /// In pt, this message translates to:
+  /// **'Escuro'**
+  String get settingsThemeDark;
+
+  /// No description provided for @settingsAccent.
+  ///
+  /// In pt, this message translates to:
+  /// **'Cor de destaque'**
+  String get settingsAccent;
+
+  /// No description provided for @settingsAccentDefault.
+  ///
+  /// In pt, this message translates to:
+  /// **'Predefinido (laranja da marca)'**
+  String get settingsAccentDefault;
+
+  /// No description provided for @settingsAccentCustom.
+  ///
+  /// In pt, this message translates to:
+  /// **'Personalizada'**
+  String get settingsAccentCustom;
+
+  /// No description provided for @settingsAccentReset.
+  ///
+  /// In pt, this message translates to:
+  /// **'Repor predefinida'**
+  String get settingsAccentReset;
+
+  /// No description provided for @settingsMentionColors.
+  ///
+  /// In pt, this message translates to:
+  /// **'Cores de menção'**
+  String get settingsMentionColors;
+
   /// No description provided for @settingsSelfMention.
   ///
   /// In pt, this message translates to:

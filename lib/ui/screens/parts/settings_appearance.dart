@@ -1,7 +1,7 @@
 part of '../settings_screen.dart';
 
 // ---------------------------------------------------------------------------
-// Appearance card — mention pill colours
+// Appearance card — theme mode, accent colour, mention pill colours
 // ---------------------------------------------------------------------------
 
 class _AppearanceCard extends ConsumerWidget {
@@ -33,14 +33,15 @@ class _AppearanceCard extends ConsumerWidget {
           (ctx) => AlertDialog(
             title: Text(context.l10n.settingsChooseColor),
             content: Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 10,
+              runSpacing: 10,
               children:
                   _swatches.map((c) {
                     final selected = c == current;
                     return GestureDetector(
                       onTap: () => Navigator.pop(ctx, c),
-                      child: Container(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 120),
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
@@ -54,12 +55,21 @@ class _AppearanceCard extends ConsumerWidget {
                               selected
                                   ? [
                                     BoxShadow(
-                                      color: c.withValues(alpha: 0.47),
-                                      blurRadius: 6,
+                                      color: c.withValues(alpha: 0.55),
+                                      blurRadius: 8,
+                                      spreadRadius: 1,
                                     ),
                                   ]
                                   : null,
                         ),
+                        child:
+                            selected
+                                ? const Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 18,
+                                )
+                                : null,
                       ),
                     );
                   }).toList(),
@@ -79,42 +89,30 @@ class _AppearanceCard extends ConsumerWidget {
     final theme = Theme.of(context);
     final selfColor = ref.watch(selfMentionColorProvider);
     final otherColor = ref.watch(otherMentionColorProvider);
+    final themeMode = ref.watch(themeModeProvider);
+    final accent = ref.watch(accentColorProvider);
 
-    Widget colorRow(
-      String label,
-      Color color,
-      Future<void> Function(Color) onPick,
-    ) {
-      final textColor =
-          color.computeLuminance() > 0.45 ? Colors.black : Colors.white;
-      return ListTile(
-        title: Text(label),
-        subtitle: Text(
-          '@[nome]',
-          style: theme.textTheme.labelSmall?.copyWith(color: color),
-        ),
-        trailing: GestureDetector(
-          onTap: () async {
-            final picked = await _pickColor(context, color);
-            if (picked != null) await onPick(picked);
-          },
-          child: Container(
-            width: 48,
-            height: 32,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: theme.colorScheme.outlineVariant),
+    // A tappable colour pill used for mention colour rows.
+    Widget pillButton(Color color, VoidCallback onTap) {
+      final fg = color.computeLuminance() > 0.45 ? Colors.black : Colors.white;
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: theme.colorScheme.outlineVariant,
+              width: 1,
             ),
-            child: Center(
-              child: Text(
-                '@',
-                style: TextStyle(
-                  color: textColor,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
+          ),
+          child: Text(
+            '@nome',
+            style: TextStyle(
+              color: fg,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
             ),
           ),
         ),
@@ -123,13 +121,14 @@ class _AppearanceCard extends ConsumerWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Header ───────────────────────────────────────────────────
             Row(
               children: [
-                Icon(Icons.palette, color: theme.colorScheme.primary),
+                Icon(Icons.palette_outlined, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(
                   context.l10n.settingsAppearance,
@@ -139,21 +138,149 @@ class _AppearanceCard extends ConsumerWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+
+            // ── Theme mode ───────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                context.l10n.settingsTheme,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<ThemeMode>(
+                showSelectedIcon: false,
+                style: SegmentedButton.styleFrom(
+                  textStyle: theme.textTheme.labelMedium,
+                  visualDensity: VisualDensity.compact,
+                ),
+                segments: [
+                  ButtonSegment(
+                    value: ThemeMode.system,
+                    icon: const Icon(Icons.brightness_auto_outlined, size: 16),
+                    label: Text(context.l10n.settingsThemeSystem),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.light,
+                    icon: const Icon(Icons.light_mode_outlined, size: 16),
+                    label: Text(context.l10n.settingsThemeLight),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.dark,
+                    icon: const Icon(Icons.dark_mode_outlined, size: 16),
+                    label: Text(context.l10n.settingsThemeDark),
+                  ),
+                ],
+                selected: {themeMode},
+                onSelectionChanged:
+                    (s) => ref.read(themeModeProvider.notifier).set(s.first),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Divider(height: 1),
+
+            // ── Accent colour ────────────────────────────────────────────
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              title: Text(context.l10n.settingsAccent),
+              subtitle: Text(
+                accent == null
+                    ? context.l10n.settingsAccentDefault
+                    : context.l10n.settingsAccentCustom,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (accent != null)
+                    IconButton(
+                      tooltip: context.l10n.settingsAccentReset,
+                      icon: Icon(
+                        Icons.restart_alt,
+                        size: 20,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      onPressed:
+                          () =>
+                              ref.read(accentColorProvider.notifier).set(null),
+                    ),
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await _pickColor(
+                        context,
+                        accent ?? AppTheme.primary,
+                      );
+                      if (picked != null) {
+                        await ref
+                            .read(accentColorProvider.notifier)
+                            .set(picked);
+                      }
+                    },
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: accent ?? AppTheme.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: theme.colorScheme.outlineVariant,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+
+            // ── Mention pill colours ─────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
+              child: Text(
+                context.l10n.settingsMentionColors,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ),
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              title: Text(context.l10n.settingsSelfMention),
+              trailing: pillButton(selfColor, () async {
+                final picked = await _pickColor(context, selfColor);
+                if (picked != null) {
+                  await ref
+                      .read(selfMentionColorProvider.notifier)
+                      .setColor(picked);
+                }
+              }),
+            ),
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              title: Text(context.l10n.settingsOtherMention),
+              trailing: pillButton(otherColor, () async {
+                final picked = await _pickColor(context, otherColor);
+                if (picked != null) {
+                  await ref
+                      .read(otherMentionColorProvider.notifier)
+                      .setColor(picked);
+                }
+              }),
+            ),
             const SizedBox(height: 4),
-            colorRow(
-              context.l10n.settingsSelfMention,
-              selfColor,
-              (c) => ref.read(selfMentionColorProvider.notifier).setColor(c),
-            ),
-            colorRow(
-              context.l10n.settingsOtherMention,
-              otherColor,
-              (c) => ref.read(otherMentionColorProvider.notifier).setColor(c),
-            ),
           ],
         ),
       ),
     );
   }
 }
-

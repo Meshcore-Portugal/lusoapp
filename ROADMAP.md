@@ -152,8 +152,8 @@
   - [x] Scan QR to add contact
   - [x] Scan QR to add/configure channel
 - [ ] Theme customization
-  - [ ] Light/dark mode toggle (both themes defined in `theme.dart`; hardcoded dark — no user toggle yet)
-  - [ ] Custom accent colors
+  - [x] Light/dark mode toggle (System / Light / Dark via `themeModeProvider`, persisted to SharedPreferences; selectable in Settings → Appearance)
+  - [x] Custom accent colors (`accentColorProvider` overrides Material `colorScheme.primary`; 16-swatch picker in Settings → Appearance with one-tap reset to brand orange)
 - [ ] Accessibility
   - [ ] Screen reader support
   - [ ] High contrast mode

@@ -322,6 +322,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAppearance => 'Appearance';
 
   @override
+  String get settingsTheme => 'Theme';
+
+  @override
+  String get settingsThemeSystem => 'System';
+
+  @override
+  String get settingsThemeLight => 'Light';
+
+  @override
+  String get settingsThemeDark => 'Dark';
+
+  @override
+  String get settingsAccent => 'Accent color';
+
+  @override
+  String get settingsAccentDefault => 'Default (brand orange)';
+
+  @override
+  String get settingsAccentCustom => 'Custom';
+
+  @override
+  String get settingsAccentReset => 'Reset to default';
+
+  @override
+  String get settingsMentionColors => 'Mention colors';
+
+  @override
   String get settingsSelfMention => 'Self mention (@[You])';
 
   @override

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart' show Color;
+import 'package:flutter/material.dart' show Color, ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -77,7 +77,6 @@ final lastDeviceProvider = StateProvider<LastDevice?>((_) => null);
 /// Superset of [lastDeviceProvider]; used by the connect screen to let
 /// users with multiple radios reconnect without scanning.
 final recentDevicesProvider = StateProvider<List<LastDevice>>((_) => []);
-
 
 // ---------------------------------------------------------------------------
 // Data providers
@@ -373,7 +372,6 @@ final channelsProvider =
     StateNotifierProvider<ChannelsNotifier, List<ChannelInfo>>((ref) {
       return ChannelsNotifier(ref);
     });
-
 
 // Per-key message version counters: key → bump count.
 // Incremented each time any message for that key is added/updated.
@@ -889,7 +887,6 @@ Future<void> _migrateLegacyFavorites(Ref ref, RadioService service) async {
   await StorageService.instance.clearFavorites();
 }
 
-
 // ---------------------------------------------------------------------------
 // Radio hardware stats (CMD_GET_STATS responses)
 // ---------------------------------------------------------------------------
@@ -1241,3 +1238,74 @@ final otherMentionColorProvider =
         'mention_color_other',
       ),
     );
+
+// ---------------------------------------------------------------------------
+// App-wide theme settings (mode + accent), persisted to SharedPreferences.
+// ---------------------------------------------------------------------------
+
+class ThemeModeNotifier extends StateNotifier<ThemeMode> {
+  ThemeModeNotifier() : super(ThemeMode.dark) {
+    _load();
+  }
+
+  static const _key = 'theme_mode_v1';
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_key);
+    state = switch (raw) {
+      'light' => ThemeMode.light,
+      'system' => ThemeMode.system,
+      _ => ThemeMode.dark,
+    };
+  }
+
+  Future<void> set(ThemeMode mode) async {
+    state = mode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_key, mode.name);
+  }
+}
+
+final themeModeProvider = StateNotifierProvider<ThemeModeNotifier, ThemeMode>(
+  (ref) => ThemeModeNotifier(),
+);
+
+/// User-selected accent colour. `null` means "use brand orange (default)".
+class AccentColorNotifier extends StateNotifier<Color?> {
+  AccentColorNotifier() : super(null) {
+    _load();
+  }
+
+  static const _key = 'accent_color_v1';
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final val = prefs.getInt(_key);
+    if (val == null) return;
+    state = Color.fromARGB(
+      (val >> 24) & 0xFF,
+      (val >> 16) & 0xFF,
+      (val >> 8) & 0xFF,
+      val & 0xFF,
+    );
+  }
+
+  Future<void> set(Color? color) async {
+    state = color;
+    final prefs = await SharedPreferences.getInstance();
+    if (color == null) {
+      await prefs.remove(_key);
+      return;
+    }
+    final a = (color.a * 255).round();
+    final r = (color.r * 255).round();
+    final g = (color.g * 255).round();
+    final b = (color.b * 255).round();
+    await prefs.setInt(_key, (a << 24) | (r << 16) | (g << 8) | b);
+  }
+}
+
+final accentColorProvider = StateNotifierProvider<AccentColorNotifier, Color?>(
+  (ref) => AccentColorNotifier(),
+);

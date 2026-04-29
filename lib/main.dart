@@ -136,13 +136,15 @@ class _McAppPtState extends ConsumerState<McAppPt> {
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
+    final themeMode = ref.watch(themeModeProvider);
+    final accent = ref.watch(accentColorProvider);
 
     return MaterialApp.router(
       title: 'LusoAPP',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.dark,
+      theme: AppTheme.build(brightness: Brightness.light, accent: accent),
+      darkTheme: AppTheme.build(brightness: Brightness.dark, accent: accent),
+      themeMode: themeMode,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: router,
