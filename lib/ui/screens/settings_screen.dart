@@ -9,7 +9,9 @@ import 'package:share_plus/share_plus.dart';
 import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/canned_messages_provider.dart';
+import '../../providers/gps_sharing_provider.dart';
 import '../../providers/radio_providers.dart';
+import '../../services/gps_sharing_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/storage_service.dart';
 import '../../transport/radio_transport.dart';
@@ -17,6 +19,7 @@ import '../theme.dart';
 
 part 'parts/settings_appearance.dart';
 part 'parts/settings_canned_messages.dart';
+part 'parts/settings_gps_sharing.dart';
 part 'parts/settings_notifications.dart';
 part 'parts/settings_keybackup.dart';
 
@@ -224,6 +227,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const _CannedMessagesCard(),
           const SizedBox(height: 16),
 
+          // GPS sharing
+          const _GpsSharingCard(),
+          const SizedBox(height: 16),
+
           // About
           Card(
             child: Padding(
@@ -399,16 +406,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ref.read(radioServiceProvider)?.setAdvertName(name);
                     final current = ref.read(selfInfoProvider);
                     if (current != null) {
-                      ref.read(selfInfoProvider.notifier).state = SelfInfo(
-                        publicKey: current.publicKey,
-                        name: name,
-                        radioConfig: current.radioConfig,
-                        advType: current.advType,
-                        txPower: current.txPower,
-                        maxTxPower: current.maxTxPower,
-                        latitude: current.latitude,
-                        longitude: current.longitude,
-                      );
+                      ref.read(selfInfoProvider.notifier).state = current
+                          .copyWith(name: name);
                     }
                   }
                   Navigator.pop(ctx);

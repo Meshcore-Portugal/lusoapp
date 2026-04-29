@@ -6,7 +6,10 @@ import 'package:timezone/data/latest_all.dart' as tz_data;
 
 import 'providers/radio_providers.dart';
 import 'providers/canned_messages_provider.dart';
+import 'providers/gps_sharing_provider.dart';
+import 'providers/map_visibility_provider.dart';
 import 'protocol/protocol.dart' show ChatMessage;
+import 'services/gps_sharing_service.dart';
 import 'transport/radio_transport.dart' show TransportState;
 import 'services/notification_service.dart';
 import 'services/plan333_service.dart';
@@ -117,8 +120,13 @@ class _McAppPtState extends ConsumerState<McAppPt> {
       await ref.read(plan333ConfigProvider.notifier).loadFromStorage();
       await ref.read(qslLogProvider.notifier).loadFromStorage();
       await ref.read(cannedMessagesProvider.notifier).loadFromStorage();
+      await ref.read(gpsSharingProvider.notifier).loadFromStorage();
+      await ref.read(mapHiddenContactsProvider.notifier).loadFromStorage();
       // Eagerly initialize the auto-send notifier (starts background timer).
       ref.read(plan333AutoSendProvider);
+      // Eagerly initialize the GPS sharing service so its listeners attach
+      // and the timer starts if the user previously enabled Auto mode.
+      ref.read(gpsSharingServiceProvider);
     }
 
     // Push initial widget state with cached data (or disconnected state).
@@ -133,6 +141,7 @@ class _McAppPtState extends ConsumerState<McAppPt> {
         batteryPct: 0,
         contactCount: contacts.length,
         channelCount: channels.where((c) => !c.isEmpty).length,
+        gpsSharing: ref.read(gpsSharingProvider).isEnabled,
       );
     }
 

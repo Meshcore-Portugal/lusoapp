@@ -51,6 +51,8 @@ const int cmdSignData = 0x22;
 const int cmdSignFinish = 0x23;
 const int cmdSendTracePath = 0x24;
 const int cmdSendTelemetryReq = 0x27;
+const int cmdSetOtherParams =
+    0x26; // 38 — manual_add_contacts, telemetry_mode, adv_loc_policy, multi_acks
 const int cmdSendBinaryReq = 0x32;
 const int cmdSendPathDiscoveryReq = 0x34;
 const int cmdSendControlData = 0x37;

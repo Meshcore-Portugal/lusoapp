@@ -19,6 +19,77 @@
   "commonCopy": "Copy",
   "commonRename": "Rename",
   "commonReset": "Reset",
+  "commonJustNow": "just now",
+  "commonMinutesAgo": "{minutes} min ago",
+  "@commonMinutesAgo": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "commonHoursAgo": "{hours} h ago",
+  "@commonHoursAgo": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "gpsSharingTitle": "GPS sharing",
+  "gpsSharingSubtitle": "You decide whether your location is broadcast in the radio's adverts. Off by default.",
+  "gpsSharingStatusOff": "OFF",
+  "gpsSharingStatusManual": "MANUAL",
+  "gpsSharingStatusAuto": "AUTO",
+  "gpsSharingModeOff": "Off",
+  "gpsSharingModeManual": "Manual",
+  "gpsSharingModeAuto": "Auto",
+  "gpsSharingPrecisionTitle": "Sent precision",
+  "gpsSharingPrecisionExact": "Exact",
+  "gpsSharingPrecisionRough": "Rough",
+  "gpsSharingPrecisionVague": "Vague",
+  "gpsSharingIntervalLabel": "Update interval",
+  "gpsSharingShareNow": "Share now",
+  "gpsSharingClearNow": "Clear from radio",
+  "gpsSharingClearedOnRadio": "Location cleared from the radio.",
+  "gpsSharingPrivacyDisclaimer": "Your position will be included in LoRa adverts your radio transmits and may be visible to other nodes. Only enable this if you accept sharing it.",
+  "gpsSharingLastShared": "Shared {ago} — {lat}, {lon}",
+  "@gpsSharingLastShared": {
+    "placeholders": {
+      "ago": {},
+      "lat": {},
+      "lon": {}
+    }
+  },
+  "gpsSharingOutcomeOk": "✅ Location sent: {lat}, {lon}",
+  "@gpsSharingOutcomeOk": {
+    "placeholders": {
+      "lat": {},
+      "lon": {}
+    }
+  },
+  "gpsSharingOutcomeCleared": "Location cleared from radio.",
+  "gpsSharingOutcomeDisabled": "GPS sharing is off in Settings.",
+  "gpsSharingOutcomeNoPerm": "Location permission denied.",
+  "gpsSharingOutcomeServiceOff": "Phone location service disabled.",
+  "gpsSharingOutcomeNoFix": "No GPS fix available.",
+  "gpsSharingOutcomeDisconnected": "Radio disconnected — connect first.",
+  "gpsSharingOutcomeFailed": "Failed to send location.",
+  "gpsSharingOutcomeSkipped": "Position unchanged — transmit skipped.",
+  "gpsSharingMinMoveLabel": "Minimum movement",
+  "gpsSharingMinMoveAlways": "Always send",
+  "gpsSharingMinMoveHint": "In Auto mode, only push a new fix if you have moved at least this far since the last send. Saves LoRa air-time.",
+  "gpsSharingAdvPolicyTitle": "Broadcast location in adverts",
+  "gpsSharingAdvPolicyNever": "Off — your adverts will not include coordinates.",
+  "gpsSharingAdvPolicyAlways": "On — every advert will include the radio's last known location.",
+  "gpsSharingAdvPolicyUnknown": "Radio policy byte {value} — unknown value.",
+  "@gpsSharingAdvPolicyUnknown": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "mapVisibilityShowTitle": "Show on map",
+  "mapVisibilityShowSubtitle": "Hide this contact from your map, even if its adverts include coordinates.",
   "cannedMessagesTitle": "Canned messages",
   "cannedMessagesSubtitle": "Library of pre-written replies to send with one tap (or from the widget's SOS button).",
   "cannedMessagesAdd": "Add message",

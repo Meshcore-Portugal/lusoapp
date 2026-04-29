@@ -25,6 +25,22 @@ import 'screens/repeater_screen.dart';
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/connect',
+    // Widget click intents arrive as `meshcore-widget://...` URIs and would
+    // otherwise hit GoRouter's "no route" page. The actual action is handled
+    // by `WidgetService.registerClickHandlers()` listening on the
+    // `HomeWidget.widgetClicked` stream, so we only need to neutralise the
+    // navigation side-effect here.
+    redirect: (context, state) {
+      final loc = state.matchedLocation;
+      if (loc.startsWith('meshcore-widget') ||
+          state.uri.scheme == 'meshcore-widget') {
+        // Land on the channels list \u2014 a stable, always-available shell
+        // route. The widget action handler in main.dart will then re-route
+        // to the right destination (chats / map / connect / etc.).
+        return '/channels';
+      }
+      return null;
+    },
     routes: [
       GoRoute(
         path: '/connect',

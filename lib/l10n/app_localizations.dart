@@ -214,6 +214,240 @@ abstract class AppLocalizations {
   /// **'Repor'**
   String get commonReset;
 
+  /// No description provided for @commonJustNow.
+  ///
+  /// In pt, this message translates to:
+  /// **'agora mesmo'**
+  String get commonJustNow;
+
+  /// No description provided for @commonMinutesAgo.
+  ///
+  /// In pt, this message translates to:
+  /// **'há {minutes} min'**
+  String commonMinutesAgo(int minutes);
+
+  /// No description provided for @commonHoursAgo.
+  ///
+  /// In pt, this message translates to:
+  /// **'há {hours} h'**
+  String commonHoursAgo(int hours);
+
+  /// No description provided for @gpsSharingTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Partilha de GPS'**
+  String get gpsSharingTitle;
+
+  /// No description provided for @gpsSharingSubtitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Tu decides se a tua localização vai junto nos anúncios da rádio. Por defeito está desligada.'**
+  String get gpsSharingSubtitle;
+
+  /// No description provided for @gpsSharingStatusOff.
+  ///
+  /// In pt, this message translates to:
+  /// **'DESLIGADA'**
+  String get gpsSharingStatusOff;
+
+  /// No description provided for @gpsSharingStatusManual.
+  ///
+  /// In pt, this message translates to:
+  /// **'MANUAL'**
+  String get gpsSharingStatusManual;
+
+  /// No description provided for @gpsSharingStatusAuto.
+  ///
+  /// In pt, this message translates to:
+  /// **'AUTOMÁTICA'**
+  String get gpsSharingStatusAuto;
+
+  /// No description provided for @gpsSharingModeOff.
+  ///
+  /// In pt, this message translates to:
+  /// **'Desligada'**
+  String get gpsSharingModeOff;
+
+  /// No description provided for @gpsSharingModeManual.
+  ///
+  /// In pt, this message translates to:
+  /// **'Manual'**
+  String get gpsSharingModeManual;
+
+  /// No description provided for @gpsSharingModeAuto.
+  ///
+  /// In pt, this message translates to:
+  /// **'Automática'**
+  String get gpsSharingModeAuto;
+
+  /// No description provided for @gpsSharingPrecisionTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Precisão enviada'**
+  String get gpsSharingPrecisionTitle;
+
+  /// No description provided for @gpsSharingPrecisionExact.
+  ///
+  /// In pt, this message translates to:
+  /// **'Exacta'**
+  String get gpsSharingPrecisionExact;
+
+  /// No description provided for @gpsSharingPrecisionRough.
+  ///
+  /// In pt, this message translates to:
+  /// **'Aproximada'**
+  String get gpsSharingPrecisionRough;
+
+  /// No description provided for @gpsSharingPrecisionVague.
+  ///
+  /// In pt, this message translates to:
+  /// **'Vaga'**
+  String get gpsSharingPrecisionVague;
+
+  /// No description provided for @gpsSharingIntervalLabel.
+  ///
+  /// In pt, this message translates to:
+  /// **'Intervalo entre actualizações'**
+  String get gpsSharingIntervalLabel;
+
+  /// No description provided for @gpsSharingShareNow.
+  ///
+  /// In pt, this message translates to:
+  /// **'Partilhar agora'**
+  String get gpsSharingShareNow;
+
+  /// No description provided for @gpsSharingClearNow.
+  ///
+  /// In pt, this message translates to:
+  /// **'Limpar do rádio'**
+  String get gpsSharingClearNow;
+
+  /// No description provided for @gpsSharingClearedOnRadio.
+  ///
+  /// In pt, this message translates to:
+  /// **'Localização removida do rádio.'**
+  String get gpsSharingClearedOnRadio;
+
+  /// No description provided for @gpsSharingPrivacyDisclaimer.
+  ///
+  /// In pt, this message translates to:
+  /// **'A tua posição será incluída nos anúncios LoRa que o teu rádio transmitir, podendo ser vista por outros nós. Liga apenas se aceitas partilhá-la.'**
+  String get gpsSharingPrivacyDisclaimer;
+
+  /// No description provided for @gpsSharingLastShared.
+  ///
+  /// In pt, this message translates to:
+  /// **'Partilhado {ago} — {lat}, {lon}'**
+  String gpsSharingLastShared(Object ago, Object lat, Object lon);
+
+  /// No description provided for @gpsSharingOutcomeOk.
+  ///
+  /// In pt, this message translates to:
+  /// **'✅ Localização enviada: {lat}, {lon}'**
+  String gpsSharingOutcomeOk(Object lat, Object lon);
+
+  /// No description provided for @gpsSharingOutcomeCleared.
+  ///
+  /// In pt, this message translates to:
+  /// **'Localização limpa do rádio.'**
+  String get gpsSharingOutcomeCleared;
+
+  /// No description provided for @gpsSharingOutcomeDisabled.
+  ///
+  /// In pt, this message translates to:
+  /// **'A partilha está desligada nas Definições.'**
+  String get gpsSharingOutcomeDisabled;
+
+  /// No description provided for @gpsSharingOutcomeNoPerm.
+  ///
+  /// In pt, this message translates to:
+  /// **'Permissão de localização negada.'**
+  String get gpsSharingOutcomeNoPerm;
+
+  /// No description provided for @gpsSharingOutcomeServiceOff.
+  ///
+  /// In pt, this message translates to:
+  /// **'Serviço de localização desligado no telemóvel.'**
+  String get gpsSharingOutcomeServiceOff;
+
+  /// No description provided for @gpsSharingOutcomeNoFix.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sem fix de GPS disponível.'**
+  String get gpsSharingOutcomeNoFix;
+
+  /// No description provided for @gpsSharingOutcomeDisconnected.
+  ///
+  /// In pt, this message translates to:
+  /// **'Rádio desligado — liga primeiro.'**
+  String get gpsSharingOutcomeDisconnected;
+
+  /// No description provided for @gpsSharingOutcomeFailed.
+  ///
+  /// In pt, this message translates to:
+  /// **'Falha ao enviar localização.'**
+  String get gpsSharingOutcomeFailed;
+
+  /// No description provided for @gpsSharingOutcomeSkipped.
+  ///
+  /// In pt, this message translates to:
+  /// **'Posição não mudou — envio poupado.'**
+  String get gpsSharingOutcomeSkipped;
+
+  /// No description provided for @gpsSharingMinMoveLabel.
+  ///
+  /// In pt, this message translates to:
+  /// **'Movimento mínimo'**
+  String get gpsSharingMinMoveLabel;
+
+  /// No description provided for @gpsSharingMinMoveAlways.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sempre enviar'**
+  String get gpsSharingMinMoveAlways;
+
+  /// No description provided for @gpsSharingMinMoveHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Em modo automático, só envia novo fix se te moveste pelo menos esta distância desde o último envio. Poupa air-time da rede LoRa.'**
+  String get gpsSharingMinMoveHint;
+
+  /// No description provided for @gpsSharingAdvPolicyTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Difundir localização nos adverts'**
+  String get gpsSharingAdvPolicyTitle;
+
+  /// No description provided for @gpsSharingAdvPolicyNever.
+  ///
+  /// In pt, this message translates to:
+  /// **'Desligado — os teus adverts não incluem coordenadas.'**
+  String get gpsSharingAdvPolicyNever;
+
+  /// No description provided for @gpsSharingAdvPolicyAlways.
+  ///
+  /// In pt, this message translates to:
+  /// **'Ligado — cada advert inclui a última localização conhecida do rádio.'**
+  String get gpsSharingAdvPolicyAlways;
+
+  /// No description provided for @gpsSharingAdvPolicyUnknown.
+  ///
+  /// In pt, this message translates to:
+  /// **'Política do rádio: byte {value} — valor desconhecido.'**
+  String gpsSharingAdvPolicyUnknown(Object value);
+
+  /// No description provided for @mapVisibilityShowTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Mostrar no mapa'**
+  String get mapVisibilityShowTitle;
+
+  /// No description provided for @mapVisibilityShowSubtitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Esconde este contacto do teu mapa, mesmo que os adverts incluam coordenadas.'**
+  String get mapVisibilityShowSubtitle;
+
   /// No description provided for @cannedMessagesTitle.
   ///
   /// In pt, this message translates to:

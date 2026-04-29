@@ -66,6 +66,143 @@ class AppLocalizationsEs extends AppLocalizations {
   String get commonReset => 'Restablecer';
 
   @override
+  String get commonJustNow => 'ahora mismo';
+
+  @override
+  String commonMinutesAgo(int minutes) {
+    return 'hace $minutes min';
+  }
+
+  @override
+  String commonHoursAgo(int hours) {
+    return 'hace $hours h';
+  }
+
+  @override
+  String get gpsSharingTitle => 'Compartir GPS';
+
+  @override
+  String get gpsSharingSubtitle =>
+      'Tú decides si tu ubicación se incluye en los anuncios de la radio. Desactivado por defecto.';
+
+  @override
+  String get gpsSharingStatusOff => 'DESACTIVADO';
+
+  @override
+  String get gpsSharingStatusManual => 'MANUAL';
+
+  @override
+  String get gpsSharingStatusAuto => 'AUTOMÁTICO';
+
+  @override
+  String get gpsSharingModeOff => 'Desactivado';
+
+  @override
+  String get gpsSharingModeManual => 'Manual';
+
+  @override
+  String get gpsSharingModeAuto => 'Automático';
+
+  @override
+  String get gpsSharingPrecisionTitle => 'Precisión enviada';
+
+  @override
+  String get gpsSharingPrecisionExact => 'Exacta';
+
+  @override
+  String get gpsSharingPrecisionRough => 'Aproximada';
+
+  @override
+  String get gpsSharingPrecisionVague => 'Vaga';
+
+  @override
+  String get gpsSharingIntervalLabel => 'Intervalo de actualización';
+
+  @override
+  String get gpsSharingShareNow => 'Compartir ahora';
+
+  @override
+  String get gpsSharingClearNow => 'Borrar de la radio';
+
+  @override
+  String get gpsSharingClearedOnRadio => 'Ubicación borrada de la radio.';
+
+  @override
+  String get gpsSharingPrivacyDisclaimer =>
+      'Tu posición se incluirá en los anuncios LoRa de tu radio y puede ser visible para otros nodos. Activa sólo si aceptas compartirla.';
+
+  @override
+  String gpsSharingLastShared(Object ago, Object lat, Object lon) {
+    return 'Compartido $ago — $lat, $lon';
+  }
+
+  @override
+  String gpsSharingOutcomeOk(Object lat, Object lon) {
+    return '✅ Ubicación enviada: $lat, $lon';
+  }
+
+  @override
+  String get gpsSharingOutcomeCleared => 'Ubicación borrada de la radio.';
+
+  @override
+  String get gpsSharingOutcomeDisabled =>
+      'El compartir GPS está desactivado en Ajustes.';
+
+  @override
+  String get gpsSharingOutcomeNoPerm => 'Permiso de ubicación denegado.';
+
+  @override
+  String get gpsSharingOutcomeServiceOff =>
+      'Servicio de ubicación desactivado.';
+
+  @override
+  String get gpsSharingOutcomeNoFix => 'Sin señal GPS disponible.';
+
+  @override
+  String get gpsSharingOutcomeDisconnected =>
+      'Radio desconectada — conecta primero.';
+
+  @override
+  String get gpsSharingOutcomeFailed => 'Falló el envío de ubicación.';
+
+  @override
+  String get gpsSharingOutcomeSkipped =>
+      'Posición sin cambios — envío omitido.';
+
+  @override
+  String get gpsSharingMinMoveLabel => 'Movimiento mínimo';
+
+  @override
+  String get gpsSharingMinMoveAlways => 'Enviar siempre';
+
+  @override
+  String get gpsSharingMinMoveHint =>
+      'En modo automático, solo envía un nuevo fix si te has movido al menos esta distancia desde el último envío. Ahorra tiempo de antena LoRa.';
+
+  @override
+  String get gpsSharingAdvPolicyTitle => 'Difundir ubicación en los anuncios';
+
+  @override
+  String get gpsSharingAdvPolicyNever =>
+      'Desactivado — tus anuncios no incluyen coordenadas.';
+
+  @override
+  String get gpsSharingAdvPolicyAlways =>
+      'Activado — cada anuncio incluye la última ubicación conocida de la radio.';
+
+  @override
+  String gpsSharingAdvPolicyUnknown(Object value) {
+    return 'Política de la radio: byte $value — valor desconocido.';
+  }
+
+  @override
+  String get mapVisibilityShowTitle => 'Mostrar en el mapa';
+
+  @override
+  String get mapVisibilityShowSubtitle =>
+      'Oculta este contacto de tu mapa, incluso si sus anuncios incluyen coordenadas.';
+
+  @override
   String get cannedMessagesTitle => 'Mensajes rápidos';
 
   @override

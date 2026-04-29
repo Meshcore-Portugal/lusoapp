@@ -75,6 +75,8 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     final newList = List<ChatMessage>.from(state);
     newList[idx] = updated;
     state = newList;
+    _rebuildPartitioned(state);
+    _bumpVersion(_partitionKey(updated));
     _saveForMessage(updated);
   }
 
@@ -187,6 +189,8 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     final newList = List<ChatMessage>.from(state);
     newList[idx] = updated;
     state = newList;
+    _rebuildPartitioned(state);
+    _bumpVersion(_partitionKey(updated));
     _saveForMessage(updated);
   }
 
@@ -205,6 +209,7 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
           final newList = List<ChatMessage>.from(state);
           newList[i] = updated;
           state = newList;
+          _rebuildPartitioned(state);
           _bumpVersion(_partitionKey(updated));
           _saveForMessage(updated);
         }
@@ -271,6 +276,7 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
         final newList = List<ChatMessage>.from(state);
         newList[i] = updated;
         state = newList;
+        _rebuildPartitioned(state);
         _bumpVersion(_partitionKey(updated));
         _saveForMessage(updated);
         return;
@@ -295,6 +301,7 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
         final newList = List<ChatMessage>.from(state);
         newList[i] = updated;
         state = newList;
+        _rebuildPartitioned(state);
         _bumpVersion(_partitionKey(updated));
         _saveForMessage(updated);
         return;

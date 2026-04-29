@@ -138,6 +138,21 @@
   - [x] Persisted via `cannedMessagesProvider` (SharedPreferences); 8 ham/mesh defaults seeded on first launch (SOS, QRT, QRX, 73, CQ, OK, QTH?, ETA)
   - [x] Manage in Settings → Mensagens rápidas (add / edit / delete / reorder / reset, single emergency-flag enforced)
   - [x] Quick-pick ⚡ icon in private + channel chat composers inserts text into the input
+- [x] User-controlled GPS sharing
+  - [x] **Off by default** — user explicitly opts in via Settings → Partilha de GPS
+  - [x] Three modes: `off` / `manual` (one-shot from Map FAB or Settings) / `auto` (configurable 1–60 min timer)
+  - [x] Privacy precision chips: Exact (~1 m) · Rough (±100 m) · Vague (±1 km) — applied before pushing
+  - [x] Pushes phone GPS via `CMD_SET_ADVERT_LATLON 0x0E` (`radioService.setLocation`) so the radio's outgoing adverts carry the location flag
+  - [x] Toggling `off` automatically clears coords on the radio (sends 0,0 sentinel) and stops the timer
+  - [x] Settings card shows live status badge (DESLIGADA / MANUAL / AUTOMÁTICA), last-shared timestamp + coords, and an explicit privacy disclaimer
+  - [x] Map screen exposes a green "Partilhar agora" FAB **only when sharing is enabled**, never auto-prompting for location
+  - [x] **Move-aware Auto mode** — configurable 0–1000 m threshold (default 50 m); skips redundant pushes when the phone hasn't moved, saving LoRa air-time
+  - [x] **Home-screen widget badge** — green 📍 dot appears in the widget header whenever sharing is enabled, hidden otherwise
+  - [x] **Interactive radio policy toggle** — Switch surfaces the radio's `adv_loc_policy` byte (parsed from `RESP_SELF_INFO` offset 44) and writes it via `CMD_SET_OTHER_PARAMS` (0x26), round-tripping `manual_add_contacts`, `telemetry_mode` and `multi_acks` unchanged so only the location policy is mutated
+- [x] Per-contact map opt-in
+  - [x] `mapHiddenContactsProvider` (SharedPreferences-backed Set of pubKey hex)
+  - [x] Contact bottom sheet on the map exposes a "Mostrar no mapa" switch — user can hide any contact from the map even if their adverts include GPS
+  - [x] Hidden contacts are filtered out of the marker layer, cluster, and fit-all bounds
 - [x] Event Program screen (hidden)
   - [x] Hardcoded MeshCore PT summit schedule; route wired but tile disabled in Apps screen
 

@@ -77,7 +77,13 @@ class _ContactInfoSheet extends ConsumerWidget {
                   '${contact.longitude!.toStringAsFixed(5)}',
               theme: theme,
             ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
+
+          // Per-contact map opt-in: user can hide this node from the map
+          // even though its adverts include coordinates.
+          _MapVisibilityToggle(contact: contact),
+
+          const SizedBox(height: 8),
 
           // Action button — only for chat contacts
           if (contact.isChat)
@@ -152,6 +158,48 @@ class _DetailRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Switch + label that flips a contact's "show on map" preference.
+class _MapVisibilityToggle extends ConsumerWidget {
+  const _MapVisibilityToggle({required this.contact});
+  final Contact contact;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final hidden = ref
+        .watch(mapHiddenContactsProvider)
+        .contains(
+          contact.publicKey
+              .map((b) => b.toRadixString(16).padLeft(2, '0'))
+              .join(),
+        );
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        title: Text(context.l10n.mapVisibilityShowTitle),
+        subtitle: Text(
+          context.l10n.mapVisibilityShowSubtitle,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        value: !hidden,
+        onChanged: (show) {
+          ref
+              .read(mapHiddenContactsProvider.notifier)
+              .setHidden(contact.publicKey, !show);
+        },
       ),
     );
   }

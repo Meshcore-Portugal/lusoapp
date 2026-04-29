@@ -232,6 +232,10 @@ class CompanionDecoder {
     final pubKey = Uint8List.fromList(data.sublist(3, 35));
     final lat = _readInt32LE(data, 35) / 1e6;
     final lon = _readInt32LE(data, 39) / 1e6;
+    final multiAcks = data.length > 43 ? data[43] : null;
+    final advLocPolicy = data.length > 44 ? data[44] : null;
+    final telemetryMode = data.length > 45 ? data[45] : null;
+    final manualAddContacts = data.length > 46 ? data[46] : null;
 
     final radioFreq = _readUint32LE(data, 47);
     final radioBw = _readUint32LE(data, 51);
@@ -262,6 +266,10 @@ class CompanionDecoder {
         maxTxPower: maxTxPower,
         latitude: lat,
         longitude: lon,
+        advLocPolicy: advLocPolicy,
+        multiAcks: multiAcks,
+        telemetryMode: telemetryMode,
+        manualAddContacts: manualAddContacts,
       ),
     );
   }

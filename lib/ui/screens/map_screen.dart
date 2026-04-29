@@ -17,12 +17,16 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../protocol/models.dart';
 import '../../l10n/l10n.dart';
+import '../../providers/gps_sharing_provider.dart';
+import '../../providers/map_visibility_provider.dart';
 import '../../providers/radio_providers.dart';
-
+import '../../services/gps_sharing_service.dart';
+import '../../transport/radio_transport.dart' show TransportState;
 
 part 'parts/map_contact_sheets.dart';
 part 'parts/map_cluster.dart';
 part 'parts/map_trace_card.dart';
+
 /// Full-screen map showing all contacts with GPS coordinates and the device's
 /// own position.  Uses OpenStreetMap tiles via flutter_map (no API key needed).
 class MapScreen extends ConsumerStatefulWidget {
@@ -121,6 +125,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   /// Rejects null values and the [0, 0] sentinel used when no fix is available.
   static bool _isValidGps(double? lat, double? lng) =>
       lat != null && lng != null && !(lat == 0.0 && lng == 0.0);
+
+  /// Lowercase hex of a contact's full 32-byte public key (used as the
+  /// stable map-visibility opt-out key).
+  static String _pubKeyHex(Uint8List key) =>
+      key.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 
   /// True on platforms where Geolocator works.
   bool get _locationSupported =>
@@ -247,10 +256,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final contacts = ref.watch(contactsProvider);
     final selfInfo = ref.watch(selfInfoProvider);
     final traceResult = ref.watch(traceResultProvider);
+    final hidden = ref.watch(mapHiddenContactsProvider);
     final theme = Theme.of(context);
 
     final gpsContacts =
-        contacts.where((c) => _isValidGps(c.latitude, c.longitude)).toList();
+        contacts
+            .where((c) => _isValidGps(c.latitude, c.longitude))
+            .where((c) => !hidden.contains(_pubKeyHex(c.publicKey)))
+            .toList();
 
     // Prefer GPS from radio self-info; fall back to device GPS.
     // Treat [0, 0] as "no fix" — do not snap the map to null-island.
@@ -494,6 +507,52 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 ),
                 const SizedBox(height: 8),
               ],
+              // Quick "share my GPS to the radio" — only visible when the user
+              // has explicitly enabled GPS sharing in Settings.
+              Consumer(
+                builder: (context, ref, _) {
+                  final settings = ref.watch(gpsSharingProvider);
+                  final connected =
+                      ref.watch(connectionProvider) == TransportState.connected;
+                  if (!settings.isEnabled) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: FloatingActionButton.small(
+                      heroTag: 'map_share_gps',
+                      backgroundColor: Colors.green.shade700,
+                      foregroundColor: Colors.white,
+                      onPressed:
+                          connected
+                              ? () async {
+                                final svc = ref.read(gpsSharingServiceProvider);
+                                final res = await svc.shareNow();
+                                if (!context.mounted) return;
+                                final l10n = context.l10n;
+                                final msg = switch (res.outcome) {
+                                  GpsShareOutcome.ok => l10n
+                                      .gpsSharingOutcomeOk(
+                                        (res.lat ?? 0).toStringAsFixed(4),
+                                        (res.lon ?? 0).toStringAsFixed(4),
+                                      ),
+                                  GpsShareOutcome.noPermission =>
+                                    l10n.gpsSharingOutcomeNoPerm,
+                                  GpsShareOutcome.serviceDisabled =>
+                                    l10n.gpsSharingOutcomeServiceOff,
+                                  GpsShareOutcome.notConnected =>
+                                    l10n.gpsSharingOutcomeDisconnected,
+                                  _ => l10n.gpsSharingOutcomeFailed,
+                                };
+                                ScaffoldMessenger.of(
+                                  context,
+                                ).showSnackBar(SnackBar(content: Text(msg)));
+                              }
+                              : null,
+                      tooltip: context.l10n.gpsSharingShareNow,
+                      child: const Icon(Icons.upload_outlined),
+                    ),
+                  );
+                },
+              ),
               // If we already know the position, show a "center" button that
               // just pans without a new GPS fetch.  If position is unknown,
               // the button fetches GPS first.
@@ -793,4 +852,3 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 }
-

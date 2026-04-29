@@ -19,6 +19,77 @@
   "commonCopy": "Copiar",
   "commonRename": "Renombrar",
   "commonReset": "Restablecer",
+  "commonJustNow": "ahora mismo",
+  "commonMinutesAgo": "hace {minutes} min",
+  "@commonMinutesAgo": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "commonHoursAgo": "hace {hours} h",
+  "@commonHoursAgo": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "gpsSharingTitle": "Compartir GPS",
+  "gpsSharingSubtitle": "Tú decides si tu ubicación se incluye en los anuncios de la radio. Desactivado por defecto.",
+  "gpsSharingStatusOff": "DESACTIVADO",
+  "gpsSharingStatusManual": "MANUAL",
+  "gpsSharingStatusAuto": "AUTOMÁTICO",
+  "gpsSharingModeOff": "Desactivado",
+  "gpsSharingModeManual": "Manual",
+  "gpsSharingModeAuto": "Automático",
+  "gpsSharingPrecisionTitle": "Precisión enviada",
+  "gpsSharingPrecisionExact": "Exacta",
+  "gpsSharingPrecisionRough": "Aproximada",
+  "gpsSharingPrecisionVague": "Vaga",
+  "gpsSharingIntervalLabel": "Intervalo de actualización",
+  "gpsSharingShareNow": "Compartir ahora",
+  "gpsSharingClearNow": "Borrar de la radio",
+  "gpsSharingClearedOnRadio": "Ubicación borrada de la radio.",
+  "gpsSharingPrivacyDisclaimer": "Tu posición se incluirá en los anuncios LoRa de tu radio y puede ser visible para otros nodos. Activa sólo si aceptas compartirla.",
+  "gpsSharingLastShared": "Compartido {ago} — {lat}, {lon}",
+  "@gpsSharingLastShared": {
+    "placeholders": {
+      "ago": {},
+      "lat": {},
+      "lon": {}
+    }
+  },
+  "gpsSharingOutcomeOk": "✅ Ubicación enviada: {lat}, {lon}",
+  "@gpsSharingOutcomeOk": {
+    "placeholders": {
+      "lat": {},
+      "lon": {}
+    }
+  },
+  "gpsSharingOutcomeCleared": "Ubicación borrada de la radio.",
+  "gpsSharingOutcomeDisabled": "El compartir GPS está desactivado en Ajustes.",
+  "gpsSharingOutcomeNoPerm": "Permiso de ubicación denegado.",
+  "gpsSharingOutcomeServiceOff": "Servicio de ubicación desactivado.",
+  "gpsSharingOutcomeNoFix": "Sin señal GPS disponible.",
+  "gpsSharingOutcomeDisconnected": "Radio desconectada — conecta primero.",
+  "gpsSharingOutcomeFailed": "Falló el envío de ubicación.",
+  "gpsSharingOutcomeSkipped": "Posición sin cambios — envío omitido.",
+  "gpsSharingMinMoveLabel": "Movimiento mínimo",
+  "gpsSharingMinMoveAlways": "Enviar siempre",
+  "gpsSharingMinMoveHint": "En modo automático, solo envía un nuevo fix si te has movido al menos esta distancia desde el último envío. Ahorra tiempo de antena LoRa.",
+  "gpsSharingAdvPolicyTitle": "Difundir ubicación en los anuncios",
+  "gpsSharingAdvPolicyNever": "Desactivado — tus anuncios no incluyen coordenadas.",
+  "gpsSharingAdvPolicyAlways": "Activado — cada anuncio incluye la última ubicación conocida de la radio.",
+  "gpsSharingAdvPolicyUnknown": "Política de la radio: byte {value} — valor desconocido.",
+  "@gpsSharingAdvPolicyUnknown": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "mapVisibilityShowTitle": "Mostrar en el mapa",
+  "mapVisibilityShowSubtitle": "Oculta este contacto de tu mapa, incluso si sus anuncios incluyen coordenadas.",
   "cannedMessagesTitle": "Mensajes rápidos",
   "cannedMessagesSubtitle": "Biblioteca de respuestas predefinidas para enviar con un toque (o desde el botón SOS del widget).",
   "cannedMessagesAdd": "Añadir mensaje",

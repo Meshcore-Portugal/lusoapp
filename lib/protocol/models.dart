@@ -462,6 +462,10 @@ class SelfInfo extends Equatable {
     this.maxTxPower = 0,
     this.latitude,
     this.longitude,
+    this.advLocPolicy,
+    this.multiAcks,
+    this.telemetryMode,
+    this.manualAddContacts,
   });
 
   final Uint8List publicKey; // 32 bytes
@@ -472,6 +476,48 @@ class SelfInfo extends Equatable {
   final int maxTxPower;
   final double? latitude;
   final double? longitude;
+
+  /// Radio's stored "advert location policy" byte. Writable via
+  /// `CMD_SET_OTHER_PARAMS` (0x26): 0 = never broadcast location,
+  /// 1 = broadcast with every advert.
+  final int? advLocPolicy;
+
+  /// Radio's `multi_acks` byte (v7+). Round-tripped via `CMD_SET_OTHER_PARAMS`.
+  final int? multiAcks;
+
+  /// Packed telemetry mode byte: `(env<<4)|(loc<<2)|base` (v5+).
+  /// Round-tripped via `CMD_SET_OTHER_PARAMS`.
+  final int? telemetryMode;
+
+  /// `manual_add_contacts` flag. Round-tripped via `CMD_SET_OTHER_PARAMS`.
+  final int? manualAddContacts;
+
+  SelfInfo copyWith({
+    String? name,
+    RadioConfig? radioConfig,
+    int? advType,
+    int? txPower,
+    int? maxTxPower,
+    double? latitude,
+    double? longitude,
+    int? advLocPolicy,
+    int? multiAcks,
+    int? telemetryMode,
+    int? manualAddContacts,
+  }) => SelfInfo(
+    publicKey: publicKey,
+    name: name ?? this.name,
+    radioConfig: radioConfig ?? this.radioConfig,
+    advType: advType ?? this.advType,
+    txPower: txPower ?? this.txPower,
+    maxTxPower: maxTxPower ?? this.maxTxPower,
+    latitude: latitude ?? this.latitude,
+    longitude: longitude ?? this.longitude,
+    advLocPolicy: advLocPolicy ?? this.advLocPolicy,
+    multiAcks: multiAcks ?? this.multiAcks,
+    telemetryMode: telemetryMode ?? this.telemetryMode,
+    manualAddContacts: manualAddContacts ?? this.manualAddContacts,
+  );
 
   @override
   List<Object?> get props => [publicKey, name, radioConfig];

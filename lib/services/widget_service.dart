@@ -22,12 +22,14 @@ class WidgetService {
   /// [batteryPct]   — battery percentage 0–100 (0 when unknown)
   /// [contactCount] — number of known contacts
   /// [channelCount] — number of named channels
+  /// [gpsSharing]   — whether the user has GPS sharing enabled (badge)
   static Future<void> update({
     required String radioName,
     required bool connected,
     required int batteryPct,
     required int contactCount,
     required int channelCount,
+    bool? gpsSharing,
   }) async {
     if (!_supported) return;
     try {
@@ -43,12 +45,24 @@ class WidgetService {
         HomeWidget.saveWidgetData<int>('contact_count', contactCount),
         HomeWidget.saveWidgetData<int>('channel_count', channelCount),
         HomeWidget.saveWidgetData<String>('last_updated', ts),
+        if (gpsSharing != null)
+          HomeWidget.saveWidgetData<bool>('gps_sharing', gpsSharing),
       ]);
 
       await HomeWidget.updateWidget(androidName: _androidProvider);
     } catch (_) {
       // Widget errors are non-fatal.
     }
+  }
+
+  /// Push only the GPS-sharing badge state. Used when the user toggles
+  /// sharing on/off without any other radio-state change.
+  static Future<void> updateGpsSharing(bool active) async {
+    if (!_supported) return;
+    try {
+      await HomeWidget.saveWidgetData<bool>('gps_sharing', active);
+      await HomeWidget.updateWidget(androidName: _androidProvider);
+    } catch (_) {}
   }
 
   // ---------------------------------------------------------------------------

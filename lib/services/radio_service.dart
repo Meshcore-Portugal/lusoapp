@@ -174,6 +174,26 @@ class RadioService {
     await _send(CompanionEncoder.setAdvertLatLon(lat, lon));
   }
 
+  /// Update the bundled "other params" frame (manual-add, telemetry mode,
+  /// adv-loc-policy, multi-acks). All four are written atomically — the
+  /// caller is responsible for passing the radio's current values for the
+  /// fields it does not want to change.
+  Future<void> setOtherParams({
+    required int manualAddContacts,
+    required int telemetryMode,
+    required int advLocPolicy,
+    required int multiAcks,
+  }) async {
+    await _send(
+      CompanionEncoder.setOtherParams(
+        manualAddContacts: manualAddContacts,
+        telemetryMode: telemetryMode,
+        advLocPolicy: advLocPolicy,
+        multiAcks: multiAcks,
+      ),
+    );
+  }
+
   Future<void> reboot() async {
     await _send(CompanionEncoder.reboot());
   }

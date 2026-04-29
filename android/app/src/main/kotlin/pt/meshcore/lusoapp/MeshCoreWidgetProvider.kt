@@ -42,17 +42,26 @@ class MeshCoreWidgetProvider : AppWidgetProvider() {
 
             val radioName   = prefs.getString("radio_name",   "—")     ?: "—"
             val connected   = prefs.getBoolean("connected",   false)
+            val gpsSharing  = prefs.getBoolean("gps_sharing", false)
             val batteryPct  = (prefs.all["battery_pct"]  as? Number)?.toInt() ?: 0
             val contacts    = (prefs.all["contact_count"] as? Number)?.toInt() ?: 0
             val channels    = (prefs.all["channel_count"] as? Number)?.toInt() ?: 0
             val lastUpdated = prefs.getString("last_updated", "--:--") ?: "--:--"
 
-            Log.d("MCWidget", "update: radio=$radioName connected=$connected " +
+            Log.d("MCWidget", "update: radio=$radioName connected=$connected gps=$gpsSharing " +
                     "bat=$batteryPct% contacts=$contacts channels=$channels ts=$lastUpdated")
 
             val views = RemoteViews(context.packageName, R.layout.widget_meshcore)
 
             views.setTextViewText(R.id.widget_radio_name, radioName)
+
+            // GPS-sharing badge — visible only when the user opted in.
+            if (gpsSharing) {
+                views.setViewVisibility(R.id.widget_gps_badge, android.view.View.VISIBLE)
+                views.setTextViewText(R.id.widget_gps_badge, "📍")
+            } else {
+                views.setViewVisibility(R.id.widget_gps_badge, android.view.View.GONE)
+            }
 
             if (connected) {
                 views.setTextViewText(R.id.widget_status, "● ONLINE")

@@ -244,6 +244,31 @@ class CompanionEncoder {
     return _frame(cmdSetAdvertLatLon, payload.toBytes());
   }
 
+  /// SET_OTHER_PARAMS (0x26) — update the four bundled radio prefs in one frame.
+  ///
+  /// Layout (per `MyMesh.cpp` `CMD_SET_OTHER_PARAMS`):
+  ///   [0] cmd                        (handled by `_frame`)
+  ///   [1] manualAddContacts          (uint8, 0/1)
+  ///   [2] telemetryMode bitfield     (env<<4 | loc<<2 | base)
+  ///   [3] advLocPolicy               (0 = never, 1 = every advert)
+  ///   [4] multiAcks                  (uint8, v7+)
+  ///
+  /// Callers MUST pass the radio's current values for fields they don't
+  /// want to change — this is a write-all command, not a partial update.
+  static Uint8List setOtherParams({
+    required int manualAddContacts,
+    required int telemetryMode,
+    required int advLocPolicy,
+    required int multiAcks,
+  }) {
+    final payload = BytesBuilder();
+    payload.addByte(manualAddContacts & 0xFF);
+    payload.addByte(telemetryMode & 0xFF);
+    payload.addByte(advLocPolicy & 0xFF);
+    payload.addByte(multiAcks & 0xFF);
+    return _frame(cmdSetOtherParams, payload.toBytes());
+  }
+
   /// SHARE_CONTACT — share a contact via radio broadcast.
   static Uint8List shareContact(Uint8List publicKey) {
     return _frame(cmdShareContact, publicKey.sublist(0, 32));
