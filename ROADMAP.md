@@ -184,9 +184,9 @@
 - [ ] Power management profiles
   - [ ] Low-power mode scheduling
   - [ ] TX power by time-of-day
-- [ ] Data export
-  - [ ] CSV export of contacts and messages
-  - [ ] KML export for map data
+- [x] Data export
+  - [x] CSV export of contacts and messages
+  - [x] KML export for map data
   - [x] Protocol log export for debugging (RX Log + PCAP — implemented in Phase 3)
 
 ---

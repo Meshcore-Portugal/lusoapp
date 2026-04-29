@@ -2074,4 +2074,53 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get repeaterHelpSearchHint => 'Buscar';
+
+  @override
+  String get dataExportTitle => 'Exportar Datos';
+
+  @override
+  String get dataExportContactsTitle => 'Contactos';
+
+  @override
+  String dataExportContactsDesc(int count) {
+    return '$count contactos guardados';
+  }
+
+  @override
+  String get dataExportMessagesTitle => 'Mensajes';
+
+  @override
+  String get dataExportMessagesDesc =>
+      'Todas las conversaciones — privadas y canales';
+
+  @override
+  String get dataExportKmlTitle => 'Datos de Mapa';
+
+  @override
+  String dataExportKmlDesc(int count) {
+    return '$count contactos con GPS';
+  }
+
+  @override
+  String get dataExportNote =>
+      'Los archivos se exportan directamente a la hoja de compartir.\nNingún dato sale del dispositivo sin tu confirmación.';
+
+  @override
+  String get dataExportNoContacts => 'Sin contactos para exportar';
+
+  @override
+  String get dataExportNoMessages => 'Sin mensajes para exportar';
+
+  @override
+  String get dataExportNoGps => 'Sin contactos con coordenadas GPS';
+
+  @override
+  String get dataExportFailed => 'Error al exportar';
+
+  @override
+  String get appsDataExportTitle => 'Exportar Datos';
+
+  @override
+  String get appsDataExportSubtitle =>
+      'Exporta contactos, mensajes y datos de mapa';
 }

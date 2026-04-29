@@ -709,5 +709,33 @@
   "repeaterHelpTitle": "Help",
   "repeaterHelpSubtitle": "Repeater Commands",
   "repeaterHelpFirmwareNote": "Some commands require the latest firmware.",
-  "repeaterHelpSearchHint": "Search"
+  "repeaterHelpSearchHint": "Search",
+  "dataExportTitle": "Data Export",
+  "dataExportContactsTitle": "Contacts",
+  "dataExportContactsDesc": "{count} contacts stored",
+  "@dataExportContactsDesc": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dataExportMessagesTitle": "Messages",
+  "dataExportMessagesDesc": "All conversations — private & channels",
+  "dataExportKmlTitle": "Map Data",
+  "dataExportKmlDesc": "{count} contacts with GPS",
+  "@dataExportKmlDesc": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dataExportNote": "Files are exported directly to the share sheet.\nNo data leaves the device unless you choose to share it.",
+  "dataExportNoContacts": "No contacts to export",
+  "dataExportNoMessages": "No messages to export",
+  "dataExportNoGps": "No contacts with GPS coordinates",
+  "dataExportFailed": "Export failed",
+  "appsDataExportTitle": "Data Export",
+  "appsDataExportSubtitle": "Export contacts, messages & map data"
 }

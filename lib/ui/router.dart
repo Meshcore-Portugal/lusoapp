@@ -19,6 +19,7 @@ import 'screens/discover_contacts_screen.dart';
 import 'apps/noise_floor/noise_floor_screen.dart';
 import 'apps/rx_log/rx_log_screen.dart';
 import 'apps/topology/topology_screen.dart';
+import 'apps/data_export/data_export_screen.dart';
 import 'screens/repeater_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -75,6 +76,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/apps/topology',
             builder: (context, state) => const TopologyScreen(),
+          ),
+          GoRoute(
+            path: '/apps/dataexport',
+            builder: (context, state) => const DataExportScreen(),
           ),
           GoRoute(
             path: '/apps/event',

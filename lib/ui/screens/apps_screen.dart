@@ -57,6 +57,14 @@ class AppsScreen extends StatelessWidget {
       color: Color(0xFF22C55E),
       route: '/apps/noisefloor',
     ),
+    _AppEntry(
+      id: 'dataexport',
+      title: 'Exportar Dados',
+      subtitle: 'Contactos, mensagens e mapa',
+      icon: Icons.upload_file_outlined,
+      color: Color(0xFFF59E0B),
+      route: '/apps/dataexport',
+    ),
   ];
 
   @override

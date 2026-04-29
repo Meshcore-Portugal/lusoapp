@@ -758,5 +758,33 @@
   "repeaterHelpTitle": "Ajuda",
   "repeaterHelpSubtitle": "Comandos do Repetidor",
   "repeaterHelpFirmwareNote": "Alguns comandos requerem firmware recente.",
-  "repeaterHelpSearchHint": "Pesquisar"
+  "repeaterHelpSearchHint": "Pesquisar",
+  "dataExportTitle": "Exportar Dados",
+  "dataExportContactsTitle": "Contactos",
+  "dataExportContactsDesc": "{count} contactos guardados",
+  "@dataExportContactsDesc": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dataExportMessagesTitle": "Mensagens",
+  "dataExportMessagesDesc": "Todas as conversas — privadas e canais",
+  "dataExportKmlTitle": "Dados de Mapa",
+  "dataExportKmlDesc": "{count} contactos com GPS",
+  "@dataExportKmlDesc": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dataExportNote": "Os ficheiros são exportados diretamente para o menu de partilha.\nNenhum dado sai do dispositivo sem a tua confirmação.",
+  "dataExportNoContacts": "Sem contactos para exportar",
+  "dataExportNoMessages": "Sem mensagens para exportar",
+  "dataExportNoGps": "Sem contactos com coordenadas GPS",
+  "dataExportFailed": "Falha na exportação",
+  "appsDataExportTitle": "Exportar Dados",
+  "appsDataExportSubtitle": "Exporta contactos, mensagens e dados de mapa"
 }

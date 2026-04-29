@@ -4023,6 +4023,90 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Pesquisar'**
   String get repeaterHelpSearchHint;
+
+  /// No description provided for @dataExportTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Exportar Dados'**
+  String get dataExportTitle;
+
+  /// No description provided for @dataExportContactsTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Contactos'**
+  String get dataExportContactsTitle;
+
+  /// No description provided for @dataExportContactsDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'{count} contactos guardados'**
+  String dataExportContactsDesc(int count);
+
+  /// No description provided for @dataExportMessagesTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Mensagens'**
+  String get dataExportMessagesTitle;
+
+  /// No description provided for @dataExportMessagesDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Todas as conversas — privadas e canais'**
+  String get dataExportMessagesDesc;
+
+  /// No description provided for @dataExportKmlTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Dados de Mapa'**
+  String get dataExportKmlTitle;
+
+  /// No description provided for @dataExportKmlDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'{count} contactos com GPS'**
+  String dataExportKmlDesc(int count);
+
+  /// No description provided for @dataExportNote.
+  ///
+  /// In pt, this message translates to:
+  /// **'Os ficheiros são exportados diretamente para o menu de partilha.\nNenhum dado sai do dispositivo sem a tua confirmação.'**
+  String get dataExportNote;
+
+  /// No description provided for @dataExportNoContacts.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sem contactos para exportar'**
+  String get dataExportNoContacts;
+
+  /// No description provided for @dataExportNoMessages.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sem mensagens para exportar'**
+  String get dataExportNoMessages;
+
+  /// No description provided for @dataExportNoGps.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sem contactos com coordenadas GPS'**
+  String get dataExportNoGps;
+
+  /// No description provided for @dataExportFailed.
+  ///
+  /// In pt, this message translates to:
+  /// **'Falha na exportação'**
+  String get dataExportFailed;
+
+  /// No description provided for @appsDataExportTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Exportar Dados'**
+  String get appsDataExportTitle;
+
+  /// No description provided for @appsDataExportSubtitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Exporta contactos, mensagens e dados de mapa'**
+  String get appsDataExportSubtitle;
 }
 
 class _AppLocalizationsDelegate

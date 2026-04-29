@@ -2060,4 +2060,51 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get repeaterHelpSearchHint => 'Search';
+
+  @override
+  String get dataExportTitle => 'Data Export';
+
+  @override
+  String get dataExportContactsTitle => 'Contacts';
+
+  @override
+  String dataExportContactsDesc(int count) {
+    return '$count contacts stored';
+  }
+
+  @override
+  String get dataExportMessagesTitle => 'Messages';
+
+  @override
+  String get dataExportMessagesDesc => 'All conversations — private & channels';
+
+  @override
+  String get dataExportKmlTitle => 'Map Data';
+
+  @override
+  String dataExportKmlDesc(int count) {
+    return '$count contacts with GPS';
+  }
+
+  @override
+  String get dataExportNote =>
+      'Files are exported directly to the share sheet.\nNo data leaves the device unless you choose to share it.';
+
+  @override
+  String get dataExportNoContacts => 'No contacts to export';
+
+  @override
+  String get dataExportNoMessages => 'No messages to export';
+
+  @override
+  String get dataExportNoGps => 'No contacts with GPS coordinates';
+
+  @override
+  String get dataExportFailed => 'Export failed';
+
+  @override
+  String get appsDataExportTitle => 'Data Export';
+
+  @override
+  String get appsDataExportSubtitle => 'Export contacts, messages & map data';
 }
