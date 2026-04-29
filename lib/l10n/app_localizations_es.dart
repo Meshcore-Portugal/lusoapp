@@ -1880,4 +1880,69 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get urlOpenConfirm => 'Abrir';
+
+  @override
+  String get topologyScreenTitle => 'Topología de Red';
+
+  @override
+  String get topologyTabGraph => 'Grafo';
+
+  @override
+  String get topologyTabTimeline => 'Cronología';
+
+  @override
+  String get topologyEmptyTitle => 'Sin datos de topología';
+
+  @override
+  String get topologyEmptyHint =>
+      'Conéctate a una radio para\nvisualizar la red';
+
+  @override
+  String get topologySelf => 'Yo';
+
+  @override
+  String get topologyResetView => 'Restablecer vista';
+
+  @override
+  String get topologySnrGood => 'SNR ≥ 5 dB';
+
+  @override
+  String get topologySnrMid => 'SNR 0–5 dB';
+
+  @override
+  String get topologySnrBad => 'SNR < 0 dB';
+
+  @override
+  String get topologyLabelId => 'ID';
+
+  @override
+  String get topologyLabelPath => 'Ruta';
+
+  @override
+  String get topologyLabelSeen => 'Visto';
+
+  @override
+  String topologySecondsAgo(int s) {
+    return 'hace ${s}s';
+  }
+
+  @override
+  String topologyMinutesAgo(int min) {
+    return 'hace ${min}min';
+  }
+
+  @override
+  String topologyHoursAgo(int h) {
+    return 'hace ${h}h';
+  }
+
+  @override
+  String topologyDaysAgo(int d) {
+    return 'hace ${d}d';
+  }
+
+  @override
+  String topologyWeeksAgo(int w) {
+    return 'hace $w sem.';
+  }
 }

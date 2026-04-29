@@ -1868,4 +1868,69 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get urlOpenConfirm => 'Open';
+
+  @override
+  String get topologyScreenTitle => 'Network Topology';
+
+  @override
+  String get topologyTabGraph => 'Graph';
+
+  @override
+  String get topologyTabTimeline => 'Timeline';
+
+  @override
+  String get topologyEmptyTitle => 'No topology data';
+
+  @override
+  String get topologyEmptyHint =>
+      'Connect to a radio to\nvisualize the network';
+
+  @override
+  String get topologySelf => 'Me';
+
+  @override
+  String get topologyResetView => 'Reset view';
+
+  @override
+  String get topologySnrGood => 'SNR ≥ 5 dB';
+
+  @override
+  String get topologySnrMid => 'SNR 0–5 dB';
+
+  @override
+  String get topologySnrBad => 'SNR < 0 dB';
+
+  @override
+  String get topologyLabelId => 'ID';
+
+  @override
+  String get topologyLabelPath => 'Path';
+
+  @override
+  String get topologyLabelSeen => 'Seen';
+
+  @override
+  String topologySecondsAgo(int s) {
+    return '${s}s ago';
+  }
+
+  @override
+  String topologyMinutesAgo(int min) {
+    return '${min}min ago';
+  }
+
+  @override
+  String topologyHoursAgo(int h) {
+    return '${h}h ago';
+  }
+
+  @override
+  String topologyDaysAgo(int d) {
+    return '${d}d ago';
+  }
+
+  @override
+  String topologyWeeksAgo(int w) {
+    return '${w}w ago';
+  }
 }

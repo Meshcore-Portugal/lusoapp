@@ -169,9 +169,9 @@
 
 **Goal:** Mesh network intelligence and advanced radio features.
 
-- [ ] Mesh topology viewer
-  - [ ] Visual network graph
-  - [ ] Node discovery timeline
+- [x] Mesh topology viewer
+  - [x] Visual network graph (interactive pan/zoom; concentric rings by hop distance; SNR-coded edges from trace history; tap-to-contact sheet)
+  - [x] Node discovery timeline (contacts sorted by last-heard timestamp)
 - [ ] Repeater management
   - [ ] View repeater status
   - [ ] Configure repeater settings (if admin)

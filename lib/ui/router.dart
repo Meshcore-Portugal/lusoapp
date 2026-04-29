@@ -18,6 +18,7 @@ import 'screens/telemetry_screen.dart';
 import 'screens/discover_contacts_screen.dart';
 import 'screens/noise_floor_screen.dart';
 import 'screens/rx_log_screen.dart';
+import 'screens/topology_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -69,6 +70,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/apps/noisefloor',
             builder: (context, state) => const NoiseFloorScreen(),
+          ),
+          GoRoute(
+            path: '/apps/topology',
+            builder: (context, state) => const TopologyScreen(),
           ),
           GoRoute(
             path: '/apps/event',

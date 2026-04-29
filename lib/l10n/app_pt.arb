@@ -664,5 +664,58 @@
   "signalGood": "Bom sinal",
   "signalExcellent": "Sinal excelente",
   "urlOpenTitle": "Abrir link externo?",
-  "urlOpenConfirm": "Abrir"
+  "urlOpenConfirm": "Abrir",
+  "topologyScreenTitle": "Topologia da Rede",
+  "topologyTabGraph": "Grafo",
+  "topologyTabTimeline": "Cronologia",
+  "topologyEmptyTitle": "Sem dados de topologia",
+  "topologyEmptyHint": "Liga-te a um rádio para\nvisualizar a rede",
+  "topologySelf": "Eu",
+  "topologyResetView": "Repor vista",
+  "topologySnrGood": "SNR ≥ 5 dB",
+  "topologySnrMid": "SNR 0–5 dB",
+  "topologySnrBad": "SNR < 0 dB",
+  "topologyLabelId": "ID",
+  "topologyLabelPath": "Caminho",
+  "topologyLabelSeen": "Visto",
+  "topologySecondsAgo": "há {s}s",
+  "@topologySecondsAgo": {
+    "placeholders": {
+      "s": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyMinutesAgo": "há {min}min",
+  "@topologyMinutesAgo": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyHoursAgo": "há {h}h",
+  "@topologyHoursAgo": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyDaysAgo": "há {d}d",
+  "@topologyDaysAgo": {
+    "placeholders": {
+      "d": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyWeeksAgo": "há {w} sem.",
+  "@topologyWeeksAgo": {
+    "placeholders": {
+      "w": {
+        "type": "int"
+      }
+    }
+  }
 }

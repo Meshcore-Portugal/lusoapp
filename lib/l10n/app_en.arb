@@ -615,5 +615,58 @@
   "signalGood": "Good signal",
   "signalExcellent": "Excellent signal",
   "urlOpenTitle": "Open external link?",
-  "urlOpenConfirm": "Open"
+  "urlOpenConfirm": "Open",
+  "topologyScreenTitle": "Network Topology",
+  "topologyTabGraph": "Graph",
+  "topologyTabTimeline": "Timeline",
+  "topologyEmptyTitle": "No topology data",
+  "topologyEmptyHint": "Connect to a radio to\nvisualize the network",
+  "topologySelf": "Me",
+  "topologyResetView": "Reset view",
+  "topologySnrGood": "SNR ≥ 5 dB",
+  "topologySnrMid": "SNR 0–5 dB",
+  "topologySnrBad": "SNR < 0 dB",
+  "topologyLabelId": "ID",
+  "topologyLabelPath": "Path",
+  "topologyLabelSeen": "Seen",
+  "topologySecondsAgo": "{s}s ago",
+  "@topologySecondsAgo": {
+    "placeholders": {
+      "s": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyMinutesAgo": "{min}min ago",
+  "@topologyMinutesAgo": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyHoursAgo": "{h}h ago",
+  "@topologyHoursAgo": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyDaysAgo": "{d}d ago",
+  "@topologyDaysAgo": {
+    "placeholders": {
+      "d": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyWeeksAgo": "{w}w ago",
+  "@topologyWeeksAgo": {
+    "placeholders": {
+      "w": {
+        "type": "int"
+      }
+    }
+  }
 }

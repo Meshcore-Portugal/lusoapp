@@ -20,6 +20,14 @@ class AppsScreen extends StatelessWidget {
     //   route: '/apps/event',
     // ),
     _AppEntry(
+      id: 'topology',
+      title: 'Topologia',
+      subtitle: 'Grafo da rede e cronologia',
+      icon: Icons.hub_outlined,
+      color: Color(0xFFEC4899),
+      route: '/apps/topology',
+    ),
+    _AppEntry(
       id: 'plan333',
       title: 'Plano 3-3-3',
       subtitle: 'Evento semanal MeshCore',

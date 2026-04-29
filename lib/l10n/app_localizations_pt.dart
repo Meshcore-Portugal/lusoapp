@@ -1877,4 +1877,68 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get urlOpenConfirm => 'Abrir';
+
+  @override
+  String get topologyScreenTitle => 'Topologia da Rede';
+
+  @override
+  String get topologyTabGraph => 'Grafo';
+
+  @override
+  String get topologyTabTimeline => 'Cronologia';
+
+  @override
+  String get topologyEmptyTitle => 'Sem dados de topologia';
+
+  @override
+  String get topologyEmptyHint => 'Liga-te a um rádio para\nvisualizar a rede';
+
+  @override
+  String get topologySelf => 'Eu';
+
+  @override
+  String get topologyResetView => 'Repor vista';
+
+  @override
+  String get topologySnrGood => 'SNR ≥ 5 dB';
+
+  @override
+  String get topologySnrMid => 'SNR 0–5 dB';
+
+  @override
+  String get topologySnrBad => 'SNR < 0 dB';
+
+  @override
+  String get topologyLabelId => 'ID';
+
+  @override
+  String get topologyLabelPath => 'Caminho';
+
+  @override
+  String get topologyLabelSeen => 'Visto';
+
+  @override
+  String topologySecondsAgo(int s) {
+    return 'há ${s}s';
+  }
+
+  @override
+  String topologyMinutesAgo(int min) {
+    return 'há ${min}min';
+  }
+
+  @override
+  String topologyHoursAgo(int h) {
+    return 'há ${h}h';
+  }
+
+  @override
+  String topologyDaysAgo(int d) {
+    return 'há ${d}d';
+  }
+
+  @override
+  String topologyWeeksAgo(int w) {
+    return 'há $w sem.';
+  }
 }

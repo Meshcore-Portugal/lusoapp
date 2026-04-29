@@ -262,6 +262,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     // by the disconnected radio's keys on the next connection.
     _ref.read(radioContactsSnapshotProvider.notifier).state = {};
     _ref.read(contactsSyncedProvider.notifier).state = false;
+    _ref.read(traceHistoryProvider.notifier).clear();
     // Clear the current radio ID so channel storage is not accidentally
     // written to the disconnected radio's scope.
     _ref.read(currentRadioIdProvider.notifier).state = null;
@@ -707,6 +708,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           final result = parseTraceDataPush(data, contacts);
           if (result != null) {
             _ref.read(traceResultProvider.notifier).state = result;
+            _ref.read(traceHistoryProvider.notifier).add(result);
           }
         case StatusResponsePush(:final data):
           final stats = RepeaterStats.fromPushData(data);
@@ -2279,6 +2281,27 @@ final scannedDevicesProvider = StateProvider<List<RadioDevice>>((_) => []);
 /// Latest parsed [TraceResult] received from a PUSH_CODE_TRACE_DATA (0x89).
 /// Updated whenever a new trace push arrives; null until first trace received.
 final traceResultProvider = StateProvider<TraceResult?>((ref) => null);
+
+/// Session-scoped accumulator of all [TraceResult]s received since the last
+/// connect.  Capped at 50 entries.  Cleared on disconnect.  Used by
+/// [TopologyScreen] to derive inter-node edges from historical trace data.
+class _TraceHistoryNotifier extends StateNotifier<List<TraceResult>> {
+  _TraceHistoryNotifier() : super(const []);
+
+  void add(TraceResult result) {
+    state =
+        state.length >= 50
+            ? [...state.sublist(state.length - 49), result]
+            : [...state, result];
+  }
+
+  void clear() => state = const [];
+}
+
+final traceHistoryProvider =
+    StateNotifierProvider<_TraceHistoryNotifier, List<TraceResult>>(
+      (_) => _TraceHistoryNotifier(),
+    );
 
 /// Cache of outPath bytes per contact, keyed by 6-byte pubKeyPrefix hex.
 /// Populated whenever a PathDiscoveryPush (0x8D) is received.

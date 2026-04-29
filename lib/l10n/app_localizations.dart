@@ -3669,6 +3669,114 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Abrir'**
   String get urlOpenConfirm;
+
+  /// No description provided for @topologyScreenTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Topologia da Rede'**
+  String get topologyScreenTitle;
+
+  /// No description provided for @topologyTabGraph.
+  ///
+  /// In pt, this message translates to:
+  /// **'Grafo'**
+  String get topologyTabGraph;
+
+  /// No description provided for @topologyTabTimeline.
+  ///
+  /// In pt, this message translates to:
+  /// **'Cronologia'**
+  String get topologyTabTimeline;
+
+  /// No description provided for @topologyEmptyTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sem dados de topologia'**
+  String get topologyEmptyTitle;
+
+  /// No description provided for @topologyEmptyHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Liga-te a um rádio para\nvisualizar a rede'**
+  String get topologyEmptyHint;
+
+  /// No description provided for @topologySelf.
+  ///
+  /// In pt, this message translates to:
+  /// **'Eu'**
+  String get topologySelf;
+
+  /// No description provided for @topologyResetView.
+  ///
+  /// In pt, this message translates to:
+  /// **'Repor vista'**
+  String get topologyResetView;
+
+  /// No description provided for @topologySnrGood.
+  ///
+  /// In pt, this message translates to:
+  /// **'SNR ≥ 5 dB'**
+  String get topologySnrGood;
+
+  /// No description provided for @topologySnrMid.
+  ///
+  /// In pt, this message translates to:
+  /// **'SNR 0–5 dB'**
+  String get topologySnrMid;
+
+  /// No description provided for @topologySnrBad.
+  ///
+  /// In pt, this message translates to:
+  /// **'SNR < 0 dB'**
+  String get topologySnrBad;
+
+  /// No description provided for @topologyLabelId.
+  ///
+  /// In pt, this message translates to:
+  /// **'ID'**
+  String get topologyLabelId;
+
+  /// No description provided for @topologyLabelPath.
+  ///
+  /// In pt, this message translates to:
+  /// **'Caminho'**
+  String get topologyLabelPath;
+
+  /// No description provided for @topologyLabelSeen.
+  ///
+  /// In pt, this message translates to:
+  /// **'Visto'**
+  String get topologyLabelSeen;
+
+  /// No description provided for @topologySecondsAgo.
+  ///
+  /// In pt, this message translates to:
+  /// **'há {s}s'**
+  String topologySecondsAgo(int s);
+
+  /// No description provided for @topologyMinutesAgo.
+  ///
+  /// In pt, this message translates to:
+  /// **'há {min}min'**
+  String topologyMinutesAgo(int min);
+
+  /// No description provided for @topologyHoursAgo.
+  ///
+  /// In pt, this message translates to:
+  /// **'há {h}h'**
+  String topologyHoursAgo(int h);
+
+  /// No description provided for @topologyDaysAgo.
+  ///
+  /// In pt, this message translates to:
+  /// **'há {d}d'**
+  String topologyDaysAgo(int d);
+
+  /// No description provided for @topologyWeeksAgo.
+  ///
+  /// In pt, this message translates to:
+  /// **'há {w} sem.'**
+  String topologyWeeksAgo(int w);
 }
 
 class _AppLocalizationsDelegate

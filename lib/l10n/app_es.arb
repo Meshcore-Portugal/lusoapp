@@ -615,5 +615,58 @@
   "signalGood": "Buena señal",
   "signalExcellent": "Señal excelente",
   "urlOpenTitle": "¿Abrir enlace externo?",
-  "urlOpenConfirm": "Abrir"
+  "urlOpenConfirm": "Abrir",
+  "topologyScreenTitle": "Topología de Red",
+  "topologyTabGraph": "Grafo",
+  "topologyTabTimeline": "Cronología",
+  "topologyEmptyTitle": "Sin datos de topología",
+  "topologyEmptyHint": "Conéctate a una radio para\nvisualizar la red",
+  "topologySelf": "Yo",
+  "topologyResetView": "Restablecer vista",
+  "topologySnrGood": "SNR ≥ 5 dB",
+  "topologySnrMid": "SNR 0–5 dB",
+  "topologySnrBad": "SNR < 0 dB",
+  "topologyLabelId": "ID",
+  "topologyLabelPath": "Ruta",
+  "topologyLabelSeen": "Visto",
+  "topologySecondsAgo": "hace {s}s",
+  "@topologySecondsAgo": {
+    "placeholders": {
+      "s": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyMinutesAgo": "hace {min}min",
+  "@topologyMinutesAgo": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyHoursAgo": "hace {h}h",
+  "@topologyHoursAgo": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyDaysAgo": "hace {d}d",
+  "@topologyDaysAgo": {
+    "placeholders": {
+      "d": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyWeeksAgo": "hace {w} sem.",
+  "@topologyWeeksAgo": {
+    "placeholders": {
+      "w": {
+        "type": "int"
+      }
+    }
+  }
 }
