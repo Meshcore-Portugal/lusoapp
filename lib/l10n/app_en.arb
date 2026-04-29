@@ -458,6 +458,32 @@
   "discoverEmptyHint": "Try a different search",
   "discoverNone": "No contacts discovered",
   "discoverNoneHint": "Contacts appear while transmitting on the network",
+  "discoverCleanTooltip": "Clean local-only contacts",
+  "discoverCleanSheetTitle": "Clean local-only contacts",
+  "discoverCleanSheetSubtitle": "Pick which discovered contacts to remove. Contacts stored on the radio are always kept.",
+  "discoverCleanOption48h": "Not heard in 48 hours",
+  "discoverCleanOption7d": "Not heard in 7 days",
+  "discoverCleanOption30d": "Not heard in 30 days",
+  "discoverCleanOptionNever": "Never heard (no advert)",
+  "discoverCleanOptionAll": "All local-only contacts",
+  "discoverCleanTitle": "Clean discovered contacts?",
+  "discoverCleanBody": "This will remove {n, plural, =1{1 contact} other{{n} contacts}} that are not stored on the radio. Contacts saved on the radio are kept.",
+  "@discoverCleanBody": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "discoverCleanNothing": "All discovered contacts are saved on the radio. Nothing to clean.",
+  "discoverCleanDone": "{n, plural, =1{Removed 1 contact} other{Removed {n} contacts}}",
+  "@discoverCleanDone": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "discoverSaveToRadio": "Save to radio",
   "discoverSendMessage": "Send message",
   "discoverJoinRoom": "Join room",
@@ -769,6 +795,35 @@
   "@topologyWeeksAgo": {
     "placeholders": {
       "w": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyFilterRecent": "Show only contacts on radio",
+  "topologyFilterAll": "Show all (including local-only)",
+  "topologyToggleLabels": "Toggle labels",
+  "topologyNodesShown": "{shown}/{total} nodes",
+  "@topologyNodesShown": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyHopDirect": "Direct",
+  "topologyHop1": "1 hop",
+  "topologyHop2": "2 hops",
+  "topologyHopFlood": "Flood / 3+",
+  "topologyTabPaths": "Paths",
+  "topologyPathsEmptyTitle": "No path data",
+  "topologyPathsEmptyHint": "Run a trace from a contact\nto see its routing path",
+  "topologyPathsCount": "{n, plural, =1{1 path} other{{n} paths}}",
+  "@topologyPathsCount": {
+    "placeholders": {
+      "n": {
         "type": "int"
       }
     }

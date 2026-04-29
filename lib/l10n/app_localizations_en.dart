@@ -1328,6 +1328,60 @@ class AppLocalizationsEn extends AppLocalizations {
       'Contacts appear while transmitting on the network';
 
   @override
+  String get discoverCleanTooltip => 'Clean local-only contacts';
+
+  @override
+  String get discoverCleanSheetTitle => 'Clean local-only contacts';
+
+  @override
+  String get discoverCleanSheetSubtitle =>
+      'Pick which discovered contacts to remove. Contacts stored on the radio are always kept.';
+
+  @override
+  String get discoverCleanOption48h => 'Not heard in 48 hours';
+
+  @override
+  String get discoverCleanOption7d => 'Not heard in 7 days';
+
+  @override
+  String get discoverCleanOption30d => 'Not heard in 30 days';
+
+  @override
+  String get discoverCleanOptionNever => 'Never heard (no advert)';
+
+  @override
+  String get discoverCleanOptionAll => 'All local-only contacts';
+
+  @override
+  String get discoverCleanTitle => 'Clean discovered contacts?';
+
+  @override
+  String discoverCleanBody(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n contacts',
+      one: '1 contact',
+    );
+    return 'This will remove $_temp0 that are not stored on the radio. Contacts saved on the radio are kept.';
+  }
+
+  @override
+  String get discoverCleanNothing =>
+      'All discovered contacts are saved on the radio. Nothing to clean.';
+
+  @override
+  String discoverCleanDone(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: 'Removed $n contacts',
+      one: 'Removed 1 contact',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get discoverSaveToRadio => 'Save to radio';
 
   @override
@@ -2156,6 +2210,53 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String topologyWeeksAgo(int w) {
     return '${w}w ago';
+  }
+
+  @override
+  String get topologyFilterRecent => 'Show only contacts on radio';
+
+  @override
+  String get topologyFilterAll => 'Show all (including local-only)';
+
+  @override
+  String get topologyToggleLabels => 'Toggle labels';
+
+  @override
+  String topologyNodesShown(int shown, int total) {
+    return '$shown/$total nodes';
+  }
+
+  @override
+  String get topologyHopDirect => 'Direct';
+
+  @override
+  String get topologyHop1 => '1 hop';
+
+  @override
+  String get topologyHop2 => '2 hops';
+
+  @override
+  String get topologyHopFlood => 'Flood / 3+';
+
+  @override
+  String get topologyTabPaths => 'Paths';
+
+  @override
+  String get topologyPathsEmptyTitle => 'No path data';
+
+  @override
+  String get topologyPathsEmptyHint =>
+      'Run a trace from a contact\nto see its routing path';
+
+  @override
+  String topologyPathsCount(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n paths',
+      one: '1 path',
+    );
+    return '$_temp0';
   }
 
   @override

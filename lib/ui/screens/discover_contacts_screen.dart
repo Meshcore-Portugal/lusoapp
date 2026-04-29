@@ -31,6 +31,17 @@ final discoveredContactsProvider = Provider<List<Contact>>((ref) {
 String _hex32(Uint8List key) =>
     key.take(32).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 
+class _CleanOption {
+  const _CleanOption({
+    required this.icon,
+    required this.label,
+    this.destructive = false,
+  });
+  final IconData icon;
+  final String label;
+  final bool destructive;
+}
+
 /// Discover new contacts via mesh advertisements.
 class DiscoverContactsScreen extends ConsumerStatefulWidget {
   const DiscoverContactsScreen({super.key});
@@ -57,6 +68,201 @@ class _DiscoverContactsScreenState
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  /// Opens a bottom sheet with several "what to clean" options. Each option
+  /// shows a count of matching contacts; tapping one runs the confirmation
+  /// dialog and removes them. Contacts saved on the radio are always kept.
+  Future<void> _openCleanSheet(
+    BuildContext context,
+    List<Contact> discovered,
+  ) async {
+    final l10n = context.l10n;
+    final radioKeys = ref.read(radioContactsSnapshotProvider);
+    final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    // Pre-compute the local-only set once.
+    final localOnly =
+        discovered
+            .where((c) => !radioKeys.contains(_hex32(c.publicKey)))
+            .toList();
+
+    if (localOnly.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.discoverCleanNothing)));
+      return;
+    }
+
+    // ageSec == null means no advert ever heard.
+    int? ageSec(Contact c) {
+      final ts = c.lastModified ?? c.lastAdvertTimestamp;
+      if (ts <= 0) return null;
+      return nowSec - ts;
+    }
+
+    final options = <(_CleanOption, List<Contact>)>[
+      (
+        _CleanOption(
+          icon: Icons.timer_outlined,
+          label: l10n.discoverCleanOption48h,
+        ),
+        localOnly.where((c) => (ageSec(c) ?? 1 << 30) >= 48 * 3600).toList(),
+      ),
+      (
+        _CleanOption(
+          icon: Icons.history_toggle_off,
+          label: l10n.discoverCleanOption7d,
+        ),
+        localOnly
+            .where((c) => (ageSec(c) ?? 1 << 30) >= 7 * 24 * 3600)
+            .toList(),
+      ),
+      (
+        _CleanOption(icon: Icons.schedule, label: l10n.discoverCleanOption30d),
+        localOnly
+            .where((c) => (ageSec(c) ?? 1 << 30) >= 30 * 24 * 3600)
+            .toList(),
+      ),
+      (
+        _CleanOption(
+          icon: Icons.signal_cellular_off,
+          label: l10n.discoverCleanOptionNever,
+        ),
+        localOnly.where((c) => ageSec(c) == null).toList(),
+      ),
+      (
+        _CleanOption(
+          icon: Icons.delete_sweep_outlined,
+          label: l10n.discoverCleanOptionAll,
+          destructive: true,
+        ),
+        localOnly,
+      ),
+    ];
+
+    final chosen = await showModalBottomSheet<List<Contact>>(
+      context: context,
+      showDragHandle: true,
+      builder:
+          (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                  child: Text(
+                    l10n.discoverCleanSheetTitle,
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Text(
+                    l10n.discoverCleanSheetSubtitle,
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                ),
+                const Divider(height: 1),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final (opt, matches) in options)
+                          ListTile(
+                            enabled: matches.isNotEmpty,
+                            leading: Icon(
+                              opt.icon,
+                              color:
+                                  opt.destructive
+                                      ? Theme.of(ctx).colorScheme.error
+                                      : null,
+                            ),
+                            title: Text(
+                              opt.label,
+                              style: TextStyle(
+                                color:
+                                    opt.destructive
+                                        ? Theme.of(ctx).colorScheme.error
+                                        : null,
+                              ),
+                            ),
+                            trailing: Text(
+                              '${matches.length}',
+                              style: Theme.of(ctx).textTheme.bodyMedium,
+                            ),
+                            onTap:
+                                matches.isEmpty
+                                    ? null
+                                    : () => Navigator.pop(ctx, matches),
+                          ),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+    );
+
+    if (chosen == null || chosen.isEmpty || !context.mounted) return;
+    await _confirmAndRemove(context, chosen);
+  }
+
+  /// Asks for confirmation, then removes the given set of contacts.
+  Future<void> _confirmAndRemove(
+    BuildContext context,
+    List<Contact> targets,
+  ) async {
+    final l10n = context.l10n;
+    final keysHex = targets.map((c) => _hex32(c.publicKey)).toSet();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(l10n.discoverCleanTitle),
+            content: Text(l10n.discoverCleanBody(keysHex.length)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(l10n.commonCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(l10n.commonDelete),
+              ),
+            ],
+          ),
+    );
+    if (confirm != true || !context.mounted) return;
+
+    final notifier = ref.read(contactsProvider.notifier);
+    final beforeTotal = ref.read(contactsProvider).length;
+    final radioKeys = ref.read(radioContactsSnapshotProvider);
+    // Defensive: never delete a contact that the radio has stored.
+    final safeKeys = keysHex.difference(radioKeys);
+    final removed = notifier.removeManyByKeyHex(safeKeys);
+    final afterTotal = ref.read(contactsProvider).length;
+    debugPrint(
+      '[Discover] clean: requested=${keysHex.length} '
+      'safe=${safeKeys.length} removed=$removed '
+      'state $beforeTotal->$afterTotal radioSnapshot=${radioKeys.length}',
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${l10n.discoverCleanDone(removed)}  '
+          '(req ${keysHex.length} / safe ${safeKeys.length} / '
+          'radio ${radioKeys.length})',
+        ),
+      ),
+    );
   }
 
   @override
@@ -93,6 +299,13 @@ class _DiscoverContactsScreenState
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: context.l10n.discoverCleanTooltip,
+            icon: const Icon(Icons.cleaning_services_outlined),
+            onPressed: () => _openCleanSheet(context, discovered),
+          ),
+        ],
         elevation: 0,
       ),
       body: Column(

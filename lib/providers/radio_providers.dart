@@ -237,6 +237,22 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
     StorageService.instance.saveContacts(next);
   }
 
+  /// Bulk-remove contacts whose 64-char pubkey hex is in [keysHex].
+  /// Returns the number of contacts actually removed.
+  /// Used by the Discover screen to wipe local-only (not-on-radio) contacts
+  /// without having to delete them one by one.
+  int removeManyByKeyHex(Set<String> keysHex) {
+    if (keysHex.isEmpty) return 0;
+    final before = state.length;
+    final next =
+        state.where((c) => !keysHex.contains(_keyHex(c.publicKey))).toList();
+    if (next.length == before) return 0;
+    state = next;
+    _rebuildIndex(next);
+    StorageService.instance.saveContacts(next);
+    return before - next.length;
+  }
+
   /// Update lastModified on the contact matched by the 6-byte key prefix.
   /// Called on every incoming private message and every 0x88 advert frame.
   /// Uses the O(1) hex6 index so it never scans the list.

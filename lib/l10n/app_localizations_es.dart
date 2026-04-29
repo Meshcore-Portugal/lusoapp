@@ -1342,6 +1342,60 @@ class AppLocalizationsEs extends AppLocalizations {
       'Los contactos aparecen mientras transmiten en la red';
 
   @override
+  String get discoverCleanTooltip => 'Limpar contactos só locais';
+
+  @override
+  String get discoverCleanSheetTitle => 'Limpar contactos só locais';
+
+  @override
+  String get discoverCleanSheetSubtitle =>
+      'Escolhe quais contactos descobertos remover. Os contactos guardados no rádio são sempre mantidos.';
+
+  @override
+  String get discoverCleanOption48h => 'Não ouvidos há 48 horas';
+
+  @override
+  String get discoverCleanOption7d => 'Não ouvidos há 7 dias';
+
+  @override
+  String get discoverCleanOption30d => 'Não ouvidos há 30 dias';
+
+  @override
+  String get discoverCleanOptionNever => 'Nunca ouvidos (sem advert)';
+
+  @override
+  String get discoverCleanOptionAll => 'Todos os contactos só locais';
+
+  @override
+  String get discoverCleanTitle => 'Limpar contactos descobertos?';
+
+  @override
+  String discoverCleanBody(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n contactos',
+      one: '1 contacto',
+    );
+    return 'Vai remover $_temp0 que não estão guardados no rádio. Os contactos guardados no rádio são mantidos.';
+  }
+
+  @override
+  String get discoverCleanNothing =>
+      'Todos os contactos descobertos estão guardados no rádio. Nada para limpar.';
+
+  @override
+  String discoverCleanDone(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: 'Removidos $n contactos',
+      one: 'Removido 1 contacto',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get discoverSaveToRadio => 'Guardar en radio';
 
   @override
@@ -2172,6 +2226,53 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String topologyWeeksAgo(int w) {
     return 'hace $w sem.';
+  }
+
+  @override
+  String get topologyFilterRecent => 'Mostrar apenas contactos no rádio';
+
+  @override
+  String get topologyFilterAll => 'Mostrar todos (incl. locais)';
+
+  @override
+  String get topologyToggleLabels => 'Mostrar/ocultar etiquetas';
+
+  @override
+  String topologyNodesShown(int shown, int total) {
+    return '$shown/$total nós';
+  }
+
+  @override
+  String get topologyHopDirect => 'Direto';
+
+  @override
+  String get topologyHop1 => '1 salto';
+
+  @override
+  String get topologyHop2 => '2 saltos';
+
+  @override
+  String get topologyHopFlood => 'Flood / 3+';
+
+  @override
+  String get topologyTabPaths => 'Caminhos';
+
+  @override
+  String get topologyPathsEmptyTitle => 'Sem dados de rota';
+
+  @override
+  String get topologyPathsEmptyHint =>
+      'Faz um trace a partir de um\ncontacto para ver o caminho';
+
+  @override
+  String topologyPathsCount(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n caminhos',
+      one: '1 caminho',
+    );
+    return '$_temp0';
   }
 
   @override

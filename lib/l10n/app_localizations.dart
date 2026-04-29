@@ -2626,6 +2626,78 @@ abstract class AppLocalizations {
   /// **'Contactos aparecem enquanto transmitem na rede'**
   String get discoverNoneHint;
 
+  /// No description provided for @discoverCleanTooltip.
+  ///
+  /// In pt, this message translates to:
+  /// **'Limpar contactos só locais'**
+  String get discoverCleanTooltip;
+
+  /// No description provided for @discoverCleanSheetTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Limpar contactos só locais'**
+  String get discoverCleanSheetTitle;
+
+  /// No description provided for @discoverCleanSheetSubtitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Escolhe quais contactos descobertos remover. Os contactos guardados no rádio são sempre mantidos.'**
+  String get discoverCleanSheetSubtitle;
+
+  /// No description provided for @discoverCleanOption48h.
+  ///
+  /// In pt, this message translates to:
+  /// **'Não ouvidos há 48 horas'**
+  String get discoverCleanOption48h;
+
+  /// No description provided for @discoverCleanOption7d.
+  ///
+  /// In pt, this message translates to:
+  /// **'Não ouvidos há 7 dias'**
+  String get discoverCleanOption7d;
+
+  /// No description provided for @discoverCleanOption30d.
+  ///
+  /// In pt, this message translates to:
+  /// **'Não ouvidos há 30 dias'**
+  String get discoverCleanOption30d;
+
+  /// No description provided for @discoverCleanOptionNever.
+  ///
+  /// In pt, this message translates to:
+  /// **'Nunca ouvidos (sem advert)'**
+  String get discoverCleanOptionNever;
+
+  /// No description provided for @discoverCleanOptionAll.
+  ///
+  /// In pt, this message translates to:
+  /// **'Todos os contactos só locais'**
+  String get discoverCleanOptionAll;
+
+  /// No description provided for @discoverCleanTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Limpar contactos descobertos?'**
+  String get discoverCleanTitle;
+
+  /// No description provided for @discoverCleanBody.
+  ///
+  /// In pt, this message translates to:
+  /// **'Vai remover {n, plural, =1{1 contacto} other{{n} contactos}} que não estão guardados no rádio. Os contactos guardados no rádio são mantidos.'**
+  String discoverCleanBody(int n);
+
+  /// No description provided for @discoverCleanNothing.
+  ///
+  /// In pt, this message translates to:
+  /// **'Todos os contactos descobertos estão guardados no rádio. Nada para limpar.'**
+  String get discoverCleanNothing;
+
+  /// No description provided for @discoverCleanDone.
+  ///
+  /// In pt, this message translates to:
+  /// **'{n, plural, =1{Removido 1 contacto} other{Removidos {n} contactos}}'**
+  String discoverCleanDone(int n);
+
   /// No description provided for @discoverSaveToRadio.
   ///
   /// In pt, this message translates to:
@@ -4179,6 +4251,78 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'há {w} sem.'**
   String topologyWeeksAgo(int w);
+
+  /// No description provided for @topologyFilterRecent.
+  ///
+  /// In pt, this message translates to:
+  /// **'Mostrar apenas contactos no rádio'**
+  String get topologyFilterRecent;
+
+  /// No description provided for @topologyFilterAll.
+  ///
+  /// In pt, this message translates to:
+  /// **'Mostrar todos (incl. locais)'**
+  String get topologyFilterAll;
+
+  /// No description provided for @topologyToggleLabels.
+  ///
+  /// In pt, this message translates to:
+  /// **'Mostrar/ocultar etiquetas'**
+  String get topologyToggleLabels;
+
+  /// No description provided for @topologyNodesShown.
+  ///
+  /// In pt, this message translates to:
+  /// **'{shown}/{total} nós'**
+  String topologyNodesShown(int shown, int total);
+
+  /// No description provided for @topologyHopDirect.
+  ///
+  /// In pt, this message translates to:
+  /// **'Direto'**
+  String get topologyHopDirect;
+
+  /// No description provided for @topologyHop1.
+  ///
+  /// In pt, this message translates to:
+  /// **'1 salto'**
+  String get topologyHop1;
+
+  /// No description provided for @topologyHop2.
+  ///
+  /// In pt, this message translates to:
+  /// **'2 saltos'**
+  String get topologyHop2;
+
+  /// No description provided for @topologyHopFlood.
+  ///
+  /// In pt, this message translates to:
+  /// **'Flood / 3+'**
+  String get topologyHopFlood;
+
+  /// No description provided for @topologyTabPaths.
+  ///
+  /// In pt, this message translates to:
+  /// **'Caminhos'**
+  String get topologyTabPaths;
+
+  /// No description provided for @topologyPathsEmptyTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sem dados de rota'**
+  String get topologyPathsEmptyTitle;
+
+  /// No description provided for @topologyPathsEmptyHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Faz um trace a partir de um\ncontacto para ver o caminho'**
+  String get topologyPathsEmptyHint;
+
+  /// No description provided for @topologyPathsCount.
+  ///
+  /// In pt, this message translates to:
+  /// **'{n, plural, =1{1 caminho} other{{n} caminhos}}'**
+  String topologyPathsCount(int n);
 
   /// No description provided for @repeaterTitle.
   ///
