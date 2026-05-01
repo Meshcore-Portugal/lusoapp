@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  USB device filter for MeshCore LoRa radio hardware.
+
+  When a matching device is plugged in Android presents a dialog asking the
+  user whether to open LusoAPP. If the user accepts, Android grants USB
+  permission automatically — no second dialog from usb_serial is needed.
+
+  VID/PID pairs listed here cover the USB-to-serial chips most commonly
+  found on LoRa radio boards:
+
+    CH340 / CH341   — very common on cheap CH340G breakouts
+    CP2102 / CP2109 — Silicon Labs; used on many ESP32 dev boards
+    FTDI FT232R     — quality option; common on older hardware
+    FTDI FT2232H    — dual-channel; used on some radio devkits
+    FTDI FT232H     — single-channel high-speed variant
+    PL2303          — Prolific; widespread on older adapters
+
+  New chips can be added by appending <usb-device> entries with the
+  correct vendorId (decimal) and productId (decimal).
+-->
+<resources>
+    <!-- CH340 (VID 0x1A86 = 6790, PID 0x7523 = 29987) -->
+    <usb-device vendorId="6790" productId="29987" />
+    <!-- CH341 (VID 0x1A86 = 6790, PID 0x5523 = 21795) -->
+    <usb-device vendorId="6790" productId="21795" />
+
+    <!-- CP2102 / CP2109 (VID 0x10C4 = 4292, PID 0xEA60 = 60000) -->
+    <usb-device vendorId="4292" productId="60000" />
+
+    <!-- FTDI FT232R (VID 0x0403 = 1027, PID 0x6001 = 24577) -->
+    <usb-device vendorId="1027" productId="24577" />
+    <!-- FTDI FT2232H (VID 0x0403 = 1027, PID 0x6010 = 24592) -->
+    <usb-device vendorId="1027" productId="24592" />
+    <!-- FTDI FT232H  (VID 0x0403 = 1027, PID 0x6014 = 24596) -->
+    <usb-device vendorId="1027" productId="24596" />
+
+    <!-- PL2303 (VID 0x067B = 1659, PID 0x2303 = 8963) -->
+    <usb-device vendorId="1659" productId="8963" />
+</resources>

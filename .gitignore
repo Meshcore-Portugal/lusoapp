@@ -78,3 +78,5 @@ app.*.map.json
 
 # AI
 opencode.json
+CLAUDE.md
+.claude/

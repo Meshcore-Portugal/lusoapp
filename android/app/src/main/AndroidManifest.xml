@@ -18,6 +18,10 @@
     <!-- Declare BLE as optional so the app works on devices without BT -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
+    <!-- USB Host — optional so the app installs on devices without OTG support.
+         Required at runtime for USB serial connections to LoRa radio hardware. -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+
     <!-- Camera — required for QR code scanning -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -54,6 +58,17 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- USB device attached — Android shows an "Open with LusoAPP?" dialog
+                 when a matching USB serial device is plugged in. If the user accepts,
+                 Android grants USB permission automatically (no second dialog needed).
+                 Matched devices are defined in res/xml/usb_device_filter.xml. -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_device_filter" />
         </activity>
         <!-- Home screen widget -->
         <receiver

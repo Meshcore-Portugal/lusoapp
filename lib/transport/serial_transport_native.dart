@@ -160,4 +160,8 @@ class SerialTransport implements RadioTransport {
   static Future<SerialTransport?> fromDeviceId(String portName) async {
     return SerialTransport(portName);
   }
+
+  /// Not available on native desktop; returns null.
+  /// The real implementation lives in serial_transport_web.dart.
+  static Future<RadioDevice?> requestPort() async => null;
 }

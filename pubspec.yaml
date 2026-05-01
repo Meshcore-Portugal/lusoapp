@@ -22,6 +22,12 @@ dependencies:
   #   Runtime guards in serial_transport_native.dart prevent any usage on Android
   flutter_libserialport: ^0.6.0
 
+  # USB serial for Android (USB Host API — CH340, CP2102, FTDI, PL2303)
+  usb_serial: ^0.5.0
+
+  # Web Serial API JS interop (Web — Chrome/Edge)
+  web: ^1.1.0
+
   # State management
   flutter_riverpod: ^2.6.1
 
