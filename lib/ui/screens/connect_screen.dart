@@ -24,32 +24,37 @@ const _showSummitEdition = false;
 // Composite model — a discovered device paired with its connection type.
 // ---------------------------------------------------------------------------
 
-enum _ConnectType { ble, serialCompanion, serialKiss }
+// Supported connection types shown in the connect screen.
+// serialCompanion — desktop serial via flutter_libserialport (Windows/Linux)
+// usbCompanion    — Android USB Host via usb_serial
+enum _ConnectType { ble, serialCompanion, usbCompanion }
 
+/// Pairs a discovered [RadioDevice] with the connection type the user selected.
+/// Drives the label and icon shown in the device list and the connect logic.
 class _ConnectTarget {
   const _ConnectTarget({required this.device, required this.type});
   final RadioDevice device;
   final _ConnectType type;
 
+  /// Human-readable connection type label shown below the device name.
   String get typeLabel {
     switch (type) {
       case _ConnectType.ble:
         return 'Bluetooth LE';
       case _ConnectType.serialCompanion:
+      case _ConnectType.usbCompanion:
         return 'Série USB — Companion';
-      case _ConnectType.serialKiss:
-        return 'KISS TNC';
     }
   }
 
+  /// Icon representing the physical connection medium.
   IconData get icon {
     switch (type) {
       case _ConnectType.ble:
         return Icons.bluetooth;
       case _ConnectType.serialCompanion:
+      case _ConnectType.usbCompanion:
         return Icons.usb;
-      case _ConnectType.serialKiss:
-        return Icons.podcasts;
     }
   }
 }
@@ -276,7 +281,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       },
     );
 
-    // Serial devices — not available on mobile or web.
+    // Desktop serial (Windows / Linux) via flutter_libserialport.
     if (!Platform.isAndroid && !Platform.isIOS) {
       try {
         final serialDevices = await SerialTransport.listDevices();
@@ -286,16 +291,38 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               _targets.add(
                 _ConnectTarget(device: d, type: _ConnectType.serialCompanion),
               );
+            }
+          });
+        }
+      } catch (_) {}
+    }
+
+    // Android USB Host via usb_serial — runs alongside the BLE scan.
+    if (Platform.isAndroid) {
+      try {
+        final usbDevices = await UsbTransport.listDevices();
+        if (mounted) {
+          setState(() {
+            for (final d in usbDevices) {
               _targets.add(
-                _ConnectTarget(device: d, type: _ConnectType.serialKiss),
+                _ConnectTarget(device: d, type: _ConnectType.usbCompanion),
               );
             }
           });
         }
-      } catch (_) {
-        // Serial not available on this platform (e.g. web)
-      }
+      } catch (_) {}
     }
+  }
+
+  /// Triggers the browser Web Serial port-picker (web only).
+  /// Must be initiated from a user gesture. Connects immediately in
+  /// Companion mode after the user selects a port.
+  Future<void> _connectWebSerial() async {
+    final device = await SerialTransport.requestPort();
+    if (device == null || !mounted) return;
+    await _connectTo(
+      _ConnectTarget(device: device, type: _ConnectType.serialCompanion),
+    );
   }
 
   Future<void> _connectTo(_ConnectTarget target) async {
@@ -314,18 +341,12 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     switch (target.type) {
       case _ConnectType.ble:
         ok = await connection.connectBle(target.device.id, name);
+      // Desktop serial via flutter_libserialport.
       case _ConnectType.serialCompanion:
-        ok = await connection.connectSerial(
-          target.device.id,
-          name,
-          mode: ConnectionMode.companion,
-        );
-      case _ConnectType.serialKiss:
-        ok = await connection.connectSerial(
-          target.device.id,
-          name,
-          mode: ConnectionMode.kiss,
-        );
+        ok = await connection.connectSerial(target.device.id, name);
+      // Android USB Host via usb_serial.
+      case _ConnectType.usbCompanion:
+        ok = await connection.connectUsb(target.device.id, name);
     }
 
     if (ok && mounted) {
@@ -341,7 +362,20 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     }
   }
 
+  /// Reconnects to a previously connected device from the recent-devices list.
+  ///
+  /// Legacy entries stored as 'usbKiss' or 'serialKiss' are silently reconnected
+  /// in Companion mode — KISS TNC is no longer a supported connection option.
   Future<void> _connectToLastDevice(LastDevice last) async {
+    // 'usbCompanion' / 'usbKiss' (legacy) → USB; everything else is serial or BLE.
+    final isUsb = last.type == 'usbCompanion' || last.type == 'usbKiss';
+    final connectType =
+        last.type == 'ble'
+            ? _ConnectType.ble
+            : isUsb
+            ? _ConnectType.usbCompanion
+            : _ConnectType.serialCompanion;
+
     setState(() {
       _connectingTarget = _ConnectTarget(
         device: RadioDevice(
@@ -350,12 +384,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
           type:
               last.type == 'ble' ? RadioDeviceType.ble : RadioDeviceType.serial,
         ),
-        type:
-            last.type == 'ble'
-                ? _ConnectType.ble
-                : last.type == 'serialKiss'
-                ? _ConnectType.serialKiss
-                : _ConnectType.serialCompanion,
+        type: connectType,
       );
       _cachedContactCount = ref.read(contactsProvider).length;
       _cachedChannelCount =
@@ -367,15 +396,12 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     bool ok;
     if (last.type == 'ble') {
       ok = await connection.connectBle(last.id, last.name);
+    } else if (isUsb) {
+      // Android USB Host reconnect. Legacy 'usbKiss' entries reconnect as companion.
+      ok = await connection.connectUsb(last.id, last.name);
     } else {
-      ok = await connection.connectSerial(
-        last.id,
-        last.name,
-        mode:
-            last.type == 'serialKiss'
-                ? ConnectionMode.kiss
-                : ConnectionMode.companion,
-      );
+      // Desktop serial reconnect. Legacy 'serialKiss' entries reconnect as companion.
+      ok = await connection.connectSerial(last.id, last.name);
     }
     if (ok && mounted) {
       context.go('/channels');
@@ -591,8 +617,6 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                                   subtitle: Text(
                                     d.type == 'ble'
                                         ? 'Bluetooth LE'
-                                        : d.type == 'serialKiss'
-                                        ? 'KISS TNC'
                                         : 'Série USB',
                                     style: theme.textTheme.bodySmall,
                                   ),
@@ -649,8 +673,24 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                 ),
                 if (kIsWeb) ...[
                   const SizedBox(height: 8),
+                  // BLE picker note.
                   Text(
-                    'O browser irá mostrar um seletor de dispositivos Bluetooth.',
+                    context.l10n.connectBrowserNote,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withAlpha(140),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Web Serial API button — triggers browser port-picker.
+                  OutlinedButton.icon(
+                    onPressed: _connectWebSerial,
+                    icon: const Icon(Icons.usb, size: 18),
+                    label: Text(context.l10n.connectUsbButton),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    context.l10n.connectWebSerialNote,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withAlpha(140),

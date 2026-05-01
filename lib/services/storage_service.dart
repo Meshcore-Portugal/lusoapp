@@ -605,7 +605,7 @@ class LastDevice {
   /// Platform device ID (BLE deviceId or serial port path).
   final String id;
 
-  /// Transport kind: 'ble', 'serialCompanion', 'serialKiss'.
+  /// Transport kind: 'ble', 'serialCompanion', 'usbCompanion'.
   final String type;
 
   /// Human-readable display name.

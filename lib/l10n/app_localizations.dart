@@ -2056,6 +2056,18 @@ abstract class AppLocalizations {
   /// **'O browser irá mostrar um seletor de dispositivos Bluetooth'**
   String get connectBrowserNote;
 
+  /// No description provided for @connectUsbButton.
+  ///
+  /// In pt, this message translates to:
+  /// **'Ligar por USB/Série'**
+  String get connectUsbButton;
+
+  /// No description provided for @connectWebSerialNote.
+  ///
+  /// In pt, this message translates to:
+  /// **'O browser irá mostrar um seletor de portas série.'**
+  String get connectWebSerialNote;
+
   /// No description provided for @connectScanningMessage.
   ///
   /// In pt, this message translates to:
@@ -2079,12 +2091,6 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'(Série USB — Companion)'**
   String get connectDeviceUSB;
-
-  /// No description provided for @connectDeviceKISS.
-  ///
-  /// In pt, this message translates to:
-  /// **'(KISS TNC)'**
-  String get connectDeviceKISS;
 
   /// No description provided for @connectStepConnecting.
   ///

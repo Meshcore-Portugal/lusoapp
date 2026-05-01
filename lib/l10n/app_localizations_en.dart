@@ -1015,6 +1015,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'The browser will show a Bluetooth device selector';
 
   @override
+  String get connectUsbButton => 'Connect via USB/Serial';
+
+  @override
+  String get connectWebSerialNote =>
+      'The browser will show a serial port selector.';
+
+  @override
   String get connectScanningMessage => 'Searching for MeshCore radios...';
 
   @override
@@ -1025,9 +1032,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get connectDeviceUSB => '(USB Serial — Companion)';
-
-  @override
-  String get connectDeviceKISS => '(KISS TNC)';
 
   @override
   String get connectStepConnecting => 'Connecting...';

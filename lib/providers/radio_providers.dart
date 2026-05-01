@@ -164,11 +164,14 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     }
   }
 
+  /// Connects to a desktop serial device (Windows/Linux) via flutter_libserialport.
+  ///
+  /// Always uses Companion protocol mode — KISS TNC framing is not supported.
+  /// Stores the connection as type 'serialCompanion' in the recent-devices list.
   Future<bool> connectSerial(
     String deviceId,
-    String deviceName, {
-    ConnectionMode mode = ConnectionMode.companion,
-  }) async {
+    String deviceName,
+  ) async {
     // Clear stale snapshot and sync flag so the contacts screen falls back
     // to the cached list while the new radio's sync is in progress.
     _ref.read(radioContactsSnapshotProvider.notifier).state = {};
@@ -182,11 +185,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         _setStep(0, '');
         return false;
       }
-      final RadioTransport transport =
-          mode == ConnectionMode.kiss
-              ? KissTransport(baseTransport)
-              : baseTransport;
-      final service = RadioService(transport);
+      final service = RadioService(baseTransport);
       _ref.read(radioServiceProvider.notifier).state = service;
       _setupListeners(service);
       final ok = await service.connect();
@@ -207,8 +206,6 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
 
         await _fetchInitialData(service);
         state = TransportState.connected;
-        final typeStr =
-            mode == ConnectionMode.kiss ? 'serialKiss' : 'serialCompanion';
         // Prefer the radio's configured node name; fall back to the USB
         // device name so the reconnect button always shows something.
         final radioNodeName = _ref.read(selfInfoProvider)?.name;
@@ -218,7 +215,78 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
                 : deviceName;
         final recentList = await StorageService.instance.upsertRecentDevice(
           id: deviceId,
-          type: typeStr,
+          type: 'serialCompanion',
+          name: displayName,
+        );
+        _ref.read(recentDevicesProvider.notifier).state = recentList;
+        _ref.read(lastDeviceProvider.notifier).state = recentList.first;
+        _startBatteryPolling(service);
+        _pushWidget();
+        return true;
+      }
+      _ref.read(radioServiceProvider.notifier).state = null;
+      state = TransportState.error;
+      _setStep(0, '');
+      return false;
+    } catch (e) {
+      state = TransportState.error;
+      _setStep(0, '');
+      return false;
+    }
+  }
+
+  /// Connects to an Android USB serial device via the USB Host API (usb_serial).
+  ///
+  /// Mirrors [connectSerial] but resolves the transport through
+  /// [UsbTransport.fromDeviceId] instead of [SerialTransport.fromDeviceId].
+  Future<bool> connectUsb(
+    String deviceId,
+    String deviceName,
+  ) async {
+    // Clear stale snapshot so the contacts screen falls back to the cached list
+    // while the new radio's sync is in progress.
+    _ref.read(radioContactsSnapshotProvider.notifier).state = {};
+    _ref.read(contactsSyncedProvider.notifier).state = false;
+    state = TransportState.connecting;
+    _setStep(0, 'A ligar via USB...');
+    try {
+      // Look up the UsbDevice by ID; returns null if no longer attached.
+      final baseTransport = await UsbTransport.fromDeviceId(deviceId);
+      if (baseTransport == null) {
+        state = TransportState.error;
+        _setStep(0, '');
+        return false;
+      }
+      final service = RadioService(baseTransport);
+      _ref.read(radioServiceProvider.notifier).state = service;
+      _setupListeners(service);
+      final ok = await service.connect();
+      if (ok) {
+        // Scope channel/message data to this radio device.
+        final prevDeviceId = _ref.read(currentRadioIdProvider);
+        if (prevDeviceId != deviceId) {
+          _ref.read(messagesProvider.notifier).clearChannelMessages();
+          _ref.read(channelsProvider.notifier).clearChannels();
+          _ref.read(unreadCountsProvider.notifier).resetChannels();
+        }
+        _ref.read(currentRadioIdProvider.notifier).state = deviceId;
+        await _ref
+            .read(channelsProvider.notifier)
+            .loadFromStorageForRadio(deviceId);
+        await _ref.read(mutedChannelsProvider.notifier).loadForRadio(deviceId);
+        await _ref.read(advertAutoAddProvider.notifier).loadForRadio(deviceId);
+
+        await _fetchInitialData(service);
+        state = TransportState.connected;
+        // Prefer the radio's configured node name for the reconnect button.
+        final radioNodeName = _ref.read(selfInfoProvider)?.name;
+        final displayName =
+            (radioNodeName != null && radioNodeName.isNotEmpty)
+                ? radioNodeName
+                : deviceName;
+        final recentList = await StorageService.instance.upsertRecentDevice(
+          id: deviceId,
+          type: 'usbCompanion',
           name: displayName,
         );
         _ref.read(recentDevicesProvider.notifier).state = recentList;
