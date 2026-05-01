@@ -211,12 +211,19 @@ class _BatteryCard extends StatelessWidget {
               ],
             ),
 
-            // Sparkline chart
+            // Sparkline chart — wrapped in a theme-aware container so the graph
+            // area is visually distinct on both light (#EEE) and dark (#252) cards.
             if (history.length > 1) ...[
               const SizedBox(height: 16),
-              SizedBox(
-                height: 80,
-                child: _BatterySparkline(history: history, theme: theme),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: ColoredBox(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  child: SizedBox(
+                    height: 80,
+                    child: _BatterySparkline(history: history, theme: theme),
+                  ),
+                ),
               ),
               const SizedBox(height: 4),
               Row(
@@ -323,9 +330,10 @@ class _SparklinePainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round;
 
+    // Alpha raised 30→60 so the fill area is visible on the light card background.
     final fillPaint =
         Paint()
-          ..color = theme.colorScheme.primary.withAlpha(30)
+          ..color = theme.colorScheme.primary.withAlpha(60)
           ..style = PaintingStyle.fill;
 
     final path = Path();
@@ -350,9 +358,9 @@ class _SparklinePainter extends CustomPainter {
     canvas.drawPath(fillPath, fillPaint);
     canvas.drawPath(path, linePaint);
 
-    // Min/max labels
+    // onSurface instead of onSurfaceVariant: better contrast at 9px on light bg.
     final labelStyle = TextStyle(
-      color: theme.colorScheme.onSurfaceVariant,
+      color: theme.colorScheme.onSurface,
       fontSize: 9,
     );
     _drawLabel(

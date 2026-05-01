@@ -408,6 +408,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     final stepLabel = ref.watch(connectionStepProvider);
     final stepIndex = ref.watch(connectionProgressProvider);
     final theme = Theme.of(context);
+    final themeMode = ref.watch(themeModeProvider);
 
     // Total steps: 0=connecting transport, 1=waiting, 2=device info,
     // 3=contacts, 4=channels, 5=done.
@@ -419,13 +420,46 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              const SizedBox(height: 48),
+              // Quick theme cycle button (dark→light→system→dark). Positioned
+              // top-right since there is no AppBar here to host an action.
+              // Icon reflects the active mode; system uses the device icon.
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    icon: Icon(switch (themeMode) {
+                      ThemeMode.dark => Icons.dark_mode,
+                      ThemeMode.light => Icons.light_mode,
+                      ThemeMode.system => Icons.brightness_auto,
+                    }),
+                    tooltip: switch (themeMode) {
+                      ThemeMode.dark => 'Tema escuro — toque para claro',
+                      ThemeMode.light => 'Tema claro — toque para automático',
+                      ThemeMode.system => 'Automático — toque para escuro',
+                    },
+                    onPressed: () =>
+                        ref.read(themeModeProvider.notifier).toggle(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Image.asset(
-                    'assets/images/meshcore-pt-logo.webp',
-                    height: 120,
+                  // Orange background when the effective theme is light so the
+                  // transparent logo stays visible; dark keeps the original look.
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).brightness == Brightness.light
+                          ? AppTheme.primary
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.all(8),
+                    child: Image.asset(
+                      'assets/images/meshcore-pt-logo.webp',
+                      height: 120,
+                    ),
                   ),
                   if (_showSummitEdition)
                     Positioned(

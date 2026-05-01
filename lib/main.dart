@@ -115,12 +115,15 @@ class _McAppPtState extends ConsumerState<McAppPt> {
   Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
 
+    // Watch persisted theme preference — replaces the former hardcoded ThemeMode.dark.
+    final themeMode = ref.watch(themeModeProvider);
+
     return MaterialApp.router(
       title: 'LusoAPP',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.dark,
+      themeMode: themeMode,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: router,

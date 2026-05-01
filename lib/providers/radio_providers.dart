@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart' show Color;
+import 'package:flutter/material.dart' show Color, ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -2777,3 +2777,43 @@ final otherMentionColorProvider =
         'mention_color_other',
       ),
     );
+
+// ---------------------------------------------------------------------------
+// Theme mode (dark / light) — persisted to SharedPreferences
+// ---------------------------------------------------------------------------
+
+// Persists the selected ThemeMode as its enum index. Defaults to dark on first
+// launch. toggle() cycles dark→light→system→dark for the connect-screen button.
+// setMode() is used by the Appearance SegmentedButton for direct selection.
+class ThemeModeNotifier extends StateNotifier<ThemeMode> {
+  ThemeModeNotifier() : super(ThemeMode.dark) {
+    _load();
+  }
+
+  static const _key = 'app_theme_mode';
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final index = prefs.getInt(_key);
+    if (index != null && index < ThemeMode.values.length) {
+      state = ThemeMode.values[index];
+    }
+  }
+
+  Future<void> setMode(ThemeMode mode) async {
+    state = mode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_key, mode.index);
+  }
+
+  // Cycles through all three modes so a single icon button covers every option.
+  Future<void> toggle() => setMode(switch (state) {
+    ThemeMode.dark => ThemeMode.light,
+    ThemeMode.light => ThemeMode.system,
+    ThemeMode.system => ThemeMode.dark,
+  });
+}
+
+final themeModeProvider = StateNotifierProvider<ThemeModeNotifier, ThemeMode>(
+  (_) => ThemeModeNotifier(),
+);

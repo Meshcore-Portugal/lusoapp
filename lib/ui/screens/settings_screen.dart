@@ -489,6 +489,7 @@ class _AppearanceCard extends ConsumerWidget {
     final theme = Theme.of(context);
     final selfColor = ref.watch(selfMentionColorProvider);
     final otherColor = ref.watch(otherMentionColorProvider);
+    final themeMode = ref.watch(themeModeProvider);
 
     Widget colorRow(
       String label,
@@ -549,7 +550,39 @@ class _AppearanceCard extends ConsumerWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            // 3-segment theme selector. Persisted immediately via ThemeModeNotifier.
+            // System option follows the device brightness setting automatically.
+            // No extra padding — the card's own 16px margin is sufficient, and
+            // full width prevents the "Sistema" label from wrapping to two lines.
+            SegmentedButton<ThemeMode>(
+              style: SegmentedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+              ),
+              segments: const [
+                ButtonSegment(
+                  value: ThemeMode.dark,
+                  icon: Icon(Icons.dark_mode),
+                  label: Text('Escuro'),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.system,
+                  icon: Icon(Icons.brightness_auto),
+                  label: Text('Sistema'),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.light,
+                  icon: Icon(Icons.light_mode),
+                  label: Text('Claro'),
+                ),
+              ],
+              selected: {themeMode},
+              onSelectionChanged: (selection) => ref
+                  .read(themeModeProvider.notifier)
+                  .setMode(selection.first),
+            ),
             const SizedBox(height: 4),
+            const Divider(height: 16),
             colorRow(
               context.l10n.settingsSelfMention,
               selfColor,
