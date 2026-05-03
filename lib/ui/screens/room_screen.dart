@@ -6,6 +6,7 @@ import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 import '../theme.dart';
+import '../widgets/path_sheet.dart';
 
 /// Replaces lone UTF-16 surrogate code units with U+FFFD.
 /// Lone surrogates crash the Flutter text engine ("string is not well-formed UTF-16").
@@ -323,7 +324,7 @@ class _RoomHeader extends StatelessWidget {
                 ),
                 if (contact != null)
                   Text(
-                    'Sala  •  ID: ${contact!.shortId}  •  Saltos: ${contact!.pathLen}',
+                    'Sala  •  ID: ${contact!.shortId}  •  ${contactPathLabel(contact!.pathLen)}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withAlpha(120),
                     ),

@@ -94,6 +94,12 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
             m.timestamp * 1000,
           ).toIso8601String();
       final direction = m.isOutgoing ? 'out' : 'in';
+      final hopCount =
+          m.pathLen == null
+              ? ''
+              : m.pathLen == 0xFF
+              ? 'flood'
+              : '${m.pathLen! & 0x3F}';
       String convType;
       String convName;
       if (m.channelIndex != null) {
@@ -122,7 +128,7 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
           _csvEsc(m.senderName ?? ''),
           _csvEsc(m.text),
           m.snr?.toStringAsFixed(1) ?? '',
-          m.pathLen?.toString() ?? '',
+          hopCount,
           m.confirmed ? '1' : '0',
         ].join(','),
       );

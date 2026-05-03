@@ -200,7 +200,7 @@ class Plan333Service {
   ///
   /// Accepted format: `CQ Plano 333, <station>, <city>[, <locality>]`
   /// Returns null if the text is not a CQ Plano 333 message.
-  /// [pathLen] is used as the hop count.
+  /// [pathLen] follows MeshCore semantics: lower 6 bits are hop count.
   static QslRecord? tryParseCq(String text, {int? pathLen}) {
     final trimmed = text.trim();
 
@@ -230,7 +230,7 @@ class Plan333Service {
 
     return QslRecord(
       stationName: station,
-      hops: pathLen ?? 0,
+      hops: QslRecord.normalizeHops(pathLen),
       location: location,
       timestamp: DateTime.now(),
     );
@@ -262,7 +262,7 @@ class QslRecord {
 
   factory QslRecord.fromJson(Map<String, dynamic> j) => QslRecord(
     stationName: (j['station'] as String?) ?? '',
-    hops: (j['hops'] as int?) ?? 0,
+    hops: normalizeHops((j['hops'] as int?) ?? 0),
     location: (j['location'] as String?) ?? '',
     timestamp: DateTime.fromMillisecondsSinceEpoch((j['ts'] as int?) ?? 0),
     notes: (j['notes'] as String?) ?? '',
@@ -274,6 +274,13 @@ class QslRecord {
   /// Number of hops (0 = direct).
   final int hops;
 
+  /// Normalizes raw route byte/pathLen values to hop count (0..63).
+  static int normalizeHops(int? raw) {
+    if (raw == null || raw <= 0) return 0;
+    if (raw == 0xFF) return 0;
+    return raw & 0x3F;
+  }
+
   /// Their reported location / city.
   final String location;
 
@@ -283,11 +290,14 @@ class QslRecord {
   /// Optional free-form notes.
   final String notes;
 
-  String get hopsLabel => hops == 0 ? 'Direto' : '$hops hops';
+  String get hopsLabel {
+    final normalized = normalizeHops(hops);
+    return normalized == 0 ? 'Direto' : '$normalized hops';
+  }
 
   Map<String, dynamic> toJson() => {
     'station': stationName,
-    'hops': hops,
+    'hops': normalizeHops(hops),
     'location': location,
     'ts': timestamp.millisecondsSinceEpoch,
     'notes': notes,
