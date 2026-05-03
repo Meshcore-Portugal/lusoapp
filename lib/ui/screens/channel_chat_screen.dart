@@ -553,11 +553,15 @@ class _HeardBadge extends StatefulWidget {
     required this.count,
     required this.theme,
     required this.confirmed,
+    required this.timestamp,
   });
 
   final int count;
   final ThemeData theme;
   final bool confirmed; // kept for potential future use
+  /// Unix epoch seconds when the message was sent — used to pre-advance the
+  /// propagating→sent timer so re-opening the channel doesn't replay it.
+  final int timestamp;
 
   @override
   State<_HeardBadge> createState() => _HeardBadgeState();
@@ -570,13 +574,23 @@ class _HeardBadgeState extends State<_HeardBadge> {
   @override
   void initState() {
     super.initState();
-    // Start the timer immediately — if no repeater is heard within 10 s,
-    // we show "Enviada". The radio does not always send SendConfirmedPush
-    // for channel messages so we cannot gate this on widget.confirmed.
+    // Start the timer — if no repeater is heard within 10 s we show "Enviada".
+    // Use the message timestamp to calculate how much time has already elapsed
+    // so that re-opening the channel doesn't replay the animation for old
+    // messages that already timed out.
     if (widget.count == 0) {
-      _timer = Timer(const Duration(seconds: 10), () {
-        if (mounted) setState(() => _timedOut = true);
-      });
+      const kTimeout = Duration(seconds: 10);
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final elapsedMs = (now - widget.timestamp) * 1000;
+      if (elapsedMs >= kTimeout.inMilliseconds) {
+        // Already past the threshold — show "Enviada" immediately.
+        _timedOut = true;
+      } else {
+        final remaining = kTimeout - Duration(milliseconds: elapsedMs);
+        _timer = Timer(remaining, () {
+          if (mounted) setState(() => _timedOut = true);
+        });
+      }
     }
   }
 

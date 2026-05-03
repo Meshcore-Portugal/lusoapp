@@ -682,6 +682,7 @@ class _MessageBubble extends ConsumerWidget {
                   count: message.heardCount,
                   theme: theme,
                   confirmed: message.confirmed,
+                  timestamp: message.timestamp,
                 ),
                 Padding(
                   padding: const EdgeInsets.only(top: 3, right: 4),
