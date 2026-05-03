@@ -1263,6 +1263,29 @@ class AppLocalizationsPt extends AppLocalizations {
   String get connectDeviceKISS => '(KISS TNC)';
 
   @override
+  String get connectDeviceWebUSB => 'Web USB — Companion';
+
+  @override
+  String get connectDeviceWebKISS => 'Web USB — KISS TNC';
+
+  @override
+  String get connectWebUsbButton => 'Ligar via USB (Web Serial)';
+
+  @override
+  String get connectWebUsbScanning => 'A selecionar porta USB...';
+
+  @override
+  String get connectWebUsbHint =>
+      'Suportado no Chrome e Edge. O browser mostrará um seletor de portas USB.';
+
+  @override
+  String get connectWebUsbExpiredMessage =>
+      'Porta USB não disponível (página recarregada). Selecione novamente o dispositivo.';
+
+  @override
+  String get connectWebUsbAction => 'Ligar via USB';
+
+  @override
   String get connectStepConnecting => 'A ligar...';
 
   @override

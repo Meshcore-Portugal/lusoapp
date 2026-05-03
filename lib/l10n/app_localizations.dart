@@ -2488,6 +2488,48 @@ abstract class AppLocalizations {
   /// **'(KISS TNC)'**
   String get connectDeviceKISS;
 
+  /// No description provided for @connectDeviceWebUSB.
+  ///
+  /// In pt, this message translates to:
+  /// **'Web USB — Companion'**
+  String get connectDeviceWebUSB;
+
+  /// No description provided for @connectDeviceWebKISS.
+  ///
+  /// In pt, this message translates to:
+  /// **'Web USB — KISS TNC'**
+  String get connectDeviceWebKISS;
+
+  /// No description provided for @connectWebUsbButton.
+  ///
+  /// In pt, this message translates to:
+  /// **'Ligar via USB (Web Serial)'**
+  String get connectWebUsbButton;
+
+  /// No description provided for @connectWebUsbScanning.
+  ///
+  /// In pt, this message translates to:
+  /// **'A selecionar porta USB...'**
+  String get connectWebUsbScanning;
+
+  /// No description provided for @connectWebUsbHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Suportado no Chrome e Edge. O browser mostrará um seletor de portas USB.'**
+  String get connectWebUsbHint;
+
+  /// No description provided for @connectWebUsbExpiredMessage.
+  ///
+  /// In pt, this message translates to:
+  /// **'Porta USB não disponível (página recarregada). Selecione novamente o dispositivo.'**
+  String get connectWebUsbExpiredMessage;
+
+  /// No description provided for @connectWebUsbAction.
+  ///
+  /// In pt, this message translates to:
+  /// **'Ligar via USB'**
+  String get connectWebUsbAction;
+
   /// No description provided for @connectStepConnecting.
   ///
   /// In pt, this message translates to:

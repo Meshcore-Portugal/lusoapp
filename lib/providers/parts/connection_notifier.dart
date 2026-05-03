@@ -153,6 +153,16 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         _ref.read(lastDeviceProvider.notifier).state = recentList.first;
         _startBatteryPolling(service);
         _startKeepalive(service);
+        // Wire the connection-lost signal so that an unexpected USB disconnect
+        // (e.g. cable pulled, OTG power loss, OS driver reset) triggers the
+        // same exponential back-off retry loop used by BLE connections.
+        // The closure captures [deviceId], [deviceName], and [mode] so that
+        // every retry attempt reuses the exact same transport configuration
+        // that produced the original successful connection.
+        _setupAutoReconnect(
+          service,
+          () => connectSerial(deviceId, deviceName, mode: mode),
+        );
         _pushWidget();
         return true;
       }
@@ -161,6 +171,138 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
       _setStep(0, '');
       return false;
     } catch (e) {
+      state = TransportState.error;
+      _setStep(0, '');
+      return false;
+    }
+  }
+
+  /// Connect to a radio over USB using the browser's Web Serial API.
+  ///
+  /// [deviceId] must be a key previously registered by [SerialTransport.listDevices]
+  /// (format: `"webserial:<n>"`). The browser port object is looked up from the
+  /// static registry inside the web transport — no new browser picker is shown.
+  ///
+  /// [mode] controls framing:
+  ///   - [ConnectionMode.companion] — raw MeshCore Companion Radio Protocol v3
+  ///   - [ConnectionMode.kiss]      — Companion frames wrapped in KISS TNC framing
+  ///
+  /// Auto-reconnect is enabled: when the cable is pulled the same backoff loop
+  /// used by BLE and native serial will retry until the port opens again or the
+  /// user calls [disconnect]. Retries are fast because [SerialTransport.connect]
+  /// fails immediately when the port is gone, so the only cost is the backoff
+  /// delay between attempts.
+  Future<bool> connectWebSerial(
+    String deviceId,
+    String deviceName, {
+    ConnectionMode mode = ConnectionMode.companion,
+  }) async {
+    // Clear stale snapshot and sync flag so the contacts screen falls back
+    // to the cached list while the new radio's sync is in progress.
+    _ref.read(radioContactsSnapshotProvider.notifier).state = {};
+    _ref.read(contactsSyncedProvider.notifier).state = false;
+    state = TransportState.connecting;
+    _setStep(0, 'A ligar via USB Web Serial...');
+    try {
+      // Look up the JS SerialPort object registered when the user selected the
+      // port from the browser picker. Returns null if the app was restarted
+      // (registry is in-memory only) — in that case the user must re-scan.
+      final baseTransport = await SerialTransport.fromDeviceId(deviceId);
+      if (baseTransport == null) {
+        state = TransportState.error;
+        _setStep(0, '');
+        return false;
+      }
+
+      // Optionally wrap with KISS TNC framing. Companion mode sends raw
+      // protocol frames; KISS mode adds FEND/FESC byte-stuffing around them.
+      final RadioTransport transport =
+          mode == ConnectionMode.kiss
+              ? KissTransport(baseTransport)
+              : baseTransport;
+
+      final service = RadioService(transport);
+      _ref.read(radioServiceProvider.notifier).state = service;
+      _setupListeners(service);
+
+      final ok = await service.connect();
+      if (ok) {
+        // Scope channel data to this radio device. If we are switching radios,
+        // clear stale channel messages so data from the previous radio does not
+        // bleed into the new session.
+        final prevDeviceId = _ref.read(currentRadioIdProvider);
+        if (prevDeviceId != deviceId) {
+          _ref.read(messagesProvider.notifier).clearChannelMessages();
+          _ref.read(channelsProvider.notifier).clearChannels();
+          _ref.read(unreadCountsProvider.notifier).resetChannels();
+        }
+        _ref.read(currentRadioIdProvider.notifier).state = deviceId;
+
+        // Pre-load cached channels and mute state before the live fetch so
+        // the UI shows something while waiting for radio responses.
+        await _ref
+            .read(channelsProvider.notifier)
+            .loadFromStorageForRadio(deviceId);
+        await _ref.read(mutedChannelsProvider.notifier).loadForRadio(deviceId);
+        await _ref.read(advertAutoAddProvider.notifier).loadForRadio(deviceId);
+
+        await _fetchInitialData(service);
+        state = TransportState.connected;
+
+        // Type strings distinguish Web Serial from native serial in the recent
+        // devices list so the reconnect button calls the correct entry point.
+        final typeStr =
+            mode == ConnectionMode.kiss ? 'webSerialKiss' : 'webSerial';
+
+        // Prefer the radio's configured node name; fall back to the port label
+        // so the reconnect button always shows a meaningful name.
+        final radioNodeName = _ref.read(selfInfoProvider)?.name;
+        final displayName =
+            (radioNodeName != null && radioNodeName.isNotEmpty)
+                ? radioNodeName
+                : deviceName;
+
+        final recentList = await StorageService.instance.upsertRecentDevice(
+          id: deviceId,
+          type: typeStr,
+          name: displayName,
+        );
+        _ref.read(recentDevicesProvider.notifier).state = recentList;
+        _ref.read(lastDeviceProvider.notifier).state = recentList.first;
+
+        _startBatteryPolling(service);
+        _startKeepalive(service);
+
+        // Wire the connection-lost signal so that an unexpected USB disconnect
+        // (cable pulled, browser killing the port) triggers the same exponential
+        // back-off retry loop used by BLE and native serial connections.
+        // The closure captures [deviceId], [deviceName], and [mode] so every
+        // retry attempt reuses the exact configuration that succeeded originally.
+        _setupAutoReconnect(
+          service,
+          () => connectWebSerial(deviceId, deviceName, mode: mode),
+        );
+
+        _pushWidget();
+        return true;
+      }
+
+      // connect() returned false — transport failed to open the port.
+      _ref.read(radioServiceProvider.notifier).state = null;
+      state = TransportState.error;
+      _setStep(0, '');
+      return false;
+    } catch (e) {
+      // An exception thrown after transport.connect() succeeded (e.g. during
+      // _fetchInitialData) means the Web Serial port is open but unused.
+      // Dispose the service so the port is closed and can be reopened on the
+      // next attempt — without this the next open() call would fail with
+      // "InvalidStateError: Cannot call 'open' on a port that is already open."
+      final svc = _ref.read(radioServiceProvider);
+      if (svc != null) {
+        unawaited(svc.dispose());
+        _ref.read(radioServiceProvider.notifier).state = null;
+      }
       state = TransportState.error;
       _setStep(0, '');
       return false;

@@ -26,13 +26,24 @@ const _showSummitEdition = false;
 // Composite model — a discovered device paired with its connection type.
 // ---------------------------------------------------------------------------
 
-enum _ConnectType { ble, serialCompanion, serialKiss }
+/// Discriminates transport type for a pending or recent connection.
+/// Web Serial variants mirror their native serial counterparts but dispatch
+/// to [connectWebSerial] so the browser's Web Serial API is used instead of
+/// the native flutter_libserialport driver.
+enum _ConnectType {
+  ble,
+  serialCompanion,
+  serialKiss,
+  webSerial,      // Web Serial API — MeshCore Companion framing
+  webSerialKiss,  // Web Serial API — KISS TNC framing
+}
 
 class _ConnectTarget {
   const _ConnectTarget({required this.device, required this.type});
   final RadioDevice device;
   final _ConnectType type;
 
+  /// Human-readable label shown in the recent-devices list and connection UI.
   String get typeLabel {
     switch (type) {
       case _ConnectType.ble:
@@ -41,9 +52,15 @@ class _ConnectTarget {
         return 'Série USB — Companion';
       case _ConnectType.serialKiss:
         return 'KISS TNC';
+      // Web Serial uses the browser's navigator.serial API (Chrome/Edge only).
+      case _ConnectType.webSerial:
+        return 'Web USB — Companion';
+      case _ConnectType.webSerialKiss:
+        return 'Web USB — KISS TNC';
     }
   }
 
+  /// Icon shown next to the device name in the connection UI.
   IconData get icon {
     switch (type) {
       case _ConnectType.ble:
@@ -52,6 +69,11 @@ class _ConnectTarget {
         return Icons.usb;
       case _ConnectType.serialKiss:
         return Icons.podcasts;
+      // cable icon differentiates Web Serial from native USB (usb icon).
+      case _ConnectType.webSerial:
+        return Icons.cable;
+      case _ConnectType.webSerialKiss:
+        return Icons.cable;
     }
   }
 }
@@ -69,6 +91,12 @@ class ConnectScreen extends ConsumerStatefulWidget {
 
 class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   bool _scanning = false;
+
+  /// True while the browser's Web Serial port-picker is open.
+  /// Kept separate from [_scanning] so the USB button can show its own
+  /// spinner without disabling the BLE scan indicator.
+  bool _usbScanning = false;
+
   final List<_ConnectTarget> _targets = [];
   StreamSubscription<RadioDevice>? _bleScanSub;
   StreamSubscription<BluetoothAdapterState>? _bleStateSub;
@@ -300,6 +328,44 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     }
   }
 
+  /// Opens the browser's USB port-picker (Web Serial API) and adds Companion
+  /// and KISS targets for the selected port.
+  ///
+  /// Only called on web — the button that triggers this is guarded by [kIsWeb].
+  /// [SerialTransport.listDevices] calls navigator.serial.requestPort() which
+  /// shows the browser's native dialog; the user selects one port and we get
+  /// back a single [RadioDevice] registered in the static port registry.
+  ///
+  /// Both framing modes (Companion and KISS) are added to [_targets] so the
+  /// user can choose which one to use, matching the native serial scan UX.
+  Future<void> _startWebSerialScan() async {
+    setState(() => _usbScanning = true);
+    try {
+      final devices = await SerialTransport.listDevices();
+      if (!mounted) return;
+
+      if (devices.isEmpty) {
+        // User cancelled the browser picker or Web Serial is unavailable.
+        return;
+      }
+
+      // Each port gets two entries — one per framing mode.
+      setState(() {
+        for (final d in devices) {
+          _targets.add(_ConnectTarget(device: d, type: _ConnectType.webSerial));
+          _targets.add(
+            _ConnectTarget(device: d, type: _ConnectType.webSerialKiss),
+          );
+        }
+      });
+    } catch (_) {
+      // Web Serial not supported in this browser (Firefox, Safari) or
+      // the user denied port access.
+    } finally {
+      if (mounted) setState(() => _usbScanning = false);
+    }
+  }
+
   Future<void> _connectTo(_ConnectTarget target) async {
     if (target.type == _ConnectType.ble && !_checkBluetoothOn()) return;
 
@@ -328,6 +394,20 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
           name,
           mode: ConnectionMode.kiss,
         );
+      // Web Serial: same framing modes as native serial, but routed through
+      // the browser's Web Serial API via connectWebSerial.
+      case _ConnectType.webSerial:
+        ok = await connection.connectWebSerial(
+          target.device.id,
+          name,
+          mode: ConnectionMode.companion,
+        );
+      case _ConnectType.webSerialKiss:
+        ok = await connection.connectWebSerial(
+          target.device.id,
+          name,
+          mode: ConnectionMode.kiss,
+        );
     }
 
     if (ok && mounted) {
@@ -344,6 +424,34 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   }
 
   Future<void> _connectToLastDevice(LastDevice last) async {
+    // Web Serial ports live in an in-memory JS registry that is cleared on
+    // every page refresh. Detect this before starting the connecting animation
+    // so the user gets a targeted message and a direct shortcut to re-scan,
+    // instead of a generic "connection failed" snackbar after several seconds.
+    if ((last.type == 'webSerial' || last.type == 'webSerialKiss') &&
+        !SerialTransport.isRegistered(last.id)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.cable, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(context.l10n.connectWebUsbExpiredMessage),
+              ),
+            ],
+          ),
+          // Action button takes the user straight to the USB port-picker.
+          action: SnackBarAction(
+            label: context.l10n.connectWebUsbAction,
+            onPressed: _startWebSerialScan,
+          ),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _connectingTarget = _ConnectTarget(
         device: RadioDevice(
@@ -352,11 +460,18 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
           type:
               last.type == 'ble' ? RadioDeviceType.ble : RadioDeviceType.serial,
         ),
-        type:
+        // Map the persisted type string back to a _ConnectType enum value.
+      // Web Serial variants are kept separate from native serial so the
+      // reconnect button calls the correct notifier entry point.
+      type:
             last.type == 'ble'
                 ? _ConnectType.ble
                 : last.type == 'serialKiss'
                 ? _ConnectType.serialKiss
+                : last.type == 'webSerial'
+                ? _ConnectType.webSerial
+                : last.type == 'webSerialKiss'
+                ? _ConnectType.webSerialKiss
                 : _ConnectType.serialCompanion,
       );
       _cachedContactCount = ref.read(contactsProvider).length;
@@ -369,6 +484,17 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     bool ok;
     if (last.type == 'ble') {
       ok = await connection.connectBle(last.id, last.name);
+    } else if (last.type == 'webSerial' || last.type == 'webSerialKiss') {
+      // Port is confirmed in-registry by the isRegistered guard above.
+      // No browser picker is shown — the existing JS handle is reused.
+      ok = await connection.connectWebSerial(
+        last.id,
+        last.name,
+        mode:
+            last.type == 'webSerialKiss'
+                ? ConnectionMode.kiss
+                : ConnectionMode.companion,
+      );
     } else {
       ok = await connection.connectSerial(
         last.id,
@@ -586,6 +712,11 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                                     child: Icon(
                                       d.type == 'ble'
                                           ? Icons.bluetooth
+                                          // cable icon for Web Serial;
+                                          // usb icon for native serial.
+                                          : (d.type == 'webSerial' ||
+                                                  d.type == 'webSerialKiss')
+                                          ? Icons.cable
                                           : Icons.usb,
                                     ),
                                   ),
@@ -595,6 +726,10 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                                         ? 'Bluetooth LE'
                                         : d.type == 'serialKiss'
                                         ? 'KISS TNC'
+                                        : d.type == 'webSerial'
+                                        ? 'Web USB — Companion'
+                                        : d.type == 'webSerialKiss'
+                                        ? 'Web USB — KISS TNC'
                                         : 'Série USB',
                                     style: theme.textTheme.bodySmall,
                                   ),
@@ -636,7 +771,10 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                   },
                 ),
                 FilledButton.icon(
-                  onPressed: _scanning ? null : _startScan,
+                  // Disabled while either scan is in progress — only one
+                  // browser picker can be open at a time.
+                  onPressed:
+                      (_scanning || _usbScanning) ? null : _startScan,
                   icon:
                       _scanning
                           ? const SizedBox(
@@ -650,9 +788,39 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                   ),
                 ),
                 if (kIsWeb) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                   Text(
                     'O browser irá mostrar um seletor de dispositivos Bluetooth.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withAlpha(140),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Web Serial USB button — only meaningful on Chrome/Edge.
+                  // Opens the browser's USB port-picker via navigator.serial.
+                  OutlinedButton.icon(
+                    onPressed:
+                        (_scanning || _usbScanning)
+                            ? null
+                            : _startWebSerialScan,
+                    icon:
+                        _usbScanning
+                            ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Icon(Icons.cable),
+                    label: Text(
+                      _usbScanning
+                          ? context.l10n.connectWebUsbScanning
+                          : context.l10n.connectWebUsbButton,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    context.l10n.connectWebUsbHint,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withAlpha(140),
