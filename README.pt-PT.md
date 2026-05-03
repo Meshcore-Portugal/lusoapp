@@ -136,6 +136,12 @@ Os utilizadores sao responsaveis pela conformidade com os regulamentos da ANACOM
 
 Contribuicoes sao bem-vindas! Consulte o [ROADMAP.md](ROADMAP.md) para funcionalidades planeadas e a direcao do projeto.
 
+## Presets de Funcionalidades para Release
+
+Para presets de ativação/desativação de apps no build e overrides por funcionalidade, consulte:
+- [docs/feature-toggles.pt-PT.md](docs/feature-toggles.pt-PT.md) (Português - Portugal)
+- [docs/feature-toggles.md](docs/feature-toggles.md) (English)
+
 ## Licenca
 
 Licenca MIT — consulte [LICENSE](LICENSE) para detalhes.

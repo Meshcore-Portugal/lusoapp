@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../config/feature_toggles.dart';
+
 import 'screens/apps_screen.dart';
 import 'screens/connect_screen.dart';
 import 'screens/home_screen.dart';
@@ -73,34 +75,41 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/apps',
             builder: (context, state) => const AppsScreen(),
           ),
-          GoRoute(
-            path: '/apps/plan333',
-            builder: (context, state) => const Plan333Screen(),
-          ),
-          GoRoute(
-            path: '/apps/telemetry',
-            builder: (context, state) => const TelemetryScreen(),
-          ),
-          GoRoute(
-            path: '/apps/rxlog',
-            builder: (context, state) => const RxLogScreen(),
-          ),
-          GoRoute(
-            path: '/apps/noisefloor',
-            builder: (context, state) => const NoiseFloorScreen(),
-          ),
-          GoRoute(
-            path: '/apps/topology',
-            builder: (context, state) => const TopologyScreen(),
-          ),
-          GoRoute(
-            path: '/apps/dataexport',
-            builder: (context, state) => const DataExportScreen(),
-          ),
-          GoRoute(
-            path: '/apps/event',
-            builder: (context, state) => const EventProgramScreen(),
-          ),
+          if (FeatureToggles.appPlan333)
+            GoRoute(
+              path: '/apps/plan333',
+              builder: (context, state) => const Plan333Screen(),
+            ),
+          if (FeatureToggles.appTelemetry)
+            GoRoute(
+              path: '/apps/telemetry',
+              builder: (context, state) => const TelemetryScreen(),
+            ),
+          if (FeatureToggles.appRxLog)
+            GoRoute(
+              path: '/apps/rxlog',
+              builder: (context, state) => const RxLogScreen(),
+            ),
+          if (FeatureToggles.appNoiseFloor)
+            GoRoute(
+              path: '/apps/noisefloor',
+              builder: (context, state) => const NoiseFloorScreen(),
+            ),
+          if (FeatureToggles.appTopology)
+            GoRoute(
+              path: '/apps/topology',
+              builder: (context, state) => const TopologyScreen(),
+            ),
+          if (FeatureToggles.appDataExport)
+            GoRoute(
+              path: '/apps/dataexport',
+              builder: (context, state) => const DataExportScreen(),
+            ),
+          if (FeatureToggles.appEvent)
+            GoRoute(
+              path: '/apps/event',
+              builder: (context, state) => const EventProgramScreen(),
+            ),
           GoRoute(
             path: '/chat/:keyHex',
             builder: (context, state) {

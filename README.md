@@ -135,6 +135,12 @@ Users are responsible for compliance with ANACOM regulations and amateur radio l
 
 Contributions are welcome! Please see the [ROADMAP.md](ROADMAP.md) for planned features and the project direction.
 
+## Release Feature Presets
+
+For build-time app enable/disable presets and per-feature overrides, see:
+- [docs/feature-toggles.md](docs/feature-toggles.md) (English)
+- [docs/feature-toggles.pt-PT.md](docs/feature-toggles.pt-PT.md) (Portuguese - Portugal)
+
 ## Translations
 
 The app uses Flutter's built-in `flutter_localizations` / `intl` ARB pipeline.
