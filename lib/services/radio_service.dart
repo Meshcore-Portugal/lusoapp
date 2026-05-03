@@ -344,17 +344,36 @@ class RadioService {
         deviceInfo = info;
       case MsgWaitingPush():
         // Start draining the offline queue.
-        syncNextMessage();
+        _safeSyncNextMessage();
       case PrivateMessageResponse():
       case ChannelMessageResponse():
         // Continue draining — firmware sends one message per syncNext.
         // Keep calling until NoMoreMessagesResponse.
-        syncNextMessage();
+        _safeSyncNextMessage();
       case NoMoreMessagesResponse():
         // Queue drained — nothing to do.
         break;
       default:
         break;
+    }
+  }
+
+  /// Fire-and-forget syncNext for queue draining. Disconnect races are expected
+  /// here, so "Not connected" errors are swallowed to avoid unhandled async
+  /// exceptions in the VM error log.
+  void _safeSyncNextMessage() {
+    unawaited(_syncNextMessageGuarded());
+  }
+
+  Future<void> _syncNextMessageGuarded() async {
+    if (!isConnected) return;
+    try {
+      await syncNextMessage();
+    } catch (e) {
+      // During teardown, a late RX frame may still trigger queue draining
+      // after transport has disconnected. Treat as benign.
+      if (e is StateError && !isConnected) return;
+      rethrow;
     }
   }
 
