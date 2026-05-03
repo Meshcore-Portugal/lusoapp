@@ -28,7 +28,7 @@ class _DeviceInfoCard extends ConsumerWidget {
     final maxContacts = deviceInfo?.maxContacts;
     final (storageUsed, storageTotal) = ref.watch(storageProvider);
 
-    String _kbStr(int bytes) {
+    String kbStr(int bytes) {
       if (bytes < 1024) return '${bytes}b';
       return '${(bytes / 1024).toStringAsFixed(0)}kb';
     }
@@ -146,7 +146,7 @@ class _DeviceInfoCard extends ConsumerWidget {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              '${_kbStr(storageUsed)} / ${_kbStr(storageTotal)}',
+                              '${kbStr(storageUsed)} / ${kbStr(storageTotal)}',
                               style: theme.textTheme.bodySmall,
                             ),
                           ],

@@ -8,6 +8,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///
 /// Stored as JSON in SharedPreferences under [_kStorageKey].
 class CannedMessage extends Equatable {
+  factory CannedMessage.fromJson(Map<String, dynamic> json) => CannedMessage(
+    id: json['id'] as String,
+    text: json['text'] as String,
+    label: json['label'] as String?,
+    isEmergency: json['isEmergency'] as bool? ?? false,
+  );
   const CannedMessage({
     required this.id,
     required this.text,
@@ -33,13 +39,6 @@ class CannedMessage extends Equatable {
     if (label != null && label!.isNotEmpty) return label!;
     return text.length <= 24 ? text : '${text.substring(0, 24)}…';
   }
-
-  factory CannedMessage.fromJson(Map<String, dynamic> json) => CannedMessage(
-    id: json['id'] as String,
-    text: json['text'] as String,
-    label: json['label'] as String?,
-    isEmergency: json['isEmergency'] as bool? ?? false,
-  );
 
   CannedMessage copyWith({String? text, String? label, bool? isEmergency}) {
     return CannedMessage(

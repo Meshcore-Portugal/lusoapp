@@ -106,28 +106,28 @@ class AdvertAutoAddNotifier extends StateNotifier<AdvertAutoAddSettings> {
   Future<void> _load(String? radioId) async {
     final prefs = await SharedPreferences.getInstance();
     final p = '${_prefix(radioId)}_';
-    final legacy = '${_keyV1}_';
+    const legacy = '${_keyV1}_';
 
     // Helper: read scoped key, fall back to legacy global (migration path),
     // then fall back to the provided default.
-    bool _b(String field, bool def) =>
+    bool b(String field, bool def) =>
         prefs.getBool('$p$field') ??
         (radioId != null ? prefs.getBool('$legacy$field') : null) ??
         def;
-    int? _i(String field) =>
+    int? i(String field) =>
         prefs.getInt('$p$field') ??
         (radioId != null ? prefs.getInt('$legacy$field') : null);
 
     state = AdvertAutoAddSettings(
-      addAll: _b('addAll', true),
-      addChat: _b('chat', true),
-      addRepeater: _b('repeater', true),
-      addRoom: _b('room', true),
-      addSensor: _b('sensor', true),
-      overwriteOldest: _b('overwriteOldest', false),
-      maxHops: _i('maxHops'),
-      pullToRefresh: _b('pullToRefresh', true),
-      showPublicKeys: _b('showPublicKeys', true),
+      addAll: b('addAll', true),
+      addChat: b('chat', true),
+      addRepeater: b('repeater', true),
+      addRoom: b('room', true),
+      addSensor: b('sensor', true),
+      overwriteOldest: b('overwriteOldest', false),
+      maxHops: i('maxHops'),
+      pullToRefresh: b('pullToRefresh', true),
+      showPublicKeys: b('showPublicKeys', true),
     );
   }
 

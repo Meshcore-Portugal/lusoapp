@@ -405,7 +405,7 @@ class NotificationService {
     required String body,
     String? payload,
   }) async {
-    final androidDetails = AndroidNotificationDetails(
+    const androidDetails = AndroidNotificationDetails(
       _androidChannelId,
       _androidChannelName,
       channelDescription: _androidChannelDesc,
