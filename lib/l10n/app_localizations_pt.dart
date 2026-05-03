@@ -1040,6 +1040,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get connectDeviceUSB => '(Série USB — Companion)';
 
   @override
+  String get connectDeviceKISS => '(KISS TNC)';
+
+  @override
   String get connectStepConnecting => 'A ligar...';
 
   @override

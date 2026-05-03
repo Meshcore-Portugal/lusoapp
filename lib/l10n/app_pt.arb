@@ -339,6 +339,7 @@
   "connectTapHint": "Toque em \"Procurar\" para encontrar dispositivos",
   "connectDeviceBLE": "(Bluetooth LE)",
   "connectDeviceUSB": "(Série USB — Companion)",
+  "connectDeviceKISS": "(KISS TNC)",
   "connectStepConnecting": "A ligar...",
   "connectStepWaiting": "A aguardar rádio...",
   "connectStepDeviceInfo": "Informação do dispositivo",

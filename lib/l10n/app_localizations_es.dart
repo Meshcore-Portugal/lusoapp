@@ -1043,6 +1043,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get connectDeviceUSB => '(Serie USB — Companion)';
 
   @override
+  String get connectDeviceKISS => '(KISS TNC)';
+
+  @override
   String get connectStepConnecting => 'Conectando...';
 
   @override

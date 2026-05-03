@@ -2092,6 +2092,12 @@ abstract class AppLocalizations {
   /// **'(Série USB — Companion)'**
   String get connectDeviceUSB;
 
+  /// No description provided for @connectDeviceKISS.
+  ///
+  /// In pt, this message translates to:
+  /// **'(KISS TNC)'**
+  String get connectDeviceKISS;
+
   /// No description provided for @connectStepConnecting.
   ///
   /// In pt, this message translates to:

@@ -1034,6 +1034,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectDeviceUSB => '(USB Serial — Companion)';
 
   @override
+  String get connectDeviceKISS => '(KISS TNC)';
+
+  @override
   String get connectStepConnecting => 'Connecting...';
 
   @override

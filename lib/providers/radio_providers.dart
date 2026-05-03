@@ -166,12 +166,13 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
 
   /// Connects to a desktop serial device (Windows/Linux) via flutter_libserialport.
   ///
-  /// Always uses Companion protocol mode — KISS TNC framing is not supported.
-  /// Stores the connection as type 'serialCompanion' in the recent-devices list.
+  /// Supports both Companion and KISS TNC framing modes via the [mode] parameter.
+  /// Stores the connection type ('serialCompanion' or 'serialKiss') in the recent-devices list.
   Future<bool> connectSerial(
     String deviceId,
-    String deviceName,
-  ) async {
+    String deviceName, {
+    ConnectionMode mode = ConnectionMode.companion,
+  }) async {
     // Clear stale snapshot and sync flag so the contacts screen falls back
     // to the cached list while the new radio's sync is in progress.
     _ref.read(radioContactsSnapshotProvider.notifier).state = {};
@@ -185,7 +186,12 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         _setStep(0, '');
         return false;
       }
-      final service = RadioService(baseTransport);
+      // Wrap with KISS TNC framing when requested; otherwise use raw Companion protocol.
+      final RadioTransport transport =
+          mode == ConnectionMode.kiss
+              ? KissTransport(baseTransport)
+              : baseTransport;
+      final service = RadioService(transport);
       _ref.read(radioServiceProvider.notifier).state = service;
       _setupListeners(service);
       final ok = await service.connect();
@@ -206,6 +212,8 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
 
         await _fetchInitialData(service);
         state = TransportState.connected;
+        final typeStr =
+            mode == ConnectionMode.kiss ? 'serialKiss' : 'serialCompanion';
         // Prefer the radio's configured node name; fall back to the USB
         // device name so the reconnect button always shows something.
         final radioNodeName = _ref.read(selfInfoProvider)?.name;
@@ -215,7 +223,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
                 : deviceName;
         final recentList = await StorageService.instance.upsertRecentDevice(
           id: deviceId,
-          type: 'serialCompanion',
+          type: typeStr,
           name: displayName,
         );
         _ref.read(recentDevicesProvider.notifier).state = recentList;
@@ -238,11 +246,14 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   /// Connects to an Android USB serial device via the USB Host API (usb_serial).
   ///
   /// Mirrors [connectSerial] but resolves the transport through
-  /// [UsbTransport.fromDeviceId] instead of [SerialTransport.fromDeviceId].
+  /// [UsbTransport.fromDeviceId] instead of [SerialTransport.fromDeviceId],
+  /// and stores the device type as 'usbCompanion' or 'usbKiss' in the recent
+  /// devices list so [_connectToLastDevice] can route back here on reconnect.
   Future<bool> connectUsb(
     String deviceId,
-    String deviceName,
-  ) async {
+    String deviceName, {
+    ConnectionMode mode = ConnectionMode.companion,
+  }) async {
     // Clear stale snapshot so the contacts screen falls back to the cached list
     // while the new radio's sync is in progress.
     _ref.read(radioContactsSnapshotProvider.notifier).state = {};
@@ -257,7 +268,12 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         _setStep(0, '');
         return false;
       }
-      final service = RadioService(baseTransport);
+      // Optionally wrap in KISS TNC framing.
+      final RadioTransport transport =
+          mode == ConnectionMode.kiss
+              ? KissTransport(baseTransport)
+              : baseTransport;
+      final service = RadioService(transport);
       _ref.read(radioServiceProvider.notifier).state = service;
       _setupListeners(service);
       final ok = await service.connect();
@@ -278,6 +294,9 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
 
         await _fetchInitialData(service);
         state = TransportState.connected;
+        // Store with usb-specific type strings for reconnect routing.
+        final typeStr =
+            mode == ConnectionMode.kiss ? 'usbKiss' : 'usbCompanion';
         // Prefer the radio's configured node name for the reconnect button.
         final radioNodeName = _ref.read(selfInfoProvider)?.name;
         final displayName =
@@ -286,7 +305,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
                 : deviceName;
         final recentList = await StorageService.instance.upsertRecentDevice(
           id: deviceId,
-          type: 'usbCompanion',
+          type: typeStr,
           name: displayName,
         );
         _ref.read(recentDevicesProvider.notifier).state = recentList;

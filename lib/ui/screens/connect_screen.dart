@@ -25,9 +25,9 @@ const _showSummitEdition = false;
 // ---------------------------------------------------------------------------
 
 // Supported connection types shown in the connect screen.
-// serialCompanion — desktop serial via flutter_libserialport (Windows/Linux)
-// usbCompanion    — Android USB Host via usb_serial
-enum _ConnectType { ble, serialCompanion, usbCompanion }
+// serialCompanion / serialKiss — desktop serial via flutter_libserialport (Windows/Linux)
+// usbCompanion    / usbKiss    — Android USB Host via usb_serial
+enum _ConnectType { ble, serialCompanion, serialKiss, usbCompanion, usbKiss }
 
 /// Pairs a discovered [RadioDevice] with the connection type the user selected.
 /// Drives the label and icon shown in the device list and the connect logic.
@@ -44,6 +44,9 @@ class _ConnectTarget {
       case _ConnectType.serialCompanion:
       case _ConnectType.usbCompanion:
         return 'Série USB — Companion';
+      case _ConnectType.serialKiss:
+      case _ConnectType.usbKiss:
+        return 'KISS TNC';
     }
   }
 
@@ -55,6 +58,9 @@ class _ConnectTarget {
       case _ConnectType.serialCompanion:
       case _ConnectType.usbCompanion:
         return Icons.usb;
+      case _ConnectType.serialKiss:
+      case _ConnectType.usbKiss:
+        return Icons.podcasts;
     }
   }
 }
@@ -291,6 +297,9 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               _targets.add(
                 _ConnectTarget(device: d, type: _ConnectType.serialCompanion),
               );
+              _targets.add(
+                _ConnectTarget(device: d, type: _ConnectType.serialKiss),
+              );
             }
           });
         }
@@ -306,6 +315,9 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
             for (final d in usbDevices) {
               _targets.add(
                 _ConnectTarget(device: d, type: _ConnectType.usbCompanion),
+              );
+              _targets.add(
+                _ConnectTarget(device: d, type: _ConnectType.usbKiss),
               );
             }
           });
@@ -343,10 +355,22 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
         ok = await connection.connectBle(target.device.id, name);
       // Desktop serial via flutter_libserialport.
       case _ConnectType.serialCompanion:
-        ok = await connection.connectSerial(target.device.id, name);
+        ok = await connection.connectSerial(
+          target.device.id, name, mode: ConnectionMode.companion,
+        );
+      case _ConnectType.serialKiss:
+        ok = await connection.connectSerial(
+          target.device.id, name, mode: ConnectionMode.kiss,
+        );
       // Android USB Host via usb_serial.
       case _ConnectType.usbCompanion:
-        ok = await connection.connectUsb(target.device.id, name);
+        ok = await connection.connectUsb(
+          target.device.id, name, mode: ConnectionMode.companion,
+        );
+      case _ConnectType.usbKiss:
+        ok = await connection.connectUsb(
+          target.device.id, name, mode: ConnectionMode.kiss,
+        );
     }
 
     if (ok && mounted) {
@@ -364,16 +388,19 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
 
   /// Reconnects to a previously connected device from the recent-devices list.
   ///
-  /// Legacy entries stored as 'usbKiss' or 'serialKiss' are silently reconnected
-  /// in Companion mode — KISS TNC is no longer a supported connection option.
+  /// Routes to the correct transport method (BLE, USB Host, or desktop serial)
+  /// and restores the original connection mode (Companion or KISS TNC).
   Future<void> _connectToLastDevice(LastDevice last) async {
-    // 'usbCompanion' / 'usbKiss' (legacy) → USB; everything else is serial or BLE.
-    final isUsb = last.type == 'usbCompanion' || last.type == 'usbKiss';
+    // Map stored type string back to a _ConnectType for UI state.
     final connectType =
         last.type == 'ble'
             ? _ConnectType.ble
-            : isUsb
+            : last.type == 'serialKiss'
+            ? _ConnectType.serialKiss
+            : last.type == 'usbCompanion'
             ? _ConnectType.usbCompanion
+            : last.type == 'usbKiss'
+            ? _ConnectType.usbKiss
             : _ConnectType.serialCompanion;
 
     setState(() {
@@ -396,12 +423,18 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     bool ok;
     if (last.type == 'ble') {
       ok = await connection.connectBle(last.id, last.name);
-    } else if (isUsb) {
-      // Android USB Host reconnect. Legacy 'usbKiss' entries reconnect as companion.
-      ok = await connection.connectUsb(last.id, last.name);
+    } else if (last.type == 'usbCompanion' || last.type == 'usbKiss') {
+      // Android USB Host reconnect.
+      ok = await connection.connectUsb(
+        last.id, last.name,
+        mode: last.type == 'usbKiss' ? ConnectionMode.kiss : ConnectionMode.companion,
+      );
     } else {
-      // Desktop serial reconnect. Legacy 'serialKiss' entries reconnect as companion.
-      ok = await connection.connectSerial(last.id, last.name);
+      // Desktop serial reconnect.
+      ok = await connection.connectSerial(
+        last.id, last.name,
+        mode: last.type == 'serialKiss' ? ConnectionMode.kiss : ConnectionMode.companion,
+      );
     }
     if (ok && mounted) {
       context.go('/channels');
@@ -617,6 +650,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                                   subtitle: Text(
                                     d.type == 'ble'
                                         ? 'Bluetooth LE'
+                                        : (d.type == 'serialKiss' || d.type == 'usbKiss')
+                                        ? 'KISS TNC'
                                         : 'Série USB',
                                     style: theme.textTheme.bodySmall,
                                   ),
