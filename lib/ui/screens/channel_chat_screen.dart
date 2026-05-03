@@ -965,10 +965,12 @@ class _ChatInputBar extends StatefulWidget {
 
 class _ChatInputBarState extends State<_ChatInputBar> {
   List<String> _suggestions = [];
+  int _charCount = 0;
 
   @override
   void initState() {
     super.initState();
+    _charCount = widget.controller.text.length;
     widget.controller.addListener(_onTextChanged);
   }
 
@@ -994,9 +996,15 @@ class _ChatInputBarState extends State<_ChatInputBar> {
   }
 
   void _onTextChanged() {
+    final nextCharCount = widget.controller.text.length;
     final query = _mentionQuery();
     if (query == null) {
-      if (_suggestions.isNotEmpty) setState(() => _suggestions = []);
+      if (_suggestions.isNotEmpty || nextCharCount != _charCount) {
+        setState(() {
+          _suggestions = [];
+          _charCount = nextCharCount;
+        });
+      }
       return;
     }
     final filtered =
@@ -1004,8 +1012,12 @@ class _ChatInputBarState extends State<_ChatInputBar> {
             .where((p) => p.toLowerCase().contains(query))
             .toList()
           ..sort();
-    if (filtered.toString() != _suggestions.toString()) {
-      setState(() => _suggestions = filtered);
+    if (filtered.toString() != _suggestions.toString() ||
+        nextCharCount != _charCount) {
+      setState(() {
+        _suggestions = filtered;
+        _charCount = nextCharCount;
+      });
     }
   }
 
@@ -1099,6 +1111,13 @@ class _ChatInputBarState extends State<_ChatInputBar> {
                           minLines: 1,
                           maxLines: 5,
                           maxLength: 140,
+                          buildCounter:
+                              (
+                                _, {
+                                required int currentLength,
+                                required bool isFocused,
+                                required int? maxLength,
+                              }) => null,
                         ),
                       ),
                       CannedMessagePicker(
@@ -1116,6 +1135,18 @@ class _ChatInputBarState extends State<_ChatInputBar> {
                         icon: const Icon(Icons.send),
                       ),
                     ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, right: 96),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        '$_charCount/140',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),

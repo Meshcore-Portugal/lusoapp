@@ -738,6 +738,13 @@ class _ChatInputBar extends StatelessWidget {
                     minLines: 1,
                     maxLines: 5,
                     maxLength: 140,
+                    buildCounter:
+                        (
+                          _, {
+                          required int currentLength,
+                          required bool isFocused,
+                          required int? maxLength,
+                        }) => null,
                   ),
                 ),
                 CannedMessagePicker(
@@ -753,6 +760,23 @@ class _ChatInputBar extends StatelessWidget {
                   icon: const Icon(Icons.send),
                 ),
               ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 2, right: 96),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: controller,
+                  builder: (context, value, _) {
+                    return Text(
+                      '${value.text.length}/140',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
           ],
         ),
