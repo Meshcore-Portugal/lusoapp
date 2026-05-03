@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -6,6 +7,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:logger/logger.dart';
 
 import 'radio_transport.dart';
+import 'win_ble_bridge.dart';
 
 final _log = Logger(printer: SimplePrinter(printTime: false));
 
@@ -54,14 +56,30 @@ class BleTransport implements RadioTransport {
     try {
       _log.i('BLE connecting to ${_device.platformName} (web=$kIsWeb)');
 
-      await _device.connect(
+      // flutter_blue_plus_windows (WinBle.connect) ignores the timeout
+      // parameter entirely — the underlying WinRT call has no timeout guard.
+      // Wrap with a Dart-level Future.timeout on Windows so an unreachable
+      // device does not block the UI indefinitely.
+      final connectFuture = _device.connect(
         autoConnect: false,
         timeout: const Duration(seconds: 15),
       );
+      await (!kIsWeb && Platform.isWindows
+          ? connectFuture.timeout(
+              const Duration(seconds: 15),
+              onTimeout: () =>
+                  throw TimeoutException('BLE connect timed out (Windows)'),
+            )
+          : connectFuture);
 
       // On native platforms, request a larger MTU before service discovery.
       // This stabilises the GATT connection and avoids early descriptor
       // write failures.  Web Bluetooth negotiates MTU automatically.
+      //
+      // On Windows, flutter_blue_plus_windows ignores the requested MTU value
+      // and returns the system-negotiated MTU instead.  The try/catch handles
+      // this silently — the system MTU is typically 247 bytes anyway on modern
+      // Windows BLE stacks.
       if (!kIsWeb) {
         try {
           await _device.requestMtu(247);
@@ -166,10 +184,9 @@ class BleTransport implements RadioTransport {
     await _connectionLostController.close();
   }
 
-  /// Enable notifications on a characteristic, handling the flutter_blue_plus
-  /// web bug where setNotifyValue always times out.
+  /// Enable notifications on a characteristic, with platform-specific handling.
   ///
-  /// **Root cause (flutter_blue_plus_web 7.0.2):**
+  /// **Web bug (flutter_blue_plus_web 7.0.2):**
   /// The web implementation of `setNotifyValue` calls the Web Bluetooth
   /// `startNotifications()` JS API and adds the event listener, then returns
   /// `true` (hasCCCD). The platform-agnostic layer interprets `true` as
@@ -178,12 +195,15 @@ class BleTransport implements RadioTransport {
   /// descriptor internally. So the call always times out after 15 s, even
   /// though `startNotifications()` already succeeded.
   ///
-  /// **Workaround:** On web we call `setNotifyValue` with a short 2 s timeout.
-  /// The JS `startNotifications()` finishes almost instantly — the timeout
-  /// only fires in the stale "wait for CCCD" phase. We catch it and proceed,
-  /// because notifications are already active.
+  /// **Web workaround:** Call `setNotifyValue` with a short 2 s timeout; the
+  /// timeout only fires in the stale "wait for CCCD" phase. Notifications are
+  /// already active at that point, so catching and ignoring the error is safe.
   ///
-  /// On native platforms we use the normal retry path.
+  /// **Windows (flutter_blue_plus_windows):**
+  /// Uses `WriteClientCharacteristicConfigurationDescriptorAsync` via WinRT —
+  /// no timeout bug.  Falls through to the native retry path below.
+  ///
+  /// **Android / iOS / macOS / Linux:** native retry path.
   static Future<void> _enableNotifications(BluetoothCharacteristic char) async {
     if (kIsWeb) {
       try {
@@ -216,32 +236,47 @@ class BleTransport implements RadioTransport {
     }
   }
 
+  /// Pure filter used by [isWindowsMeshCoreDevice]: accepts the device when
+  /// [serviceUuids] contains the NUS service GUID, or when [deviceName]
+  /// contains "meshcore" (case-insensitive) as a fallback for radios that
+  /// omit the service UUID from their advertisement packet.
+  ///
+  /// Separated so tests can call this function directly without constructing
+  /// a [ScanResult].
+  static bool isMeshCoreAdvertisement(
+    List<Guid> serviceUuids,
+    String deviceName,
+  ) {
+    if (serviceUuids.contains(BleUuids.service)) return true;
+    return deviceName.toLowerCase().contains('meshcore');
+  }
+
   /// Scan for MeshCore BLE devices.
   ///
-  /// On web, [withServices] only goes into the browser picker `filters`.
-  /// [webOptionalServices] is the separate parameter that populates
-  /// `optionalServices` in `requestDevice()`, which the Web Bluetooth
-  /// security model requires before [discoverServices] is allowed.
-  /// Without it, `discoverServices()` throws a SecurityError even if the
-  /// device was selected successfully from the picker.
-  /// Both must include [BleUuids.service] for the NUS service to be accessible.
+  /// On Windows, delegates entirely to [WinBleBridge.scan] which uses
+  /// win_ble (WinRT/BLEServer.exe) and applies MeshCore filtering internally.
   ///
-  /// **Web note:** On web, [FlutterBluePlus.startScan] calls the browser's
-  /// `requestDevice()` which blocks until the user picks a device, emits the
-  /// result to [FlutterBluePlus.onScanResults], then returns.  We must
-  /// subscribe to [onScanResults] *before* calling [startScan]; otherwise the
-  /// result has already been emitted by the time the `await for` loop starts
-  /// and is silently missed.
+  /// On web, [withServices] goes into the browser picker `filters`.
+  /// [webOptionalServices] populates `optionalServices` in `requestDevice()`
+  /// so the Web Bluetooth security model allows [discoverServices].
+  ///
+  /// **Web note:** [FlutterBluePlus.startScan] blocks inside `requestDevice()`
+  /// until the user picks a device.  We must subscribe to [onScanResults]
+  /// *before* calling [startScan] so the result is not missed.
   static Stream<RadioDevice> scan({
     Duration timeout = const Duration(seconds: 10),
   }) {
+    // Windows: win_ble handles BLEServer subprocess, scanning, and filtering.
+    if (!kIsWeb && Platform.isWindows) {
+      return WinBleBridge.scan(timeout: timeout);
+    }
+
     final controller = StreamController<RadioDevice>();
     final seen = <String>{};
 
     Future<void> doScan() async {
-      // Subscribe to results BEFORE startScan — critical on web where
-      // startScan blocks inside the browser requestDevice() picker and emits
-      // the chosen device before returning.
+      // Subscribe BEFORE startScan — critical on web where startScan blocks
+      // inside requestDevice() and emits the chosen device before returning.
       final sub = FlutterBluePlus.onScanResults.listen((results) {
         for (final r in results) {
           if (!seen.contains(r.device.remoteId.str)) {
@@ -276,9 +311,9 @@ class BleTransport implements RadioTransport {
         _log.e('BLE startScan failed: $e');
       }
 
-      // On native the scan keeps running for `timeout`; wait for it to stop.
-      // On web startScan already returned after the picker resolved — done.
       if (!kIsWeb) {
+        // On native (Android/iOS/Linux/macOS) the scan runs for `timeout`;
+        // wait for it to stop before closing.
         await FlutterBluePlus.isScanning.where((scanning) => !scanning).first;
       } else {
         // On web, `startScan` returns as soon as the user picks a device from
@@ -319,8 +354,14 @@ class BleTransport implements RadioTransport {
   }
 
   /// Create a BLE transport from a scanned device ID.
-  static BleTransport fromDeviceId(String deviceId) {
-    final device = BluetoothDevice.fromId(deviceId);
-    return BleTransport(device);
+  ///
+  /// On Windows, returns a [WindowsBleTransport] backed by win_ble (WinRT)
+  /// because flutter_blue_plus has no Windows platform registration.
+  /// On all other platforms, creates a standard [BleTransport].
+  static RadioTransport fromDeviceId(String deviceId) {
+    if (!kIsWeb && Platform.isWindows) {
+      return WinBleBridge.createTransport(deviceId);
+    }
+    return BleTransport(BluetoothDevice.fromId(deviceId));
   }
 }

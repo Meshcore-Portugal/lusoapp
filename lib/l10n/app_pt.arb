@@ -439,6 +439,8 @@
   "connectBrowserNote": "O browser irá mostrar um seletor de dispositivos Bluetooth",
   "connectScanningMessage": "A procurar rádios MeshCore...",
   "connectTapHint": "Toque em \"Procurar\" para encontrar dispositivos",
+  "connectSectionBluetooth": "BLUETOOTH",
+  "connectSectionSerial": "USB / SÉRIE",
   "connectDeviceBLE": "(Bluetooth LE)",
   "connectDeviceUSB": "(Série USB — Companion)",
   "connectDeviceKISS": "(KISS TNC)",

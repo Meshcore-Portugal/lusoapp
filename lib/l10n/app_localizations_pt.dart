@@ -1254,6 +1254,12 @@ class AppLocalizationsPt extends AppLocalizations {
       'Toque em \"Procurar\" para encontrar dispositivos';
 
   @override
+  String get connectSectionBluetooth => 'BLUETOOTH';
+
+  @override
+  String get connectSectionSerial => 'USB / SÉRIE';
+
+  @override
   String get connectDeviceBLE => '(Bluetooth LE)';
 
   @override
