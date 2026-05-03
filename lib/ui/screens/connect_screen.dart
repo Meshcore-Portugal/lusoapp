@@ -107,11 +107,22 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   @override
   void initState() {
     super.initState();
-    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+    // Subscribe to BLE adapter state on platforms with a runtime-queryable
+    // adapter: Android, iOS, and Windows (WinRT BluetoothAdapter).
+    // macOS/Linux are skipped — their adapter states are not surfaced by
+    // flutter_blue_plus, and scan errors surface naturally without a dialog.
+    if (!kIsWeb &&
+        (Platform.isAndroid || Platform.isIOS || Platform.isWindows)) {
       // Subscribe to the adapterState stream — this triggers the platform call
       // that populates the actual state. adapterStateNow is 'unknown' until
       // the first subscription, so we cannot rely on it at startup.
-      _bleStateSub = FlutterBluePlus.adapterState.listen((state) {
+      // On Windows, flutter_blue_plus has no platform registration —
+      // use WinBleBridge.adapterState (FlutterBluePlusWindows / WinRT).
+      // On Android/iOS use the standard flutter_blue_plus stream.
+      final adapterStateStream = Platform.isWindows
+          ? WinBleBridge.adapterState
+          : FlutterBluePlus.adapterState;
+      _bleStateSub = adapterStateStream.listen((state) {
         if (state == BluetoothAdapterState.off) {
           _bleStateSub?.cancel();
           _bleStateSub = null;
@@ -147,9 +158,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                 Flexible(child: Text(context.l10n.connectBluetoothOff)),
               ],
             ),
-            content: const Text(
-              'O Bluetooth está desligado. Deseja activá-lo para ligar ao rádio MeshCore?',
-            ),
+            content: Text(context.l10n.connectBluetoothOffMessage),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
@@ -181,14 +190,13 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
           }
         }
       } else {
-        // iOS does not allow programmatic BLE enable.
+        // iOS and Windows do not allow programmatic BT enable — direct the
+        // user to open system settings and toggle it manually.
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Por favor active o Bluetooth nas Definições do sistema.',
-              ),
-              duration: Duration(seconds: 4),
+            SnackBar(
+              content: Text(context.l10n.connectBluetoothDeniedMessage),
+              duration: const Duration(seconds: 4),
             ),
           );
         }
@@ -196,27 +204,34 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     }
   }
 
-  /// Returns true if Bluetooth is on (or not applicable), false if it is off.
-  /// When off, shows a friendly snackbar and returns false so the caller can abort.
+  /// Returns true if the BT adapter is on (or not relevant to this platform).
+  /// Shows a snackbar and returns false when BT is confirmed off, so callers
+  /// can abort scan/connect early with clear user feedback.
   bool _checkBluetoothOn() {
     if (kIsWeb) return true;
-    if (!Platform.isAndroid && !Platform.isIOS) return true;
-    if (FlutterBluePlus.adapterStateNow == BluetoothAdapterState.off) {
+    // Only Android, iOS, and Windows expose a queryable adapter state through
+    // flutter_blue_plus.  macOS/Linux return true and let natural scan errors
+    // surface instead.
+    if (!Platform.isAndroid && !Platform.isIOS && !Platform.isWindows) {
+      return true;
+    }
+    // On Windows, use the cached state from WinBleBridge (WinRT adapter).
+    // On Android/iOS use the standard flutter_blue_plus sync getter.
+    final currentState = Platform.isWindows
+        ? WinBleBridge.adapterStateNow
+        : FlutterBluePlus.adapterStateNow;
+    if (currentState == BluetoothAdapterState.off) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Row(
             children: [
-              Icon(Icons.bluetooth_disabled, color: Colors.white),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Bluetooth desligado. Ligue o Bluetooth para procurar dispositivos.',
-                ),
-              ),
+              const Icon(Icons.bluetooth_disabled, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(child: Text(context.l10n.connectBluetoothOff)),
             ],
           ),
           backgroundColor: AppTheme.primary,
-          duration: Duration(seconds: 4),
+          duration: const Duration(seconds: 4),
         ),
       );
       return false;
@@ -285,17 +300,30 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       }
     }
 
-    // BLE scan — yields one entry per device (always Companion protocol)
+    // BLE scan — one entry per device, but the stream may re-emit a device
+    // with an improved name (e.g. when a Windows scan-response PDU arrives
+    // after the initial advertising PDU). Upsert by device ID so the UI
+    // replaces "MESHCORE" placeholders with the real name in place.
     _bleScanSub = BleTransport.scan(
       timeout: const Duration(seconds: 10),
     ).listen(
       (device) {
         if (mounted) {
-          setState(
-            () => _targets.add(
-              _ConnectTarget(device: device, type: _ConnectType.ble),
-            ),
-          );
+          setState(() {
+            final idx = _targets.indexWhere(
+              (t) =>
+                  t.type == _ConnectType.ble && t.device.id == device.id,
+            );
+            final target = _ConnectTarget(
+              device: device,
+              type: _ConnectType.ble,
+            );
+            if (idx >= 0) {
+              _targets[idx] = target; // name improved — update in place
+            } else {
+              _targets.add(target); // new device
+            }
+          });
         }
       },
       onDone: () {
@@ -528,6 +556,138 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       ref.read(lastDeviceProvider.notifier).state =
           updated.isNotEmpty ? updated.first : null;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Windows-only grouped scan results list
+  // ---------------------------------------------------------------------------
+
+  /// Builds a grouped device list with "BLUETOOTH" and "USB / SÉRIE" sections.
+  /// Only rendered on Windows where BLE and Serial devices are discovered
+  /// together in a single scan and would otherwise be interleaved.
+  Widget _buildWindowsGroupedList(ThemeData theme) {
+    final bleTargets =
+        _targets.where((t) => t.type == _ConnectType.ble).toList();
+    final serialTargets =
+        _targets
+            .where(
+              (t) =>
+                  t.type == _ConnectType.serialCompanion ||
+                  t.type == _ConnectType.serialKiss,
+            )
+            .toList();
+
+    return ListView(
+      children: [
+        if (bleTargets.isNotEmpty) ...[
+          _buildSectionHeader(
+            context.l10n.connectSectionBluetooth,
+            Icons.bluetooth_searching,
+            theme,
+          ),
+          ...bleTargets.map((t) => _buildBleTile(t, theme)),
+        ],
+        if (serialTargets.isNotEmpty) ...[
+          if (bleTargets.isNotEmpty) const SizedBox(height: 4),
+          _buildSectionHeader(
+            context.l10n.connectSectionSerial,
+            Icons.usb,
+            theme,
+          ),
+          ...serialTargets.map((t) => _buildSerialTile(t, theme)),
+        ],
+      ],
+    );
+  }
+
+  /// Small label row used as a section header in the grouped scan list.
+  Widget _buildSectionHeader(String label, IconData icon, ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 12, 4, 2),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: theme.colorScheme.onSurface.withAlpha(130),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurface.withAlpha(130),
+              letterSpacing: 1.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// BLE device tile for the Windows grouped list.
+  ///
+  /// Title: saved radio name from recent devices if the MAC address matches,
+  ///        otherwise the BLE advertisement name (often the generic "MESHCORE").
+  /// Subtitle: MAC address + RSSI so the user can identify multiple radios
+  ///           that all advertise the same generic name.
+  Widget _buildBleTile(_ConnectTarget target, ThemeData theme) {
+    // Prefer the name stored from a previous successful connection.
+    // The radio's configured node name is saved on connect; the BLE
+    // advertisement only carries the firmware default ("MESHCORE").
+    final recent = ref.read(recentDevicesProvider);
+    final savedName =
+        recent
+            .where(
+              (r) =>
+                  r.id.toUpperCase() == target.device.id.toUpperCase() &&
+                  r.name.isNotEmpty,
+            )
+            .firstOrNull
+            ?.name;
+    final displayName =
+        (savedName != null) ? savedName : target.device.name;
+
+    // Subtitle: MAC address + signal strength to distinguish radios.
+    final rssi = target.device.rssi;
+    final subtitle =
+        rssi != null
+            ? '${target.device.id} · $rssi dBm'
+            : target.device.id;
+
+    return Card(
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: theme.colorScheme.primaryContainer,
+          child: Icon(
+            Icons.bluetooth,
+            color: theme.colorScheme.onPrimaryContainer,
+          ),
+        ),
+        title: Text(displayName),
+        subtitle: Text(subtitle, style: theme.textTheme.bodySmall),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: () => _connectTo(target),
+      ),
+    );
+  }
+
+  /// Serial device tile for the Windows grouped list.
+  Widget _buildSerialTile(_ConnectTarget target, ThemeData theme) {
+    return Card(
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: theme.colorScheme.primaryContainer,
+          child: Icon(
+            target.icon,
+            color: theme.colorScheme.onPrimaryContainer,
+          ),
+        ),
+        title: Text(target.device.name),
+        subtitle: Text(target.typeLabel, style: theme.textTheme.bodySmall),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: () => _connectTo(target),
+      ),
+    );
   }
 
   @override
@@ -845,6 +1005,10 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                               ),
                             ),
                           )
+                          // Windows: grouped BLE / Serial sections.
+                          // Other platforms: flat list (existing behaviour).
+                          : (!kIsWeb && Platform.isWindows)
+                          ? _buildWindowsGroupedList(theme)
                           : ListView.builder(
                             itemCount: _targets.length,
                             itemBuilder: (context, index) {

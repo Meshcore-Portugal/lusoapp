@@ -2470,6 +2470,18 @@ abstract class AppLocalizations {
   /// **'Toque em \"Procurar\" para encontrar dispositivos'**
   String get connectTapHint;
 
+  /// No description provided for @connectSectionBluetooth.
+  ///
+  /// In pt, this message translates to:
+  /// **'BLUETOOTH'**
+  String get connectSectionBluetooth;
+
+  /// No description provided for @connectSectionSerial.
+  ///
+  /// In pt, this message translates to:
+  /// **'USB / SÉRIE'**
+  String get connectSectionSerial;
+
   /// No description provided for @connectDeviceBLE.
   ///
   /// In pt, this message translates to:
