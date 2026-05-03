@@ -121,6 +121,7 @@ class _TraceResultCardState extends State<_TraceResultCard> {
                       hop: hop,
                       theme: widget.theme,
                       distanceM: distM,
+                      showSnr: i == totalHops - 1,
                     );
                   },
                 ),
@@ -182,12 +183,14 @@ class _HopRow extends StatelessWidget {
     required this.hop,
     required this.theme,
     this.distanceM,
+    this.showSnr = true,
   });
 
   final int index;
   final TraceHop hop;
   final ThemeData theme;
   final double? distanceM;
+  final bool showSnr;
 
   @override
   Widget build(BuildContext context) {
@@ -231,13 +234,14 @@ class _HopRow extends StatelessWidget {
             ),
             const SizedBox(width: 6),
           ],
-          Text(
-            '${hop.snrDb.toStringAsFixed(1)} dB',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: _snrColor(hop.snrDb),
-              fontWeight: FontWeight.w600,
+          if (showSnr)
+            Text(
+              '${hop.snrDb.toStringAsFixed(1)} dB',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: _snrColor(hop.snrDb),
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
         ],
       ),
     );

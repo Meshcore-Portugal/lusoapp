@@ -401,6 +401,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                   hi,
                                   selfPos,
                                 ),
+                                showSnr: hi == traceResult.hops.length - 1,
                               ),
                             ),
                       ],
@@ -632,7 +633,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
-  Widget _buildHopMarker(TraceHop hop, ThemeData theme, {double? distanceM}) {
+  Widget _buildHopMarker(
+    TraceHop hop,
+    ThemeData theme, {
+    double? distanceM,
+    bool showSnr = true,
+  }) {
     final snr = hop.snrDb.toStringAsFixed(1);
     final distLabel = distanceM != null ? '  ${_formatDist(distanceM)}' : '';
     // Layout (top → bottom):
@@ -653,7 +659,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             border: Border.all(color: Colors.white, width: 1),
           ),
           child: Text(
-            '${hop.name ?? hop.hashHex.substring(0, 4)}  $snr dB',
+            '${hop.name ?? hop.hashHex.substring(0, 4)}${showSnr ? '  $snr dB' : ''}',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 9,
