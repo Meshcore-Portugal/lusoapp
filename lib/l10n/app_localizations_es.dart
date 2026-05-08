@@ -63,6 +63,207 @@ class AppLocalizationsEs extends AppLocalizations {
   String get commonRename => 'Renombrar';
 
   @override
+  String get commonReset => 'Restablecer';
+
+  @override
+  String get commonJustNow => 'ahora mismo';
+
+  @override
+  String commonMinutesAgo(int minutes) {
+    return 'hace $minutes min';
+  }
+
+  @override
+  String commonHoursAgo(int hours) {
+    return 'hace $hours h';
+  }
+
+  @override
+  String get gpsSharingTitle => 'Compartir GPS';
+
+  @override
+  String get gpsSharingSubtitle =>
+      'Tú decides si tu ubicación se incluye en los anuncios de la radio. Desactivado por defecto.';
+
+  @override
+  String get gpsSharingStatusOff => 'DESACTIVADO';
+
+  @override
+  String get gpsSharingStatusManual => 'MANUAL';
+
+  @override
+  String get gpsSharingStatusAuto => 'AUTOMÁTICO';
+
+  @override
+  String get gpsSharingModeOff => 'Desactivado';
+
+  @override
+  String get gpsSharingModeManual => 'Manual';
+
+  @override
+  String get gpsSharingModeAuto => 'Automático';
+
+  @override
+  String get gpsSharingPrecisionTitle => 'Precisión enviada';
+
+  @override
+  String get gpsSharingPrecisionExact => 'Exacta';
+
+  @override
+  String get gpsSharingPrecisionRough => 'Aproximada';
+
+  @override
+  String get gpsSharingPrecisionVague => 'Vaga';
+
+  @override
+  String get gpsSharingIntervalLabel => 'Intervalo de actualización';
+
+  @override
+  String get gpsSharingShareNow => 'Compartir ahora';
+
+  @override
+  String get gpsSharingClearNow => 'Borrar de la radio';
+
+  @override
+  String get gpsSharingClearedOnRadio => 'Ubicación borrada de la radio.';
+
+  @override
+  String get gpsSharingPrivacyDisclaimer =>
+      'Tu posición se incluirá en los anuncios LoRa de tu radio y puede ser visible para otros nodos. Activa sólo si aceptas compartirla.';
+
+  @override
+  String gpsSharingLastShared(Object ago, Object lat, Object lon) {
+    return 'Compartido $ago — $lat, $lon';
+  }
+
+  @override
+  String gpsSharingOutcomeOk(Object lat, Object lon) {
+    return '✅ Ubicación enviada: $lat, $lon';
+  }
+
+  @override
+  String get gpsSharingOutcomeCleared => 'Ubicación borrada de la radio.';
+
+  @override
+  String get gpsSharingOutcomeDisabled =>
+      'El compartir GPS está desactivado en Ajustes.';
+
+  @override
+  String get gpsSharingOutcomeNoPerm => 'Permiso de ubicación denegado.';
+
+  @override
+  String get gpsSharingOutcomeServiceOff =>
+      'Servicio de ubicación desactivado.';
+
+  @override
+  String get gpsSharingOutcomeNoFix => 'Sin señal GPS disponible.';
+
+  @override
+  String get gpsSharingOutcomeDisconnected =>
+      'Radio desconectada — conecta primero.';
+
+  @override
+  String get gpsSharingOutcomeFailed => 'Falló el envío de ubicación.';
+
+  @override
+  String get gpsSharingOutcomeSkipped =>
+      'Posición sin cambios — envío omitido.';
+
+  @override
+  String get gpsSharingMinMoveLabel => 'Movimiento mínimo';
+
+  @override
+  String get gpsSharingMinMoveAlways => 'Enviar siempre';
+
+  @override
+  String get gpsSharingMinMoveHint =>
+      'En modo automático, solo envía un nuevo fix si te has movido al menos esta distancia desde el último envío. Ahorra tiempo de antena LoRa.';
+
+  @override
+  String get gpsSharingAdvPolicyTitle => 'Difundir ubicación en los anuncios';
+
+  @override
+  String get gpsSharingAdvPolicyNever =>
+      'Desactivado — tus anuncios no incluyen coordenadas.';
+
+  @override
+  String get gpsSharingAdvPolicyAlways =>
+      'Activado — cada anuncio incluye la última ubicación conocida de la radio.';
+
+  @override
+  String gpsSharingAdvPolicyUnknown(Object value) {
+    return 'Política de la radio: byte $value — valor desconocido.';
+  }
+
+  @override
+  String get mapVisibilityShowTitle => 'Mostrar en el mapa';
+
+  @override
+  String get mapVisibilityShowSubtitle =>
+      'Oculta este contacto de tu mapa, incluso si sus anuncios incluyen coordenadas.';
+
+  @override
+  String get cannedMessagesTitle => 'Mensajes rápidos';
+
+  @override
+  String get cannedMessagesSubtitle =>
+      'Biblioteca de respuestas predefinidas para enviar con un toque (o desde el botón SOS del widget).';
+
+  @override
+  String get cannedMessagesAdd => 'Añadir mensaje';
+
+  @override
+  String get cannedMessagesAddTitle => 'Nuevo mensaje rápido';
+
+  @override
+  String get cannedMessagesEditTitle => 'Editar mensaje rápido';
+
+  @override
+  String get cannedMessagesEmpty =>
+      'Sin mensajes guardados. Toca + para añadir.';
+
+  @override
+  String get cannedMessagesReset => 'Restablecer por defecto';
+
+  @override
+  String get cannedMessagesResetTitle => '¿Restablecer mensajes?';
+
+  @override
+  String get cannedMessagesResetConfirm =>
+      'Perderás todos los cambios y volverás a la lista original.';
+
+  @override
+  String get cannedMessagesDeleteTitle => '¿Borrar mensaje?';
+
+  @override
+  String cannedMessagesDeleteConfirm(Object label) {
+    return 'Vas a borrar “$label”.';
+  }
+
+  @override
+  String get cannedMessagesLabelHint => 'Etiqueta (opcional)';
+
+  @override
+  String get cannedMessagesTextHint => 'Texto del mensaje';
+
+  @override
+  String get cannedMessagesEmergencyToggle => 'Mensaje de emergencia';
+
+  @override
+  String get cannedMessagesEmergencyDesc =>
+      'Usado por el botón SOS del widget. Solo uno puede estar marcado.';
+
+  @override
+  String get cannedMessagesPickerTooltip => 'Mensajes rápidos';
+
+  @override
+  String get cannedMessagesPickerTitle => 'Insertar mensaje rápido';
+
+  @override
+  String get cannedMessagesPickerSubtitle =>
+      'Toca para ponerlo en el campo de texto.';
+
+  @override
   String get commonConfirm => 'Confirmar';
 
   @override
@@ -250,6 +451,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get homeDisconnect => 'Desconectar';
 
   @override
+  String get homeExitTitle => '¿Salir de LusoAPP?';
+
+  @override
+  String get homeExitContent =>
+      'La conexión con la radio será terminada y la aplicación se cerrará.';
+
+  @override
+  String get homeExit => 'Salir';
+
+  @override
   String get settingsIdentity => 'Identidad';
 
   @override
@@ -275,6 +486,13 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get settingsDisconnected => 'Desconectado';
+
+  @override
+  String get settingsAutoReconnect => 'Reconexión automática';
+
+  @override
+  String get settingsAutoReconnectDesc =>
+      'Reconectar automáticamente cuando se pierde la conexión';
 
   @override
   String get settingsRadioConfig => 'Configuración de Radio';
@@ -306,6 +524,40 @@ class AppLocalizationsEs extends AppLocalizations {
   String get settingsAppearance => 'Apariencia';
 
   @override
+  String get settingsTheme => 'Tema';
+
+  @override
+  String get settingsThemeSystem => 'Sistema';
+
+  @override
+  String get settingsThemeLight => 'Claro';
+
+  @override
+  String get settingsThemeDark => 'Oscuro';
+
+  @override
+  String get settingsTextSize => 'Tamaño del texto';
+
+  @override
+  String get settingsTextSizeDesc =>
+      'Ajusta el tamaño global del texto en la app.';
+
+  @override
+  String get settingsAccent => 'Color de acento';
+
+  @override
+  String get settingsAccentDefault => 'Predeterminado (naranja de la marca)';
+
+  @override
+  String get settingsAccentCustom => 'Personalizado';
+
+  @override
+  String get settingsAccentReset => 'Restablecer';
+
+  @override
+  String get settingsMentionColors => 'Colores de mención';
+
+  @override
   String get settingsSelfMention => 'Mención propia (@[Tú])';
 
   @override
@@ -335,10 +587,108 @@ class AppLocalizationsEs extends AppLocalizations {
   String get settingsPrivateMessages => 'Mensajes privados';
 
   @override
+  String get settingsPrivateMessagesDesc =>
+      'Notificar al recibir un mensaje directo';
+
+  @override
   String get settingsChannelMessages => 'Mensajes de canal';
 
   @override
+  String get settingsChannelMessagesDesc => 'Notificar mensajes en canales';
+
+  @override
+  String get settingsChannelMentionsOnly => 'Solo menciones';
+
+  @override
+  String get settingsChannelMentionsOnlyDesc =>
+      'Notificar solo cuando un mensaje del canal mencione tu nombre';
+
+  @override
   String get settingsBackgroundOnly => 'Solo en segundo plano';
+
+  @override
+  String get settingsBackgroundOnlyDesc =>
+      'Notificar solo cuando la app no esté en primer plano';
+
+  @override
+  String settingsSosDesc(Object gps) {
+    return 'Configura el destino y el mensaje de emergencia. Usa \'$gps\' en el texto para insertar coordenadas.';
+  }
+
+  @override
+  String get settingsSosTarget => 'Destino SOS';
+
+  @override
+  String get settingsSosTargetChannel => 'Canal';
+
+  @override
+  String get settingsSosTargetPrivateContact => 'Contacto privado';
+
+  @override
+  String get settingsSosChannelLabel => 'Canal de envío';
+
+  @override
+  String get settingsSosGeneralChannel => '#0 General';
+
+  @override
+  String get settingsSosDestinationContact => 'Contacto de destino';
+
+  @override
+  String get settingsSosNoContactsAvailable => 'No hay contactos disponibles';
+
+  @override
+  String get settingsSosTapToSearchContact => 'Toca para buscar un contacto';
+
+  @override
+  String get settingsSosClearContact => 'Limpiar contacto';
+
+  @override
+  String get settingsSosMessage => 'Mensaje SOS';
+
+  @override
+  String settingsSosMessageHint(Object gps) {
+    return 'Ej.: SOS - necesito ayuda! \'$gps\'';
+  }
+
+  @override
+  String get settingsSosIncludeGps => 'Incluir coordenadas GPS del teléfono';
+
+  @override
+  String get settingsSosIncludeGpsDesc =>
+      'Si no hay GPS o permiso, el mensaje se envía sin coordenadas.';
+
+  @override
+  String get settingsSosSendNow => 'Enviar SOS ahora';
+
+  @override
+  String get settingsSosSent => 'SOS enviado';
+
+  @override
+  String get settingsSosRadioNotConnected => 'La radio no está conectada';
+
+  @override
+  String get settingsSosMissingContact =>
+      'Contacto SOS no configurado/encontrado';
+
+  @override
+  String get settingsSosSendFailed => 'Error al enviar SOS';
+
+  @override
+  String settingsSosSendFailedDetail(Object detail) {
+    return 'Error SOS: $detail';
+  }
+
+  @override
+  String get settingsSosSearchContact => 'Buscar contacto SOS';
+
+  @override
+  String get settingsSosSearchHint => 'Nombre o ID corto';
+
+  @override
+  String get settingsSosNoContactFound => 'No se encontraron contactos';
+
+  @override
+  String get settingsSosUnnamedChannel => '(sin nombre)';
 
   @override
   String get settingsPrivateKeyCopy => 'Copia de clave privada';
@@ -857,6 +1207,29 @@ class AppLocalizationsEs extends AppLocalizations {
   String get channelsRemoveWarning => 'Esta acción no puede deshacerse.';
 
   @override
+  String get channelsMuteTitle => 'Canal silenciado';
+
+  @override
+  String get channelsUnmuteTitle => 'Notificaciones activas';
+
+  @override
+  String get channelsMuteSubtitleOn =>
+      'Sin alertas — el indicador de no leídos sigue visible';
+
+  @override
+  String get channelsMuteSubtitleOff =>
+      'Recibe notificaciones e indicador de no leídos';
+
+  @override
+  String get channelsMuteLabel => 'silenciado';
+
+  @override
+  String get chatMuteChannel => 'Silenciar canal';
+
+  @override
+  String get chatUnmuteChannel => 'Reactivar notificaciones';
+
+  @override
   String get chatNoMessages => 'Sin mensajes en este canal';
 
   @override
@@ -891,6 +1264,12 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get chatMsgDetails => 'Detalles del mensaje';
+
+  @override
+  String get chatRetry => 'Reenviar';
+
+  @override
+  String get chatFailed => 'Fallido';
 
   @override
   String get chatPathLabel => 'Ruta';
@@ -950,6 +1329,15 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatMenuOptions => 'Opciones del canal';
 
   @override
+  String get chatNewMessages => 'Mensajes nuevos';
+
+  @override
+  String get chatPingButton => '!ping';
+
+  @override
+  String get chatViewResultOnline => 'ver resultado online';
+
+  @override
   String get connectTitle => 'MeshCore Portugal';
 
   @override
@@ -975,6 +1363,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get connectTapHint => 'Toca en \"Buscar\" para encontrar dispositivos';
 
   @override
+  String get connectSectionBluetooth => 'BLUETOOTH';
+
+  @override
+  String get connectSectionSerial => 'USB / SERIE';
+
+  @override
   String get connectDeviceBLE => '(Bluetooth LE)';
 
   @override
@@ -982,6 +1376,29 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get connectDeviceKISS => '(KISS TNC)';
+
+  @override
+  String get connectDeviceWebUSB => 'Web USB — Companion';
+
+  @override
+  String get connectDeviceWebKISS => 'Web USB — KISS TNC';
+
+  @override
+  String get connectWebUsbButton => 'Conectar vía USB (Web Serial)';
+
+  @override
+  String get connectWebUsbScanning => 'Seleccionando puerto USB...';
+
+  @override
+  String get connectWebUsbHint =>
+      'Compatible con Chrome y Edge. El navegador mostrará un selector de puertos USB.';
+
+  @override
+  String get connectWebUsbExpiredMessage =>
+      'Puerto USB no disponible (página recargada). Seleccione el dispositivo nuevamente.';
+
+  @override
+  String get connectWebUsbAction => 'Conectar vía USB';
 
   @override
   String get connectStepConnecting => 'Conectando...';
@@ -1059,6 +1476,60 @@ class AppLocalizationsEs extends AppLocalizations {
       'Los contactos aparecen mientras transmiten en la red';
 
   @override
+  String get discoverCleanTooltip => 'Limpar contactos só locais';
+
+  @override
+  String get discoverCleanSheetTitle => 'Limpar contactos só locais';
+
+  @override
+  String get discoverCleanSheetSubtitle =>
+      'Escolhe quais contactos descobertos remover. Os contactos guardados no rádio são sempre mantidos.';
+
+  @override
+  String get discoverCleanOption48h => 'Não ouvidos há 48 horas';
+
+  @override
+  String get discoverCleanOption7d => 'Não ouvidos há 7 dias';
+
+  @override
+  String get discoverCleanOption30d => 'Não ouvidos há 30 dias';
+
+  @override
+  String get discoverCleanOptionNever => 'Nunca ouvidos (sem advert)';
+
+  @override
+  String get discoverCleanOptionAll => 'Todos os contactos só locais';
+
+  @override
+  String get discoverCleanTitle => 'Limpar contactos descobertos?';
+
+  @override
+  String discoverCleanBody(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n contactos',
+      one: '1 contacto',
+    );
+    return 'Vai remover $_temp0 que não estão guardados no rádio. Os contactos guardados no rádio são mantidos.';
+  }
+
+  @override
+  String get discoverCleanNothing =>
+      'Todos os contactos descobertos estão guardados no rádio. Nada para limpar.';
+
+  @override
+  String discoverCleanDone(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: 'Removidos $n contactos',
+      one: 'Removido 1 contacto',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get discoverSaveToRadio => 'Guardar en radio';
 
   @override
@@ -1075,6 +1546,39 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get discoverHeard => 'Escuchado';
+
+  @override
+  String get discoverNever => 'Nunca';
+
+  @override
+  String get discoverNoName => 'Sin nombre';
+
+  @override
+  String get discoverTypeCompanion => 'Compañero';
+
+  @override
+  String get discoverTypeUnknown => 'Desconocido';
+
+  @override
+  String get discoverPathNear => 'Cercano';
+
+  @override
+  String get discoverJustNow => 'Ahora';
+
+  @override
+  String discoverMinutesAgo(int min) {
+    return 'hace ${min}m';
+  }
+
+  @override
+  String discoverHoursAgo(int hours) {
+    return 'hace ${hours}h';
+  }
+
+  @override
+  String discoverDaysAgo(int days) {
+    return 'hace ${days}d';
+  }
 
   @override
   String get appsPlano333Title => 'Plan 3-3-3';
@@ -1152,6 +1656,24 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get mapFinal => 'Final:';
+
+  @override
+  String get mapLegendTitle => 'Leyenda';
+
+  @override
+  String get mapLegendCompanion => 'Compañero';
+
+  @override
+  String get mapLegendRepeater => 'Repetidor';
+
+  @override
+  String get mapLegendRoom => 'Sala';
+
+  @override
+  String get mapLegendSensor => 'Sensor';
+
+  @override
+  String get mapLegendYou => 'Tú';
 
   @override
   String get mapAttribution => 'MeshCore Portugal';
@@ -1241,6 +1763,18 @@ class AppLocalizationsEs extends AppLocalizations {
   String get radioSettingsStorage => 'Almacenamiento';
 
   @override
+  String get radioSettingsChannels => 'Canales';
+
+  @override
+  String get radioSettingsContacts => 'Contactos';
+
+  @override
+  String get radioSettingsDiscovered => 'Contactos locales';
+
+  @override
+  String get radioSettingsAppVersion => 'Versión de App';
+
+  @override
   String get radioSettingsLoRa => 'Parámetros LoRa';
 
   @override
@@ -1305,11 +1839,65 @@ class AppLocalizationsEs extends AppLocalizations {
   String get radioSettingsResetValues => 'Restablecer valores actuales';
 
   @override
+  String get radioSettingsExperimentalTitle => 'Experimental';
+
+  @override
+  String get radioSettingsExperimentalWarning =>
+      'Usar com cuidado — estas opções afectam a compatibilidade no ar com outros nós.';
+
+  @override
+  String get radioSettingsPathHashMode => 'Tamaño del hash de ruta';
+
+  @override
+  String get radioSettingsPathHashModeDesc =>
+      'Número de bytes utilizados por salto en la ruta de encaminamiento. Valores mayores reducen la probabilidad de colisión entre nodos distantes. Requiere firmware v1.14.0+. Predeterminado: 1 byte.';
+
+  @override
+  String get radioSettingsPathHashMode1 => '1 byte';
+
+  @override
+  String get radioSettingsPathHashMode2 => '2 bytes';
+
+  @override
+  String get radioSettingsPathHashModeCaptionDefault =>
+      '1 byte por salto — predeterminado, compatible con todos los firmwares.';
+
+  @override
+  String get radioSettingsPathHashModeCaptionExperimental =>
+      'Experimental — solo los nodos con firmware v10+ encaminarán este paquete correctamente.';
+
+  @override
+  String get radioSettingsPathHashModeUnsupported =>
+      'No compatible con este firmware.';
+
+  @override
+  String get radioSettingsPathHashModeSaved =>
+      'Tamaño del hash de ruta actualizado';
+
+  @override
+  String get radioSettingsPathHashModeFailed =>
+      'Error al actualizar el tamaño del hash de ruta';
+
+  @override
   String get radioSettingsAutoAddTitle => 'Adición automática de contactos';
 
   @override
   String get radioSettingsAutoAddDesc =>
       'Cuando un nodo envía un advert y la radio está en modo manual, añadir automáticamente como:';
+
+  @override
+  String get radioSettingsAutoAddAll => 'Auto Añadir Todos';
+
+  @override
+  String get radioSettingsAutoAddAllDesc =>
+      'Cuando está activo, todos los adverts recibidos se añadirán a los contactos.';
+
+  @override
+  String get radioSettingsAutoAddSelected => 'Auto Añadir Seleccionados';
+
+  @override
+  String get radioSettingsAutoAddSelectedDesc =>
+      'Cuando está activo, solo los tipos de contacto seleccionados a continuación se añadirán automáticamente.';
 
   @override
   String get radioSettingsAutoAddCompanion => 'Compañero (Chat)';
@@ -1322,6 +1910,40 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get radioSettingsAutoAddSensor => 'Sensor';
+
+  @override
+  String get radioSettingsOverwriteOldest => 'Sobrescribir Más Antiguo';
+
+  @override
+  String get radioSettingsOverwriteOldestDesc =>
+      'Cuando está activo, los contactos más antiguos sin favorito son reemplazados por nuevos cuando la lista está llena.';
+
+  @override
+  String get radioSettingsAutoAddMaxHops => 'Saltos Máximos de Auto Adición';
+
+  @override
+  String get radioSettingsAutoAddMaxHopsDesc =>
+      'Los contactos solo se añadirán automáticamente si el camino del advert tiene el mismo o menos saltos que el límite. Dejar en blanco para sin límite.';
+
+  @override
+  String get radioSettingsAutoAddMaxHopsHint => 'Saltos (0-63)';
+
+  @override
+  String get radioSettingsPullToRefresh => 'Deslizar para Actualizar';
+
+  @override
+  String get radioSettingsPullToRefreshDesc =>
+      'Cuando está activo, puedes deslizar hacia abajo para actualizar la lista de contactos.';
+
+  @override
+  String get radioSettingsShowPublicKeys => 'Mostrar Claves Públicas';
+
+  @override
+  String get radioSettingsShowPublicKeysDesc =>
+      'Cuando está activo, las claves públicas se mostrarán en la lista de contactos.';
+
+  @override
+  String get radioSettingsBandPresetsTitle => 'Preajustes de Banda';
 
   @override
   String get roomJoinTitle => 'Entrar en sala';
@@ -1563,19 +2185,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get plan333PhaseCQ => 'CQ 21:00–22:00';
 
   @override
-  String get plan333PhaseQSL => 'QSL 21:30–22:00';
-
-  @override
   String get plan333CqSent => 'CQ enviados:';
 
   @override
   String get plan333LastSent => '(último:';
-
-  @override
-  String get plan333QslSent => 'QSL enviados:';
-
-  @override
-  String get plan333NoQslLog => 'sin QSLs en el log';
 
   @override
   String get plan333EventSchedule =>
@@ -1606,11 +2219,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get plan333LocalityHint => 'Ej: Olaias';
 
   @override
-  String get plan333AutoSend => 'Envío automático de CQ y QSL';
+  String get plan333AutoSend => 'Envío automático de CQ';
 
   @override
-  String get plan333AutoSendDesc =>
-      'CQ: hasta 3 mensajes (21:00–22:00)  •  QSL: confirma cada estación recibida (21:30–22:00)';
+  String get plan333AutoSendDesc => 'CQ: hasta 3 mensajes (21:00–22:00)';
 
   @override
   String get plan333CqMessageLabel => 'Mensaje CQ:';
@@ -1627,16 +2239,6 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get plan333FormatCqTemplate =>
       'CQ Plan 333, [Nombre], [Ciudad], [Localidad]';
-
-  @override
-  String get plan333FormatQSL => 'QSL (confirmación)';
-
-  @override
-  String get plan333FormatQSLPhase => 'Opcional 21:30–22:00';
-
-  @override
-  String get plan333FormatQSLTemplate =>
-      'QSL, [Nombre estación recibida], [N] saltos, [local]\nEj: QSL, Daytona, 5 saltos, Tomar';
 
   @override
   String get plan333ConfigureChannel =>
@@ -1669,14 +2271,14 @@ class AppLocalizationsEs extends AppLocalizations {
       'Ninguna estación escuchada aún. Los CQs recibidos en el canal aparecen aquí automáticamente.';
 
   @override
-  String get plan333ClearQslTitle => '¿Limpiar QSL?';
+  String get plan333ClearQslTitle => '¿Limpiar log?';
 
   @override
   String get plan333ClearQslContent =>
-      'Todos los QSL registrados serán eliminados.';
+      'Todas las estaciones registradas serán eliminadas.';
 
   @override
-  String get plan333AddQslTitle => 'Añadir QSL';
+  String get plan333AddQslTitle => 'Añadir estación';
 
   @override
   String get plan333StationLabel => 'Estación *';
@@ -1731,4 +2333,288 @@ class AppLocalizationsEs extends AppLocalizations {
   String plan333ChannelAdded(int slot) {
     return 'Canal #plano333 añadido en ranura $slot';
   }
+
+  @override
+  String get signalNone => 'Sin señal (sin paquetes en los últimos 5 min)';
+
+  @override
+  String get signalWeak => 'Señal muy débil';
+
+  @override
+  String get signalFair => 'Señal débil';
+
+  @override
+  String get signalGood => 'Buena señal';
+
+  @override
+  String get signalExcellent => 'Señal excelente';
+
+  @override
+  String get urlOpenTitle => '¿Abrir enlace externo?';
+
+  @override
+  String get urlOpenConfirm => 'Abrir';
+
+  @override
+  String get topologyScreenTitle => 'Topología de Red';
+
+  @override
+  String get topologyTabGraph => 'Grafo';
+
+  @override
+  String get topologyTabTimeline => 'Cronología';
+
+  @override
+  String get topologyEmptyTitle => 'Sin datos de topología';
+
+  @override
+  String get topologyEmptyHint =>
+      'Conéctate a una radio para\nvisualizar la red';
+
+  @override
+  String get topologySelf => 'Yo';
+
+  @override
+  String get topologyResetView => 'Restablecer vista';
+
+  @override
+  String get topologySnrGood => 'SNR ≥ 5 dB';
+
+  @override
+  String get topologySnrMid => 'SNR 0–5 dB';
+
+  @override
+  String get topologySnrBad => 'SNR < 0 dB';
+
+  @override
+  String get topologyLabelId => 'ID';
+
+  @override
+  String get topologyLabelPath => 'Ruta';
+
+  @override
+  String get topologyLabelSeen => 'Visto';
+
+  @override
+  String topologySecondsAgo(int s) {
+    return 'hace ${s}s';
+  }
+
+  @override
+  String topologyMinutesAgo(int min) {
+    return 'hace ${min}min';
+  }
+
+  @override
+  String topologyHoursAgo(int h) {
+    return 'hace ${h}h';
+  }
+
+  @override
+  String topologyDaysAgo(int d) {
+    return 'hace ${d}d';
+  }
+
+  @override
+  String topologyWeeksAgo(int w) {
+    return 'hace $w sem.';
+  }
+
+  @override
+  String get topologyFilterRecent => 'Mostrar apenas contactos no rádio';
+
+  @override
+  String get topologyFilterAll => 'Mostrar todos (incl. locais)';
+
+  @override
+  String get topologyToggleLabels => 'Mostrar/ocultar etiquetas';
+
+  @override
+  String topologyNodesShown(int shown, int total) {
+    return '$shown/$total nós';
+  }
+
+  @override
+  String get topologyHopDirect => 'Direto';
+
+  @override
+  String get topologyHop1 => '1 salto';
+
+  @override
+  String get topologyHop2 => '2 saltos';
+
+  @override
+  String get topologyHopFlood => 'Flood / 3+';
+
+  @override
+  String get topologyTabPaths => 'Caminhos';
+
+  @override
+  String get topologyPathsEmptyTitle => 'Sem dados de rota';
+
+  @override
+  String get topologyPathsEmptyHint =>
+      'Faz um trace a partir de um\ncontacto para ver o caminho';
+
+  @override
+  String topologyPathsCount(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n caminhos',
+      one: '1 caminho',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get repeaterTitle => 'Gestionar Repetidor';
+
+  @override
+  String get repeaterConfig => 'Configuración Remota';
+
+  @override
+  String get repeaterApply => 'Aplicar';
+
+  @override
+  String get repeaterNodeName => 'Nombre del nodo';
+
+  @override
+  String get repeaterTxPower => 'Potencia TX';
+
+  @override
+  String get repeaterForwarding => 'Reenvío de paquetes';
+
+  @override
+  String get repeaterForwardingDesc =>
+      'Activar o desactivar el reenvío de paquetes';
+
+  @override
+  String get repeaterAdvertInterval => 'Intervalo anuncio local';
+
+  @override
+  String get repeaterAdvertZeroHop => 'Anuncio Auto (Zero Hop)';
+
+  @override
+  String get repeaterAdvertFlood => 'Anuncio Auto (Flood)';
+
+  @override
+  String get repeaterIntervalMinutes => 'Intervalo (minutos)';
+
+  @override
+  String get repeaterIntervalHours => 'Intervalo (horas)';
+
+  @override
+  String get repeaterMinimalTrafficHint =>
+      'Para usar tráfico mínimo de malla, utilice los iconos de actualizar para solicitar solo la información que necesita.';
+
+  @override
+  String get repeaterValueNotLoaded => '—';
+
+  @override
+  String get repeaterFloodMax => 'Flood máximo (saltos)';
+
+  @override
+  String get repeaterClearStats => 'Limpiar Estadísticas';
+
+  @override
+  String get repeaterClearStatsDesc =>
+      'Reinicia contadores de paquetes y errores';
+
+  @override
+  String get repeaterNoStats =>
+      'Autentícate y pulsa \"Actualizar\" para obtener las estadísticas.';
+
+  @override
+  String get repeaterFetchStats => 'Actualizar';
+
+  @override
+  String get repeaterAuthenticated => 'Autenticado';
+
+  @override
+  String get repeaterTabStatus => 'Estado';
+
+  @override
+  String get repeaterTabCommandLine => 'Línea de comandos';
+
+  @override
+  String get repeaterTabSettings => 'Ajustes';
+
+  @override
+  String get repeaterCmdHint => 'Enviar un comando...';
+
+  @override
+  String get repeaterCmdEmpty =>
+      'Sin comandos enviados. Use el campo de abajo para enviar comandos CLI directamente.';
+
+  @override
+  String get repeaterCmdClear => 'Limpiar historial';
+
+  @override
+  String get repeaterMenuHelp => 'Ayuda de Comandos';
+
+  @override
+  String get repeaterMenuClearHistory => 'Borrar Historial de Comandos';
+
+  @override
+  String get repeaterHelpTitle => 'Ayuda';
+
+  @override
+  String get repeaterHelpSubtitle => 'Comandos del Repetidor';
+
+  @override
+  String get repeaterHelpFirmwareNote =>
+      'Algunos comandos requieren firmware reciente.';
+
+  @override
+  String get repeaterHelpSearchHint => 'Buscar';
+
+  @override
+  String get dataExportTitle => 'Exportar Datos';
+
+  @override
+  String get dataExportContactsTitle => 'Contactos';
+
+  @override
+  String dataExportContactsDesc(int count) {
+    return '$count contactos guardados';
+  }
+
+  @override
+  String get dataExportMessagesTitle => 'Mensajes';
+
+  @override
+  String get dataExportMessagesDesc =>
+      'Todas las conversaciones — privadas y canales';
+
+  @override
+  String get dataExportKmlTitle => 'Datos de Mapa';
+
+  @override
+  String dataExportKmlDesc(int count) {
+    return '$count contactos con GPS';
+  }
+
+  @override
+  String get dataExportNote =>
+      'Los archivos se exportan directamente a la hoja de compartir.\nNingún dato sale del dispositivo sin tu confirmación.';
+
+  @override
+  String get dataExportNoContacts => 'Sin contactos para exportar';
+
+  @override
+  String get dataExportNoMessages => 'Sin mensajes para exportar';
+
+  @override
+  String get dataExportNoGps => 'Sin contactos con coordenadas GPS';
+
+  @override
+  String get dataExportFailed => 'Error al exportar';
+
+  @override
+  String get appsDataExportTitle => 'Exportar Datos';
+
+  @override
+  String get appsDataExportSubtitle =>
+      'Exporta contactos, mensajes y datos de mapa';
 }

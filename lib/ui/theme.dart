@@ -1,236 +1,318 @@
 import 'package:flutter/material.dart';
 
 /// MeshCore PT app theme — matches the official meshcore.pt website.
-/// Palette: near-black background, orange primary accent, dark cards.
+///
+/// The brand palette is fixed (near-black background, orange accent) but the
+/// user can override:
+///   * the seed/accent colour via [build] `accent` parameter
+///   * the brightness via [build] `brightness` parameter
+///
+/// The static [AppTheme.primary] colour is the immutable brand orange and is
+/// referenced directly by a few brand splashes (logo background, repeater
+/// badge, etc.). User customisation only affects the Material `colorScheme`.
 class AppTheme {
   // ---- Brand colours (from meshcore.pt) ----
-  static const primary = Color(0xFFFF6B00); // orange accent
+  static const primary = Color(0xFFFF6B00); // orange accent (brand)
   static const primaryVariant = Color(0xFFFF8C38); // lighter orange
-  static const background = Color(0xFF111111); // near-black page bg
-  static const surface = Color(0xFF1C1C1C); // card / appbar surface
-  static const surfaceVariant = Color(0xFF252525); // slightly lighter surface
-  static const onPrimary = Colors.white;
-  static const onBackground = Color(0xFFF0F0F0); // near-white text
-  static const onSurface = Color(0xFFE0E0E0);
-  static const divider = Color(0xFF2E2E2E);
-  static const navBar = Color(0xFF141414); // bottom / side nav
 
-  static ThemeData get dark {
-    const cs = ColorScheme(
+  // Dark surfaces
+  static const _darkBackground = Color(0xFF111111);
+  static const _darkSurface = Color(0xFF1C1C1C);
+  static const _darkSurfaceVariant = Color(0xFF252525);
+  static const _darkOnSurface = Color(0xFFE0E0E0);
+  static const _darkOnBackground = Color(0xFFF0F0F0);
+  static const _darkDivider = Color(0xFF2E2E2E);
+  static const _darkNavBar = Color(0xFF141414);
+
+  // Backwards-compatible aliases (used by a few hard-coded widgets).
+  static const background = _darkBackground;
+  static const surface = _darkSurface;
+  static const surfaceVariant = _darkSurfaceVariant;
+  static const onPrimary = Colors.white;
+  static const onBackground = _darkOnBackground;
+  static const onSurface = _darkOnSurface;
+  static const divider = _darkDivider;
+  static const navBar = _darkNavBar;
+
+  /// Default dark theme (brand orange accent).
+  static ThemeData get dark => build(brightness: Brightness.dark);
+
+  /// Default light theme (brand orange accent).
+  static ThemeData get light => build(brightness: Brightness.light);
+
+  /// Build a [ThemeData] with the given [brightness] and optional [accent]
+  /// colour. When [accent] is null, the brand orange is used.
+  static ThemeData build({
+    required Brightness brightness,
+    Color? accent,
+  }) {
+    final acc = accent ?? primary;
+    return brightness == Brightness.dark
+        ? _buildDark(acc)
+        : _buildLight(acc);
+  }
+
+  // ---------------------------------------------------------------------
+  // Dark theme
+  // ---------------------------------------------------------------------
+  static ThemeData _buildDark(Color acc) {
+    final cs = ColorScheme(
       brightness: Brightness.dark,
-      primary: primary,
-      onPrimary: onPrimary,
-      primaryContainer: Color(0xFF3A1A00),
-      onPrimaryContainer: primaryVariant,
-      secondary: Color(0xFF14B8A6),
+      primary: acc,
+      onPrimary: Colors.white,
+      primaryContainer: Color.alphaBlend(acc.withAlpha(40), _darkSurface),
+      onPrimaryContainer: acc,
+      secondary: const Color(0xFF14B8A6),
       onSecondary: Colors.white,
-      secondaryContainer: Color(0xFF0D3330),
-      onSecondaryContainer: Color(0xFF5EEAD4),
-      tertiary: Color(0xFFFFB347),
+      secondaryContainer: const Color(0xFF0D3330),
+      onSecondaryContainer: const Color(0xFF5EEAD4),
+      tertiary: const Color(0xFFFFB347),
       onTertiary: Colors.black,
-      tertiaryContainer: Color(0xFF3D2800),
-      onTertiaryContainer: Color(0xFFFFB347),
-      error: Color(0xFFFF5252),
+      tertiaryContainer: const Color(0xFF3D2800),
+      onTertiaryContainer: const Color(0xFFFFB347),
+      error: const Color(0xFFFF5252),
       onError: Colors.white,
-      errorContainer: Color(0xFF4A0000),
-      onErrorContainer: Color(0xFFFF8A80),
-      surface: surface,
-      onSurface: onSurface,
-      surfaceContainerHighest: surfaceVariant,
-      onSurfaceVariant: Color(0xFFAAAAAA),
-      outline: Color(0xFF444444),
-      outlineVariant: divider,
+      errorContainer: const Color(0xFF4A0000),
+      onErrorContainer: const Color(0xFFFF8A80),
+      surface: _darkSurface,
+      onSurface: _darkOnSurface,
+      surfaceContainerHighest: _darkSurfaceVariant,
+      onSurfaceVariant: const Color(0xFFAAAAAA),
+      outline: const Color(0xFF444444),
+      outlineVariant: _darkDivider,
       shadow: Colors.black,
       scrim: Colors.black,
-      inverseSurface: Color(0xFFE8E8E8),
-      onInverseSurface: Color(0xFF1C1C1C),
-      inversePrimary: Color(0xFFB84500),
+      inverseSurface: const Color(0xFFE8E8E8),
+      onInverseSurface: const Color(0xFF1C1C1C),
+      inversePrimary: Color.alphaBlend(acc.withAlpha(140), Colors.black),
     );
+    return _commonTheme(cs, _darkBackground, _darkNavBar, _darkDivider, acc);
+  }
+
+  // ---------------------------------------------------------------------
+  // Light theme — bright surfaces, accent drives primary.
+  // ---------------------------------------------------------------------
+  static ThemeData _buildLight(Color acc) {
+    const lightBackground = Color(0xFFFAFAFA);
+    const lightSurface = Color(0xFFFFFFFF);
+    const lightSurfaceVariant = Color(0xFFF1F1F1);
+    const lightOnSurface = Color(0xFF1C1C1C);
+    const lightDivider = Color(0xFFE0E0E0);
+    const lightNavBar = Color(0xFFFFFFFF);
+
+    final cs = ColorScheme(
+      brightness: Brightness.light,
+      primary: acc,
+      onPrimary: Colors.white,
+      primaryContainer: Color.alphaBlend(acc.withAlpha(40), Colors.white),
+      onPrimaryContainer: Color.alphaBlend(acc.withAlpha(220), Colors.black),
+      secondary: const Color(0xFF0F766E),
+      onSecondary: Colors.white,
+      secondaryContainer: const Color(0xFFCCFBF1),
+      onSecondaryContainer: const Color(0xFF042F2E),
+      tertiary: const Color(0xFFB45309),
+      onTertiary: Colors.white,
+      tertiaryContainer: const Color(0xFFFEF3C7),
+      onTertiaryContainer: const Color(0xFF451A03),
+      error: const Color(0xFFD32F2F),
+      onError: Colors.white,
+      errorContainer: const Color(0xFFFFEBEE),
+      onErrorContainer: const Color(0xFF7F1D1D),
+      surface: lightSurface,
+      onSurface: lightOnSurface,
+      surfaceContainerHighest: lightSurfaceVariant,
+      onSurfaceVariant: const Color(0xFF555555),
+      outline: const Color(0xFFBDBDBD),
+      outlineVariant: lightDivider,
+      shadow: Colors.black,
+      scrim: Colors.black,
+      inverseSurface: const Color(0xFF1C1C1C),
+      onInverseSurface: const Color(0xFFE8E8E8),
+      inversePrimary: Color.alphaBlend(acc.withAlpha(140), Colors.white),
+    );
+    return _commonTheme(cs, lightBackground, lightNavBar, lightDivider, acc);
+  }
+
+  // ---------------------------------------------------------------------
+  // Shared component themes — derived from the colour scheme so a single
+  // body works for both brightnesses.
+  // ---------------------------------------------------------------------
+  static ThemeData _commonTheme(
+    ColorScheme cs,
+    Color scaffoldBg,
+    Color navBg,
+    Color dividerColor,
+    Color acc,
+  ) {
+    final isDark = cs.brightness == Brightness.dark;
+    final mutedIcon = isDark ? const Color(0xFF888888) : const Color(0xFF777777);
+    final hintColor = isDark ? const Color(0xFF666666) : const Color(0xFF999999);
+    final switchOff = isDark ? const Color(0xFF666666) : const Color(0xFFBDBDBD);
+    final switchTrackOff =
+        isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0);
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: cs,
-      scaffoldBackgroundColor: background,
+      scaffoldBackgroundColor: scaffoldBg,
 
-      // AppBar: dark with orange icon/title
-      appBarTheme: const AppBarTheme(
-        backgroundColor: surface,
-        foregroundColor: onSurface,
+      appBarTheme: AppBarTheme(
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
         elevation: 0,
         scrolledUnderElevation: 0,
         titleTextStyle: TextStyle(
-          color: onBackground,
+          color: cs.onSurface,
           fontSize: 18,
           fontWeight: FontWeight.bold,
           letterSpacing: 0.3,
         ),
-        iconTheme: IconThemeData(color: primary),
+        iconTheme: IconThemeData(color: acc),
       ),
 
-      // Cards: dark with subtle border, no elevation glow
-      cardTheme: const CardThemeData(
-        color: surfaceVariant,
+      cardTheme: CardThemeData(
+        color: cs.surfaceContainerHighest,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(10)),
-          side: BorderSide(color: divider, width: 1),
+          borderRadius: const BorderRadius.all(Radius.circular(10)),
+          side: BorderSide(color: dividerColor, width: 1),
         ),
         margin: EdgeInsets.zero,
       ),
 
-      // Bottom navigation bar: very dark bg, orange indicator
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: navBar,
-        indicatorColor: primary.withAlpha(40),
+        backgroundColor: navBg,
+        indicatorColor: acc.withAlpha(40),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const IconThemeData(color: primary);
+            return IconThemeData(color: acc);
           }
-          return const IconThemeData(color: Color(0xFF888888));
+          return IconThemeData(color: mutedIcon);
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const TextStyle(
-              color: primary,
+            return TextStyle(
+              color: acc,
               fontWeight: FontWeight.bold,
               fontSize: 11,
             );
           }
-          return const TextStyle(color: Color(0xFF888888), fontSize: 12);
+          return TextStyle(color: mutedIcon, fontSize: 12);
         }),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),
 
-      // Dividers
-      dividerTheme: const DividerThemeData(
-        color: divider,
+      dividerTheme: DividerThemeData(
+        color: dividerColor,
         thickness: 1,
         space: 1,
       ),
 
-      // List tiles
       listTileTheme: const ListTileThemeData(
         tileColor: Colors.transparent,
         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       ),
 
-      // Text inputs
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: surfaceVariant,
+        fillColor: cs.surfaceContainerHighest,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: divider),
+          borderSide: BorderSide(color: dividerColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: divider),
+          borderSide: BorderSide(color: dividerColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: primary, width: 1.5),
+          borderSide: BorderSide(color: acc, width: 1.5),
         ),
-        hintStyle: const TextStyle(color: Color(0xFF666666)),
+        hintStyle: TextStyle(color: hintColor),
       ),
 
-      // FAB
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: primary,
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: acc,
         foregroundColor: Colors.white,
         elevation: 2,
       ),
 
-      // Elevated buttons
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: primary,
+          backgroundColor: acc,
           foregroundColor: Colors.white,
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
 
-      // Text buttons
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: primary),
+        style: TextButton.styleFrom(foregroundColor: acc),
       ),
 
-      // Chips
-      chipTheme: const ChipThemeData(
-        backgroundColor: surfaceVariant,
-        selectedColor: Color(0xFF3A1A00),
-        labelStyle: TextStyle(color: onSurface),
+      chipTheme: ChipThemeData(
+        backgroundColor: cs.surfaceContainerHighest,
+        selectedColor: cs.primaryContainer,
+        labelStyle: TextStyle(color: cs.onSurface),
         secondaryLabelStyle: TextStyle(
-          color: primaryVariant,
+          color: cs.onPrimaryContainer,
           fontWeight: FontWeight.w600,
         ),
-        iconTheme: IconThemeData(color: onSurface),
-        secondarySelectedColor: Color(0xFF3A1A00),
-        checkmarkColor: primary,
-        side: BorderSide(color: divider),
-        shape: RoundedRectangleBorder(
+        iconTheme: IconThemeData(color: cs.onSurface),
+        secondarySelectedColor: cs.primaryContainer,
+        checkmarkColor: acc,
+        side: BorderSide(color: dividerColor),
+        shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(8)),
         ),
       ),
 
-      // Bottom sheets
-      bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: surface,
-        shape: RoundedRectangleBorder(
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: cs.surface,
+        shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
         ),
       ),
 
-      // Popup menus
       popupMenuTheme: PopupMenuThemeData(
-        color: surfaceVariant,
+        color: cs.surfaceContainerHighest,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
-          side: const BorderSide(color: divider),
+          side: BorderSide(color: dividerColor),
         ),
       ),
 
-      // Dialogs
       dialogTheme: DialogThemeData(
-        backgroundColor: surface,
+        backgroundColor: cs.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: divider),
+          side: BorderSide(color: dividerColor),
         ),
       ),
 
-      // Switches / checkboxes
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith(
-          (s) =>
-              s.contains(WidgetState.selected)
-                  ? primary
-                  : const Color(0xFF666666),
+          (s) => s.contains(WidgetState.selected) ? acc : switchOff,
         ),
         trackColor: WidgetStateProperty.resolveWith(
-          (s) =>
-              s.contains(WidgetState.selected)
-                  ? primary.withAlpha(80)
-                  : const Color(0xFF333333),
+          (s) => s.contains(WidgetState.selected)
+              ? acc.withAlpha(80)
+              : switchTrackOff,
         ),
       ),
 
-      // Progress indicators
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: primary,
-        linearTrackColor: divider,
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: acc,
+        linearTrackColor: dividerColor,
       ),
 
-      // Snackbars
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: surfaceVariant,
-        contentTextStyle: const TextStyle(color: onSurface),
+        backgroundColor: cs.surfaceContainerHighest,
+        contentTextStyle: TextStyle(color: cs.onSurface),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         behavior: SnackBarBehavior.floating,
       ),
     );
   }
-
-  static ThemeData get light => dark; // Force dark only — matches website
 }

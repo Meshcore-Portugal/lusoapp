@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart' show Color;
+import 'package:flutter/material.dart' show AppLifecycleState, Color, ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,6 +15,15 @@ import '../services/radio_service.dart';
 import '../services/storage_service.dart';
 import '../services/widget_service.dart';
 import '../transport/transport.dart';
+
+part 'parts/connection_notifier.dart';
+part 'parts/messages_notifier.dart';
+part 'parts/advert_auto_add.dart';
+
+/// Returns the 64-char hex string of the first 32 bytes of a public key.
+/// Used as a stable map key for comparing contact identity across providers.
+String _keyHex(Uint8List key) =>
+    key.take(32).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 
 // ---------------------------------------------------------------------------
 // Transport state
@@ -37,778 +46,42 @@ final connectionProgressProvider = StateProvider<int>((_) => 0);
 
 final radioServiceProvider = StateProvider<RadioService?>((_) => null);
 
+/// Snapshot of the public-key hex-strings of contacts confirmed to be stored
+/// on the radio at the last explicit sync (initial connect or contact deletion).
+/// Used by [discoveredContactsProvider] so that background path-update refreshes
+/// don't falsely hide contacts from the discover screen.
+final radioContactsSnapshotProvider = StateProvider<Set<String>>((_) => {});
+
+/// Snapshot of channel indexes confirmed by the radio during the current sync.
+/// Used by the connect screen so it does not show locally cached channels as if
+/// they had already been read back from the device.
+final radioChannelsSnapshotProvider = StateProvider<Set<int>>((_) => {});
+
+/// True once the first [EndContactsResponse] has been received after the
+/// current connection was established.  Reset to false on every new connect
+/// attempt and on disconnect.  Used by the contacts screen to distinguish
+/// "no contacts on this radio" (synced, empty snapshot) from "not yet synced"
+/// (should fall back to the local cache).
+final contactsSyncedProvider = StateProvider<bool>((_) => false);
+
+// ---------------------------------------------------------------------------
+// Current radio device ID — set when a connection is established, cleared
+// on disconnect. Used to scope channel and message storage per radio so
+// that data from different radios never bleeds into each other.
+// ---------------------------------------------------------------------------
+
+final currentRadioIdProvider = StateProvider<String?>((_) => null);
+
 // ---------------------------------------------------------------------------
 // Last connected device (loaded on app start from SharedPreferences)
 // ---------------------------------------------------------------------------
 
 final lastDeviceProvider = StateProvider<LastDevice?>((_) => null);
 
-// ---------------------------------------------------------------------------
-// Connection manager
-// ---------------------------------------------------------------------------
-
-class ConnectionNotifier extends StateNotifier<TransportState> {
-  ConnectionNotifier(this._ref) : super(TransportState.disconnected);
-  final Ref _ref;
-
-  StreamSubscription<void>? _connectionLostSub;
-  StreamSubscription<CompanionResponse>? _responseSub;
-  Timer? _batteryPollTimer;
-
-  void _setStep(int step, String label) {
-    _ref.read(connectionProgressProvider.notifier).state = step;
-    _ref.read(connectionStepProvider.notifier).state = label;
-  }
-
-  Future<bool> connectBle(String deviceId, String deviceName) async {
-    state = TransportState.connecting;
-    _setStep(0, 'A ligar via Bluetooth...');
-    try {
-      final transport = BleTransport.fromDeviceId(deviceId);
-      final service = RadioService(transport);
-      _ref.read(radioServiceProvider.notifier).state = service;
-      _setupListeners(service);
-      final ok = await service.connect();
-      if (ok) {
-        await _fetchInitialData(service);
-        state = TransportState.connected;
-        await StorageService.instance.saveLastDevice(
-          id: deviceId,
-          type: 'ble',
-          name: deviceName,
-        );
-        _ref.read(lastDeviceProvider.notifier).state = LastDevice(
-          id: deviceId,
-          type: 'ble',
-          name: deviceName,
-        );
-        _setupAutoReconnect(service, () => connectBle(deviceId, deviceName));
-        _startBatteryPolling(service);
-        _pushWidget();
-        return true;
-      }
-      _ref.read(radioServiceProvider.notifier).state = null;
-      state = TransportState.error;
-      _setStep(0, '');
-      return false;
-    } catch (e) {
-      state = TransportState.error;
-      _setStep(0, '');
-      return false;
-    }
-  }
-
-  Future<bool> connectSerial(
-    String deviceId,
-    String deviceName, {
-    ConnectionMode mode = ConnectionMode.companion,
-  }) async {
-    state = TransportState.connecting;
-    _setStep(0, 'A ligar via USB série...');
-    try {
-      final baseTransport = await SerialTransport.fromDeviceId(deviceId);
-      if (baseTransport == null) {
-        state = TransportState.error;
-        _setStep(0, '');
-        return false;
-      }
-      final RadioTransport transport =
-          mode == ConnectionMode.kiss
-              ? KissTransport(baseTransport)
-              : baseTransport;
-      final service = RadioService(transport);
-      _ref.read(radioServiceProvider.notifier).state = service;
-      _setupListeners(service);
-      final ok = await service.connect();
-      if (ok) {
-        await _fetchInitialData(service);
-        state = TransportState.connected;
-        final typeStr =
-            mode == ConnectionMode.kiss ? 'serialKiss' : 'serialCompanion';
-        await StorageService.instance.saveLastDevice(
-          id: deviceId,
-          type: typeStr,
-          name: deviceName,
-        );
-        _ref.read(lastDeviceProvider.notifier).state = LastDevice(
-          id: deviceId,
-          type: typeStr,
-          name: deviceName,
-        );
-        _startBatteryPolling(service);
-        _pushWidget();
-        return true;
-      }
-      _ref.read(radioServiceProvider.notifier).state = null;
-      state = TransportState.error;
-      _setStep(0, '');
-      return false;
-    } catch (e) {
-      state = TransportState.error;
-      _setStep(0, '');
-      return false;
-    }
-  }
-
-  Future<void> disconnect() async {
-    _batteryPollTimer?.cancel();
-    _batteryPollTimer = null;
-    await _connectionLostSub?.cancel();
-    _connectionLostSub = null;
-    await _responseSub?.cancel();
-    _responseSub = null;
-    _ref.read(packetHeardProvider.notifier).reset();
-    final service = _ref.read(radioServiceProvider);
-    if (service != null) {
-      await service.dispose();
-      _ref.read(radioServiceProvider.notifier).state = null;
-    }
-    _ref.read(unreadCountsProvider.notifier).reset();
-    _setStep(0, '');
-    state = TransportState.disconnected;
-    _pushWidget();
-  }
-
-  /// Push current radio state to the Android home screen widget.
-  void _pushWidget() {
-    final selfInfo = _ref.read(selfInfoProvider);
-    final batteryMv = _ref.read(batteryProvider);
-    final contacts = _ref.read(contactsProvider);
-    final channels = _ref.read(channelsProvider);
-
-    // Same LiPo curve used by the home screen: 4200 mV = 100%, 3200 mV = 0%
-    final batteryPct =
-        batteryMv == 0
-            ? 0
-            : (((batteryMv.clamp(3200, 4200) - 3200) / 1000) * 100).round();
-
-    WidgetService.update(
-      radioName: selfInfo?.name ?? '—',
-      connected: state == TransportState.connected,
-      batteryPct: batteryPct,
-      contactCount: contacts.length,
-      channelCount: channels.where((c) => !c.isEmpty).length,
-    );
-  }
-
-  /// Poll battery every 5 min while connected.
-  /// Also silently re-requests any channel slots that are still empty —
-  /// a zero-cost safety net for slots that were missed at startup.
-  void _startBatteryPolling(RadioService service) {
-    _batteryPollTimer?.cancel();
-    _batteryPollTimer = Timer.periodic(const Duration(seconds: 300), (_) {
-      if (state != TransportState.connected) return;
-      service.requestBattAndStorage().catchError((_) {});
-      unawaited(service.requestStats(statsTypeCore).catchError((_) {}));
-      unawaited(service.requestStats(statsTypeRadio).catchError((_) {}));
-      unawaited(service.requestStats(statsTypePackets).catchError((_) {}));
-
-      // Re-request any channel slots that were never populated.
-      final maxCh = service.deviceInfo?.maxChannels ?? 8;
-      final currentChannels = _ref.read(channelsProvider);
-      final receivedIndices = currentChannels.map((c) => c.index).toSet();
-      for (var i = 0; i < maxCh; i++) {
-        if (!receivedIndices.contains(i)) {
-          service.requestChannel(i).catchError((_) {});
-        }
-      }
-    });
-  }
-
-  /// Subscribe to unexpected connection loss and attempt one auto-reconnect.
-  void _setupAutoReconnect(
-    RadioService service,
-    Future<bool> Function() reconnector,
-  ) {
-    _connectionLostSub?.cancel();
-    _connectionLostSub = service.connectionLost.listen((_) async {
-      if (state != TransportState.connected) return;
-      _ref.read(radioServiceProvider.notifier).state = null;
-      _setStep(0, 'Conexão perdida. A reconectar...');
-      state = TransportState.connecting;
-      await Future.delayed(const Duration(seconds: 2));
-      final ok = await reconnector();
-      if (!ok) {
-        state = TransportState.error;
-        _setStep(0, 'Reconexão falhou.');
-      }
-    });
-  }
-
-  void _setupListeners(RadioService service) {
-    _responseSub?.cancel();
-    _responseSub = service.responses.listen((response) {
-      switch (response) {
-        case ContactResponse():
-          // Do NOT refresh here — service.contacts is still partial (the radio
-          // sends contacts one-by-one after clearing its list on ContactsStart).
-          // Refreshing on each individual response would drop all locally-cached
-          // contacts and make the provider count drop to 1, 2, 3... during sync,
-          // breaking the connect-screen "+N new" badge.  Wait for EndContacts.
-          break;
-        case EndContactsResponse():
-          // Full list has arrived — replace provider state with final radio list.
-          _ref.read(contactsProvider.notifier).refresh(service.contacts);
-          _pushWidget();
-        case ContactDeletedPush():
-          // Radio confirmed deletion — refresh from the service's now-updated list.
-          _ref.read(contactsProvider.notifier).refresh(service.contacts);
-        case ChannelInfoResponse():
-          _ref.read(channelsProvider.notifier).refresh(service.channels);
-          _pushWidget();
-        case PrivateMessageResponse(:final message):
-          _ref.read(messagesProvider.notifier).addMessage(message);
-          if (!message.isOutgoing && !message.isCliResponse) {
-            _ref.read(networkStatsProvider.notifier).incrementRx();
-          }
-          // Update last-heard timestamp on the matching contact for any
-          // incoming private message (chat or CLI response).
-          if (!message.isOutgoing && message.senderKey != null) {
-            _ref
-                .read(contactsProvider.notifier)
-                .touchLastHeard(message.senderKey!);
-          }
-          // Unread badge + notification only for real chat messages.
-          if (!message.isOutgoing && !message.isCliResponse) {
-            if (message.senderKey != null) {
-              _ref
-                  .read(unreadCountsProvider.notifier)
-                  .incrementContact(_hex6(message.senderKey!));
-            }
-            final senderHex6 =
-                message.senderKey != null ? _hex6(message.senderKey!) : null;
-            final contacts = _ref.read(contactsProvider);
-            final contact =
-                senderHex6 != null
-                    ? contacts
-                        .where((c) => _hex6(c.publicKey) == senderHex6)
-                        .firstOrNull
-                    : null;
-            final senderName = contact?.name ?? senderHex6 ?? 'Desconhecido';
-            NotificationService.instance.showPrivateMessage(
-              senderName: senderName,
-              text: message.text,
-              isAppInForeground: AppLifecycleObserver.isInForeground,
-            );
-          }
-        case ChannelMessageResponse(:final message):
-          // Channel messages arrive via CMD_SYNC_NEXT_MESSAGE.
-          // Heard-by-repeater counting is driven by PUSH_CODE_LOG_RX_DATA
-          // (0x88) packet-hash deduplication — not loopback text matching.
-          //
-          // Skip if this is a loopback echo of our own sent message.
-          // The firmware may pass the first repeater echo through dedup and
-          // queue it.  We already have the outgoing copy from addOutgoing().
-          final isLoopback =
-              message.channelIndex != null &&
-              _ref
-                  .read(messagesProvider)
-                  .any(
-                    (m) =>
-                        m.isOutgoing &&
-                        m.channelIndex == message.channelIndex &&
-                        m.timestamp == message.timestamp,
-                  );
-          if (isLoopback) break;
-          // For incoming channel messages, try to link the packet hash from
-          // the most recent unmatched 0x88 GRP_TXT frame for this channel.
-          // The 0x88 frame always arrives before the ChannelMessageResponse.
-          ChatMessage finalMessage = message;
-          if (!message.isOutgoing && message.channelIndex != null) {
-            final pendingHash = _ref
-                .read(messagesProvider.notifier)
-                .consumeIncomingHash(message.channelIndex!);
-            if (pendingHash != null) {
-              finalMessage = message.copyWith(packetHashHex: pendingHash);
-            }
-          }
-          _ref.read(messagesProvider.notifier).addMessage(finalMessage);
-          // Auto-log incoming CQ Plano 333 messages on the #plano333 channel
-          // as stations heard — these become QSL confirmations to send later.
-          if (!finalMessage.isOutgoing && finalMessage.channelIndex != null) {
-            final channels = _ref.read(channelsProvider);
-            final plan333Ch =
-                channels
-                    .where((c) => c.name.trim().toLowerCase() == '#plano333')
-                    .firstOrNull;
-            if (plan333Ch != null &&
-                finalMessage.channelIndex == plan333Ch.index) {
-              final cq = Plan333Service.tryParseCq(
-                finalMessage.text,
-                pathLen: finalMessage.pathLen,
-              );
-              if (cq != null) {
-                // Skip own CQ (echo from the radio).
-                final myStation =
-                    _ref.read(plan333ConfigProvider).stationName.trim();
-                if (myStation.isEmpty ||
-                    cq.stationName.toLowerCase() != myStation.toLowerCase()) {
-                  // Deduplicate — same station sends up to 3 CQs per event.
-                  final log = _ref.read(qslLogProvider);
-                  if (!log.any(
-                    (r) =>
-                        r.stationName.toLowerCase() ==
-                        cq.stationName.toLowerCase(),
-                  )) {
-                    _ref.read(qslLogProvider.notifier).add(cq);
-                  }
-                }
-              }
-            }
-          }
-          if (!finalMessage.isOutgoing) {
-            _ref.read(networkStatsProvider.notifier).incrementRx();
-            if (message.channelIndex != null) {
-              _ref
-                  .read(unreadCountsProvider.notifier)
-                  .incrementChannel(message.channelIndex!);
-            }
-            final channels = _ref.read(channelsProvider);
-            final idx = message.channelIndex ?? 0;
-            final channel = channels.where((c) => c.index == idx).firstOrNull;
-            final channelName =
-                (channel != null && channel.name.isNotEmpty)
-                    ? channel.name
-                    : 'Canal $idx';
-            // Channel messages embed sender as "Name: body" when senderName
-            // is not set separately.  Parse both parts so the notification
-            // shows "Name: body" rather than "Desconhecido: Name: body".
-            final String notifSender;
-            final String notifBody;
-            if (message.senderName != null && message.senderName!.isNotEmpty) {
-              notifSender = message.senderName!;
-              notifBody = message.text;
-            } else {
-              final colonIdx = message.text.indexOf(': ');
-              if (colonIdx > 0) {
-                notifSender = message.text.substring(0, colonIdx).trim();
-                notifBody = message.text.substring(colonIdx + 2);
-              } else {
-                notifSender = 'Desconhecido';
-                notifBody = message.text;
-              }
-            }
-            NotificationService.instance.showChannelMessage(
-              channelName: channelName,
-              senderName: notifSender,
-              text: notifBody,
-              isAppInForeground: AppLifecycleObserver.isInForeground,
-            );
-          }
-        case SelfInfoResponse(:final info):
-          _ref.read(selfInfoProvider.notifier).state = info;
-          _ref.read(radioConfigProvider.notifier).state = info.radioConfig;
-          _pushWidget();
-        case BattAndStorageResponse(:final batteryMv):
-          _ref.read(batteryProvider.notifier).state = batteryMv;
-          _ref.read(batteryHistoryProvider.notifier).add(batteryMv);
-          _pushWidget();
-        case DeviceInfoResponse(:final info):
-          _ref.read(deviceInfoProvider.notifier).state = info;
-        case SendConfirmedPush():
-          _ref.read(messagesProvider.notifier).confirmLastOutgoing();
-        case SentResponse(:final routeFlag):
-          _ref.read(messagesProvider.notifier).markLastOutgoingRoute(routeFlag);
-        case ErrorResponse():
-          _ref.read(networkStatsProvider.notifier).incrementError();
-        case AdvertPush(
-          :final publicKey,
-          :final type,
-          :final name,
-          :final isNew,
-        ):
-          _ref.read(networkStatsProvider.notifier).incrementHeard();
-          _ref
-              .read(contactsProvider.notifier)
-              .upsertFromAdvert(publicKey, type, name);
-          // When pushNewAdvert (isNew=true) the radio may NOT have added the
-          // contact to its own table (manual-contact mode). Write it back
-          // explicitly — but only if the user's auto-add setting allows this
-          // node type.
-          if (isNew) {
-            final autoAdd = _ref.read(advertAutoAddProvider);
-            if (type != 0 && autoAdd.allowsType(type)) {
-              final service = _ref.read(radioServiceProvider);
-              if (service != null) {
-                final contact =
-                    _ref
-                        .read(contactsProvider)
-                        .where(
-                          (c) => ContactsNotifier._keysEqual(
-                            c.publicKey,
-                            publicKey,
-                          ),
-                        )
-                        .firstOrNull;
-                if (contact != null) {
-                  service.addUpdateContact(contact).catchError((_) {});
-                }
-              }
-            }
-          }
-        case TelemetryPush(:final data):
-          final readings = CayenneLPP.decode(data);
-          if (readings.isNotEmpty) {
-            _ref.read(telemetryProvider.notifier).add(readings);
-          }
-        case PathDiscoveryPush(:final pubKeyPrefix, :final outPath):
-          if (pubKeyPrefix.length >= 6 && outPath.isNotEmpty) {
-            final prefixHex =
-                pubKeyPrefix
-                    .sublist(0, 6)
-                    .map((b) => b.toRadixString(16).padLeft(2, '0'))
-                    .join();
-            final current = Map<String, List<int>>.from(
-              _ref.read(pathCacheProvider),
-            );
-            current[prefixHex] = outPath;
-            _ref.read(pathCacheProvider.notifier).state = current;
-          }
-        case TraceDataPush(:final data):
-          final contacts = _ref.read(contactsProvider);
-          final result = parseTraceDataPush(data, contacts);
-          if (result != null) {
-            _ref.read(traceResultProvider.notifier).state = result;
-          }
-        case StatusResponsePush(:final data):
-          final stats = RepeaterStats.fromPushData(data);
-          if (stats != null) {
-            final current = Map<String, RepeaterStats>.from(
-              _ref.read(repeaterStatusProvider),
-            );
-            current[stats.pubKeyPrefixHex] = stats;
-            _ref.read(repeaterStatusProvider.notifier).state = current;
-          }
-        case LoginSuccessPush():
-          _ref.read(loginResultProvider.notifier).state = true;
-        case LoginFailPush():
-          _ref.read(loginResultProvider.notifier).state = false;
-        case PathUpdatedPush():
-          // Radio has updated a contact's cached route — re-sync the contact
-          // list so the UI shows the new hop count.
-          service.requestContacts().catchError((_) {});
-        case StatsCoreResponse():
-          _ref.read(radioStatsCoreProvider.notifier).state = response;
-        case StatsRadioResponse():
-          _ref.read(radioStatsRadioProvider.notifier).state = response;
-        case StatsPacketsResponse():
-          _ref.read(radioStatsPacketsProvider.notifier).state = response;
-        case LogRxDataPush(:final data):
-          _processLogRxData(data);
-        default:
-          break;
-      }
-    });
-  }
-
-  /// Process a PUSH_CODE_LOG_RX_DATA (0x88) frame.
-  ///
-  /// Parses the raw RF packet, computes its SHA-256 packet hash, and checks
-  /// for duplicate hashes.  Each duplicate = another repeater heard the
-  /// packet.  For outgoing channel messages the heard count on the matching
-  /// [ChatMessage] is incremented.
-  void _processLogRxData(Uint8List data) {
-    _ref.read(rxLogProvider.notifier).recordFromLogRxFrame(data);
-
-    final parsed = parseLogRxData(data);
-    if (parsed == null || parsed.packet == null) return;
-
-    final pkt = parsed.packet!;
-    final hashHex = pkt.packetHashHex;
-    final log = Logger(printer: SimplePrinter(printTime: false));
-    log.d(
-      '0x88: type=0x${pkt.payloadType.toRadixString(16)} '
-      'hash=$hashHex chHash=${pkt.channelHashByte} '
-      'path=${pkt.pathHashCount}hops snr=${parsed.snr} rssi=${parsed.rssi}',
-    );
-
-    // Update the global packet-heard tracker.
-    final tracker = _ref.read(packetHeardProvider.notifier);
-    final count = tracker.record(
-      hashHex,
-      snr: parsed.snr,
-      rssi: parsed.rssi,
-      pathBytes: pkt.pathBytes,
-      pathHashCount: pkt.pathHashCount,
-      pathHashSize: pkt.pathHashSize,
-    );
-
-    // For advert packets, update last-heard on the matching contact.
-    // The radio doesn't push 0x80 for already-known contacts, so the 0x88
-    // log frame is the only signal we get.
-    // Advert payload starts with 32-byte public key — first 6 bytes = prefix.
-    if (pkt.payloadType == payloadTypeAdvert && pkt.payload.length >= 6) {
-      _ref
-          .read(contactsProvider.notifier)
-          .touchLastHeard(Uint8List.fromList(pkt.payload.sublist(0, 6)));
-    }
-
-    // Only GRP_TXT packets can match outgoing channel messages.
-    if (pkt.payloadType != payloadTypeGrpTxt) return;
-    // For our outgoing messages the radio never receives its own TX via 0x88,
-    // so every 0x88 occurrence with a GRP_TXT hash IS a repeater echo.
-
-    // Determine which channel index this RF packet belongs to by comparing
-    // the 1-byte channel hash from the raw payload against our known channels.
-    final rxChHash = pkt.channelHashByte;
-    if (rxChHash == null) return;
-
-    final channels = _ref.read(channelsProvider);
-    int? matchedChannelIdx;
-    for (final ch in channels) {
-      if (ch.secret != null && !ch.isEmpty) {
-        if (computeChannelHash(ch.secret!) == rxChHash) {
-          matchedChannelIdx = ch.index;
-          break;
-        }
-      }
-    }
-    if (matchedChannelIdx == null) {
-      log.d(
-        '0x88: no channel matched for chHash=0x${rxChHash.toRadixString(16)}',
-      );
-      return;
-    }
-    log.i('0x88: GRP_TXT ch=$matchedChannelIdx hash=$hashHex count=$count');
-
-    // Try to match against an outgoing message first.
-    // If not matched (i.e. this is an incoming packet from another station),
-    // buffer the hash so the ChannelMessageResponse can claim it.
-    final matchedOutgoing = _ref
-        .read(messagesProvider.notifier)
-        .incrementHeardByHash(matchedChannelIdx, hashHex, count);
-    if (!matchedOutgoing) {
-      _ref
-          .read(messagesProvider.notifier)
-          .queueIncomingHash(matchedChannelIdx, hashHex);
-    }
-  }
-
-  /// Wait for a specific response type from the radio after sending a command.
-  /// Returns the matching response, or null on timeout.
-  Future<CompanionResponse?> _sendAndWait(
-    RadioService service,
-    Future<void> Function() sendFn,
-    bool Function(CompanionResponse) matcher, {
-    Duration timeout = const Duration(seconds: 3),
-  }) async {
-    final completer = Completer<CompanionResponse>();
-    late StreamSubscription<CompanionResponse> sub;
-    sub = service.responses.listen((response) {
-      if (!completer.isCompleted && matcher(response)) {
-        completer.complete(response);
-        sub.cancel();
-      }
-    });
-
-    await sendFn();
-
-    try {
-      return await completer.future.timeout(timeout);
-    } on TimeoutException {
-      await sub.cancel();
-      return null;
-    }
-  }
-
-  /// Request all initial data from the radio after connection.
-  ///
-  /// DeviceInfo is fetched first to discover maxChannels.
-  /// Contacts are fetched with response-aware sequencing (EndContactsResponse
-  /// marks completion).  Channels are sent one-at-a-time with a 150 ms gap
-  /// to avoid overflowing the firmware's BLE send queue.
-  ///
-  /// MsgWaitingPush triggers syncNextMessage() immediately at all times
-  /// so incoming messages are never missed.
-  Future<void> _fetchInitialData(RadioService service) async {
-    final log = Logger(printer: SimplePrinter(printTime: false));
-
-    // 0. Wait for SelfInfo — the radio sends it automatically after APP_START.
-    //    Rather than a fixed 300 ms delay, we watch for the response and
-    //    proceed as soon as it arrives (typically 50–100 ms over BLE).
-    //    500 ms fallback ensures we still continue even if it never comes.
-    _setStep(1, 'A aguardar resposta do rádio...');
-    await _sendAndWait(
-      service,
-      () async {}, // no command needed — just listen
-      (r) => r is SelfInfoResponse,
-      timeout: const Duration(milliseconds: 500),
-    );
-
-    // 1. Device info — we need maxChannels before requesting channels.
-    _setStep(2, 'A obter informação do dispositivo...');
-    final devResp = await _sendAndWait(
-      service,
-      () => service.requestDeviceInfo(),
-      (r) => r is DeviceInfoResponse || r is ErrorResponse,
-    );
-    log.d('DeviceInfo: ${devResp?.runtimeType ?? "TIMEOUT"}');
-
-    // 2. Battery + radio stats — fire and forget, let them arrive whenever.
-    await service.requestBattAndStorage();
-    unawaited(service.requestStats(statsTypeCore).catchError((_) {}));
-    unawaited(service.requestStats(statsTypeRadio).catchError((_) {}));
-    unawaited(service.requestStats(statsTypePackets).catchError((_) {}));
-
-    // 3. Contacts — wait for the end-of-contacts marker.
-    _setStep(3, 'A sincronizar contactos...');
-    final contactsResp = await _sendAndWait(
-      service,
-      () => service.requestContacts(),
-      (r) => r is EndContactsResponse,
-      timeout: const Duration(seconds: 10),
-    );
-    log.d('Contacts: ${contactsResp?.runtimeType ?? "TIMEOUT"}');
-
-    // 4. Channels — send all requests with a short stagger and collect
-    //    responses in parallel rather than round-tripping one at a time.
-    //    Strategy:
-    //      a) Start a listener that collects every ChannelInfoResponse index.
-    //      b) Fire all requests 30 ms apart (lets the firmware TX queue drain).
-    //      c) Wait up to 2 s for all slots to arrive.
-    //      d) Retry any missing slots once (BLE packet loss / radio busy after
-    //         contacts sync), waiting 500 ms per missing slot.
-    //      e) Final explicit refresh so storage always reflects the authoritative
-    //         complete set — not whatever the last intermediate save had.
-    _setStep(4, 'A sincronizar canais...');
-    final maxChannels = service.deviceInfo?.maxChannels ?? 8;
-    final receivedChannels = <int>{};
-
-    Future<void> waitForChannels({
-      required Duration timeout,
-      required Set<int> alreadyReceived,
-    }) async {
-      final done = Completer<void>();
-      final sub = service.responses.listen((r) {
-        if (r is ChannelInfoResponse) {
-          alreadyReceived.add(r.channel.index);
-          if (alreadyReceived.length >= maxChannels && !done.isCompleted) {
-            done.complete();
-          }
-        }
-      });
-      try {
-        await done.future.timeout(timeout);
-      } on TimeoutException {
-        // Continue with whatever arrived.
-      }
-      await sub.cancel();
-    }
-
-    // First sweep — request all slots.
-    final sweepDone = Completer<void>();
-    final sweepSub = service.responses.listen((r) {
-      if (r is ChannelInfoResponse) {
-        receivedChannels.add(r.channel.index);
-        if (receivedChannels.length >= maxChannels && !sweepDone.isCompleted) {
-          sweepDone.complete();
-        }
-      }
-    });
-    for (var i = 0; i < maxChannels; i++) {
-      await service.requestChannel(i);
-      if (i < maxChannels - 1) {
-        await Future.delayed(const Duration(milliseconds: 30));
-      }
-    }
-    try {
-      await sweepDone.future.timeout(const Duration(milliseconds: 2000));
-    } on TimeoutException {
-      // Fall through to retry.
-    }
-    await sweepSub.cancel();
-    log.d('Channels sweep: ${receivedChannels.length}/$maxChannels received');
-
-    // Retry any slots that were missed (BLE loss, radio busy, etc.).
-    final missing =
-        List.generate(
-          maxChannels,
-          (i) => i,
-        ).where((i) => !receivedChannels.contains(i)).toList();
-
-    if (missing.isNotEmpty) {
-      log.w('Channels: ${missing.length} missing slots, retrying: $missing');
-      for (final slot in missing) {
-        await service.requestChannel(slot);
-        await Future.delayed(const Duration(milliseconds: 50));
-      }
-      await waitForChannels(
-        timeout: Duration(milliseconds: missing.length * 500),
-        alreadyReceived: receivedChannels,
-      );
-      log.d(
-        'Channels after retry: ${receivedChannels.length}/$maxChannels received',
-      );
-    }
-
-    // Persist the final authoritative channel set.  This overwrites any
-    // intermediate partial saves that _setupListeners may have written during
-    // the sweep, ensuring storage is always consistent.
-    _ref.read(channelsProvider.notifier).refresh(service.channels);
-    log.d('Channels done: ${receivedChannels.length}/$maxChannels received');
-
-    // 5. Drain any messages queued while the app was disconnected.
-    //    The spec says to send CMD_SYNC_NEXT_MESSAGE during initialisation.
-    //    RadioService._processResponse() continues the chain automatically
-    //    (each received message triggers the next sync until the queue is empty).
-    await service.syncNextMessage();
-
-    _setStep(5, 'Ligado!');
-  }
-
-  // ---------------------------------------------------------------------------
-  // Private key backup / restore
-  // ---------------------------------------------------------------------------
-
-  /// Request the radio to export its 64-byte private key via the companion
-  /// protocol (requires firmware built with ENABLE_PRIVATE_KEY_EXPORT=1).
-  ///
-  /// Returns the key as a 128-char hex string on success, or null if the radio
-  /// timed out, replied with an error, or has the feature disabled.
-  Future<String?> exportPrivateKey() async {
-    final service = _ref.read(radioServiceProvider);
-    if (service == null) return null;
-    final resp = await _sendAndWait(
-      service,
-      () => service.requestPrivateKeyExport(),
-      (r) => r is PrivateKeyResponse || r is ErrorResponse,
-      timeout: const Duration(seconds: 5),
-    );
-    if (resp is PrivateKeyResponse) {
-      return resp.privateKey
-          .map((b) => b.toRadixString(16).padLeft(2, '0'))
-          .join();
-    }
-    return null;
-  }
-
-  /// Send a 64-byte private key to the radio (requires firmware built with
-  /// ENABLE_PRIVATE_KEY_IMPORT=1).
-  ///
-  /// [prvKeyHex] must be exactly 128 hex characters (64 bytes).
-  /// Returns true on success (radio replied OK), false otherwise.
-  Future<bool> importPrivateKey(String prvKeyHex) async {
-    final service = _ref.read(radioServiceProvider);
-    if (service == null) return false;
-    if (prvKeyHex.length != 128) return false;
-    final bytes = Uint8List(64);
-    for (var i = 0; i < 64; i++) {
-      bytes[i] = int.parse(prvKeyHex.substring(i * 2, i * 2 + 2), radix: 16);
-    }
-    final resp = await _sendAndWait(
-      service,
-      () => service.importPrivateKey(bytes),
-      (r) => r is OkResponse || r is ErrorResponse,
-      timeout: const Duration(seconds: 5),
-    );
-    return resp is OkResponse;
-  }
-}
-
-final connectionProvider =
-    StateNotifierProvider<ConnectionNotifier, TransportState>((ref) {
-      return ConnectionNotifier(ref);
-    });
+/// All recently connected devices, most-recent first (up to 5).
+/// Superset of [lastDeviceProvider]; used by the connect screen to let
+/// users with multiple radios reconnect without scanning.
+final recentDevicesProvider = StateProvider<List<LastDevice>>((_) => []);
 
 // ---------------------------------------------------------------------------
 // Data providers
@@ -819,30 +92,97 @@ final radioConfigProvider = StateProvider<RadioConfig?>((_) => null);
 final deviceInfoProvider = StateProvider<DeviceInfo?>((_) => null);
 final batteryProvider = StateProvider<int>((_) => 0);
 
+/// (storageUsed, storageTotal) in bytes; both null until first RESP_BATT_AND_STORAGE.
+final storageProvider = StateProvider<(int?, int?)>((_) => (null, null));
+
 // Contacts
 class ContactsNotifier extends StateNotifier<List<Contact>> {
   ContactsNotifier() : super([]);
   bool _loaded = false;
+
+  // Internal index: hex6 of first 6 bytes → (list index, Contact).
+  // Kept in sync on every state write so upsertFromAdvert / touchLastHeard
+  // are O(1) lookups instead of O(n) scans.
+  final Map<String, (int, Contact)> _byHex6 = {};
+
+  // Debounce timer for saves triggered by high-frequency events (adverts,
+  // incoming messages).  User-triggered mutations (setCustomName, remove, …)
+  // still save immediately.
+  Timer? _saveDebounce;
+
+  @override
+  void dispose() {
+    _saveDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _rebuildIndex(List<Contact> contacts) {
+    _byHex6.clear();
+    for (var i = 0; i < contacts.length; i++) {
+      final c = contacts[i];
+      if (c.publicKey.length >= 6) {
+        _byHex6[_hex6(c.publicKey)] = (i, c);
+      }
+    }
+  }
+
+  void _scheduleSave(List<Contact> contacts) {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(seconds: 2), () {
+      StorageService.instance.saveContacts(contacts);
+    });
+  }
+
+  /// O(1) contact lookup by 6-byte key prefix hex (used by notification handler).
+  Contact? lookupByHex6(String hex6) => _byHex6[hex6]?.$2;
 
   /// Load cached contacts from storage (called once on app start).
   Future<void> loadFromStorage() async {
     if (_loaded) return;
     _loaded = true;
     final stored = await StorageService.instance.loadContacts();
-    if (stored.isNotEmpty) state = stored;
+    if (stored.isNotEmpty) {
+      state = stored;
+      _rebuildIndex(stored);
+    }
   }
 
   void refresh(List<Contact> contacts) {
-    // Contacts from the radio — carry over customName from local cache.
+    // Build O(1) lookup map from current cache so the merge is O(n) not O(n²).
+    final currentByKeyHex = <String, Contact>{
+      for (final c in state) _keyHex(c.publicKey): c,
+    };
+    // Also track which full-key hexes came from the radio for the
+    // preserve-local-only pass below.
+    final radioKeys = <String>{};
+
     final merged =
         contacts.map((incoming) {
-          final existing = state.firstWhere(
-            (c) => _keysEqual(c.publicKey, incoming.publicKey),
-            orElse: () => incoming,
-          );
-          return existing.customName != null
-              ? incoming.withCustomName(existing.customName)
-              : incoming;
+          final kh = _keyHex(incoming.publicKey);
+          radioKeys.add(kh);
+          final existing = currentByKeyHex[kh];
+          // No local cache hit — nothing to preserve.
+          if (existing == null) return incoming;
+          var out =
+              existing.customName != null
+                  ? incoming.withCustomName(existing.customName)
+                  : incoming;
+          // Preserve the most recent advert timestamp seen locally.
+          if (existing.lastAdvertTimestamp > out.lastAdvertTimestamp) {
+            out = Contact(
+              publicKey: out.publicKey,
+              type: out.type,
+              flags: out.flags,
+              pathLen: out.pathLen,
+              name: out.name,
+              lastAdvertTimestamp: existing.lastAdvertTimestamp,
+              latitude: out.latitude,
+              longitude: out.longitude,
+              lastModified: out.lastModified,
+              customName: out.customName,
+            );
+          }
+          return out;
         }).toList();
 
     // Preserve locally-cached contacts that are not in the radio's list.
@@ -850,12 +190,13 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
     // yet formally stored in the radio's contacts table.  Dropping them on
     // every refresh causes the node to "disappear" after an app restart.
     for (final local in state) {
-      if (!merged.any((c) => _keysEqual(c.publicKey, local.publicKey))) {
+      if (!radioKeys.contains(_keyHex(local.publicKey))) {
         merged.add(local);
       }
     }
 
     state = merged;
+    _rebuildIndex(merged);
     StorageService.instance.saveContacts(merged);
   }
 
@@ -870,34 +211,107 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
             )
             .toList();
     state = next;
+    _rebuildIndex(next);
     StorageService.instance.saveContacts(next);
+  }
+
+  /// Optimistically flips the favourite bit on the cached contact and saves
+  /// storage. Callers are expected to push the updated contact to the radio
+  /// via [RadioService.addUpdateContact] so the change persists across
+  /// disconnects and reaches other apps connected to the same radio.
+  void setFavorite(Uint8List publicKey, bool value) {
+    final next =
+        state
+            .map(
+              (c) =>
+                  _keysEqual(c.publicKey, publicKey)
+                      ? c.withFavorite(value)
+                      : c,
+            )
+            .toList();
+    state = next;
+    _rebuildIndex(next);
+    StorageService.instance.saveContacts(next);
+  }
+
+  void setPrivateLocationOnRequest(Uint8List publicKey, bool value) {
+    final next =
+        state
+            .map(
+              (c) =>
+                  _keysEqual(c.publicKey, publicKey)
+                      ? c.withPrivateLocationOnRequest(value)
+                      : c,
+            )
+            .toList();
+    state = next;
+    _rebuildIndex(next);
+    StorageService.instance.saveContacts(next);
+  }
+
+  void updateGpsByPrefix(
+    Uint8List pubKeyPrefix,
+    double latitude,
+    double longitude,
+  ) {
+    if (pubKeyPrefix.length < 6) return;
+    final entry = _byHex6[_hex6(pubKeyPrefix)];
+    if (entry == null) return;
+    final (idx, existing) = entry;
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final next = [...state];
+    next[idx] = Contact(
+      publicKey: existing.publicKey,
+      type: existing.type,
+      flags: existing.flags,
+      pathLen: existing.pathLen,
+      name: existing.name,
+      lastAdvertTimestamp: existing.lastAdvertTimestamp,
+      latitude: latitude,
+      longitude: longitude,
+      lastModified: now,
+      customName: existing.customName,
+    );
+    state = next;
+    _rebuildIndex(next);
+    _scheduleSave(next);
   }
 
   void remove(Uint8List publicKey) {
     final next =
         state.where((c) => !_keysEqual(c.publicKey, publicKey)).toList();
     state = next;
+    _rebuildIndex(next);
     StorageService.instance.saveContacts(next);
   }
 
-  /// Called when an AdvertPush is received over the mesh.
-  /// Update lastModified on a contact matched by key prefix (6 bytes).
-  /// Called when any incoming private message (chat or CLI) is received.
+  /// Bulk-remove contacts whose 64-char pubkey hex is in [keysHex].
+  /// Returns the number of contacts actually removed.
+  /// Used by the Discover screen to wipe local-only (not-on-radio) contacts
+  /// without having to delete them one by one.
+  int removeManyByKeyHex(Set<String> keysHex) {
+    if (keysHex.isEmpty) return 0;
+    final before = state.length;
+    final next =
+        state.where((c) => !keysHex.contains(_keyHex(c.publicKey))).toList();
+    if (next.length == before) return 0;
+    state = next;
+    _rebuildIndex(next);
+    StorageService.instance.saveContacts(next);
+    return before - next.length;
+  }
+
+  /// Update lastModified on the contact matched by the 6-byte key prefix.
+  /// Called on every incoming private message and every 0x88 advert frame.
+  /// Uses the O(1) hex6 index so it never scans the list.
+  /// Save is debounced — high-frequency adverts coalesce into one write.
   void touchLastHeard(Uint8List senderKey) {
+    if (senderKey.length < 6) return;
+    final hex6 = _hex6(senderKey);
+    final entry = _byHex6[hex6];
+    if (entry == null) return;
+    final (idx, existing) = entry;
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final idx = state.indexWhere(
-      (c) =>
-          c.publicKey.length >= 6 &&
-          senderKey.length >= 6 &&
-          c.publicKey[0] == senderKey[0] &&
-          c.publicKey[1] == senderKey[1] &&
-          c.publicKey[2] == senderKey[2] &&
-          c.publicKey[3] == senderKey[3] &&
-          c.publicKey[4] == senderKey[4] &&
-          c.publicKey[5] == senderKey[5],
-    );
-    if (idx < 0) return;
-    final existing = state[idx];
     final next = [...state];
     next[idx] = Contact(
       publicKey: existing.publicKey,
@@ -912,16 +326,19 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
       customName: existing.customName,
     );
     state = next;
-    StorageService.instance.saveContacts(next);
+    _rebuildIndex(next);
+    _scheduleSave(next);
   }
 
   /// Adds a new contact if unseen, or refreshes the name/type/timestamp if already known.
+  /// Uses the O(1) hex6 index and debounces the storage write.
   void upsertFromAdvert(Uint8List publicKey, int type, String name) {
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final idx = state.indexWhere((c) => _keysEqual(c.publicKey, publicKey));
+    final hex6 = _hex6(publicKey);
+    final entry = _byHex6[hex6];
     List<Contact> next;
-    if (idx >= 0) {
-      final existing = state[idx];
+    if (entry != null) {
+      final (idx, existing) = entry;
       next = [...state];
       next[idx] = Contact(
         publicKey: existing.publicKey,
@@ -940,6 +357,10 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
         customName: existing.customName,
       );
     } else {
+      // Don't create a nameless contact — an advert without a name is a
+      // path-update ping for a node we haven't met yet; ignore it until
+      // a proper advert with a name arrives.
+      if (name.isEmpty) return;
       next = [
         ...state,
         Contact(
@@ -953,7 +374,8 @@ class ContactsNotifier extends StateNotifier<List<Contact>> {
       ];
     }
     state = next;
-    StorageService.instance.saveContacts(next);
+    _rebuildIndex(next);
+    _scheduleSave(next);
   }
 
   static bool _keysEqual(Uint8List a, Uint8List b) {
@@ -973,8 +395,11 @@ final contactsProvider = StateNotifierProvider<ContactsNotifier, List<Contact>>(
 
 // Channels
 class ChannelsNotifier extends StateNotifier<List<ChannelInfo>> {
-  ChannelsNotifier() : super([]);
+  ChannelsNotifier(this._ref) : super([]);
+  final Ref _ref;
 
+  /// Load channels for the last known device at startup (offline cache).
+  /// Only populates state if there is data — does not clear existing state.
   Future<void> loadFromStorage() async {
     final stored = await StorageService.instance.loadChannels();
     if (stored.isNotEmpty) {
@@ -982,314 +407,147 @@ class ChannelsNotifier extends StateNotifier<List<ChannelInfo>> {
     }
   }
 
+  /// Load channels scoped to a specific radio device.
+  /// Replaces any previously loaded channels in state.
+  Future<void> loadFromStorageForRadio(String deviceId) async {
+    final stored = await StorageService.instance.loadChannelsForRadio(deviceId);
+    state = List.from(stored)..sort((a, b) => a.index.compareTo(b.index));
+  }
+
+  /// Clear in-memory channels without touching storage.
+  /// Called when switching to a different radio before the new radio's
+  /// channels have been fetched, to prevent stale data showing in the UI.
+  void clearChannels() {
+    state = [];
+  }
+
   void refresh(List<ChannelInfo> channels) {
     state = List.from(channels)..sort((a, b) => a.index.compareTo(b.index));
-    StorageService.instance.saveChannels(state);
+    final deviceId = _ref.read(currentRadioIdProvider);
+    if (deviceId != null) {
+      StorageService.instance.saveChannelsForRadio(deviceId, state);
+    } else {
+      StorageService.instance.saveChannels(state);
+    }
   }
 }
 
 final channelsProvider =
     StateNotifierProvider<ChannelsNotifier, List<ChannelInfo>>((ref) {
-      return ChannelsNotifier();
+      return ChannelsNotifier(ref);
     });
 
-// Messages
-class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
-  MessagesNotifier(this._ref) : super([]);
-  final Ref _ref;
+// Per-key message version counters: key → bump count.
+// Incremented each time any message for that key is added/updated.
+// Keys follow the same scheme as MessagesNotifier._partitionKey:
+//   'c_<hex6>'  for private contacts
+//   'ch_<idx>'  for channels
+// Screens watch this with .select((vs) => vs[key] ?? 0) to rebuild only
+// when their specific conversation changes, not on every message app-wide.
+final messageVersionsProvider = StateProvider<Map<String, int>>(
+  (_) => const {},
+);
 
-  final Set<String> _loadedKeys = {};
+// Stable snapshot of (contact hex6 → last private message timestamp).
+// Uses custom equality so that a channel message arriving does NOT cause
+// contacts_screen to rebuild; only actual private-message ts changes do.
+class _MsgTsSnapshot {
+  const _MsgTsSnapshot(this.data);
+  final Map<String, int> data;
 
-  /// Per-key save lock: ensures saves for the same key are serialised so a
-  /// slower earlier save never overwrites a faster later save.
-  final Map<String, Future<void>> _saveLocks = {};
-
-  void addMessage(ChatMessage message) {
-    // Dedup: skip if an identical message already exists in state.
-    // Include senderKey prefix so messages from different contacts with
-    // identical text+timestamp are never wrongly merged.
-    final dominated = state.any(
-      (m) =>
-          m.timestamp == message.timestamp &&
-          m.channelIndex == message.channelIndex &&
-          m.text == message.text &&
-          m.isOutgoing == message.isOutgoing &&
-          _senderKeyMatch(m, message),
-    );
-    if (dominated) return;
-    state = [...state, message];
-    _saveForMessage(message);
-  }
-
-  void addOutgoing(ChatMessage message) {
-    state = [...state, message];
-    _saveForMessage(message);
-    _ref.read(networkStatsProvider.notifier).incrementTx();
-  }
-
-  /// Increment heard count on an outgoing channel message matched by packet
-  /// hash.  The first 0x88 duplicate for a GRP_TXT packet is the original
-  /// transmission; subsequent duplicates are repeater echoes.  [totalHeard]
-  /// is the cumulative repeater count (duplicates minus 1).
-  ///
-  /// If [hashHex] matches a message that already has the same packetHashHex,
-  /// update its heardCount.  Otherwise try to assign the hash to the most
-  /// recent outgoing message on [channelIndex] that has no hash yet.
-  ///
-  /// Returns `true` if the hash was matched/assigned to an outgoing message,
-  /// `false` if not (i.e. this is an incoming message from another station).
-  bool incrementHeardByHash(int channelIndex, String hashHex, int totalHeard) {
-    // First pass — find a message already tagged with this hash.
-    for (var i = state.length - 1; i >= 0; i--) {
-      final msg = state[i];
-      if (msg.packetHashHex == hashHex) {
-        if (msg.heardCount != totalHeard) {
-          final updated = msg.copyWith(heardCount: totalHeard);
-          final newList = List<ChatMessage>.from(state);
-          newList[i] = updated;
-          state = newList;
-          _saveForMessage(updated);
-        }
-        return true;
-      }
-    }
-    // Second pass — assign hash to the most recent outgoing message on this
-    // channel that does not yet have a packetHashHex.
-    // Only consider messages sent in the last 60 seconds to avoid wrongly
-    // assigning an incoming packet's hash to a stale outgoing message.
-    final cutoff = DateTime.now().millisecondsSinceEpoch ~/ 1000 - 60;
-    for (var i = state.length - 1; i >= 0; i--) {
-      final msg = state[i];
-      if (!msg.isOutgoing || msg.channelIndex != channelIndex) continue;
-      if (msg.packetHashHex != null) continue;
-      if (msg.timestamp < cutoff) break; // too old — stop searching
-      final updated = msg.copyWith(
-        packetHashHex: hashHex,
-        heardCount: totalHeard,
-      );
-      final newList = List<ChatMessage>.from(state);
-      newList[i] = updated;
-      state = newList;
-      _saveForMessage(updated);
-      return true;
-    }
-    return false;
-  }
-
-  // Per-channel FIFO buffer of unmatched GRP_TXT packet hashes from 0x88 frames.
-  // Populated when the hash doesn't match any outgoing message (i.e. it came
-  // from another station).  Consumed when the corresponding ChannelMessageResponse
-  // arrives so the incoming ChatMessage can be tagged with its packetHashHex.
-  final Map<int, List<String>> _pendingIncomingHashes = {};
-
-  /// Buffer [hashHex] as a pending incoming-message path for [channelIndex].
-  void queueIncomingHash(int channelIndex, String hashHex) {
-    final q = _pendingIncomingHashes[channelIndex] ?? <String>[];
-    if (q.length >= 16) q.removeAt(0); // prevent unbounded growth
-    _pendingIncomingHashes[channelIndex] = [...q, hashHex];
-  }
-
-  /// Pop and return the oldest pending incoming hash for [channelIndex],
-  /// or null if none is buffered.
-  String? consumeIncomingHash(int channelIndex) {
-    final q = _pendingIncomingHashes[channelIndex];
-    if (q == null || q.isEmpty) return null;
-    final hash = q.first;
-    _pendingIncomingHashes[channelIndex] = q.sublist(1);
-    return hash;
-  }
-
-  /// Mark the most recent unconfirmed outgoing message as confirmed.
-  /// Called when a [SendConfirmedPush] arrives from the radio.
-  void confirmLastOutgoing() {
-    // Walk backwards and only touch the most-recently-added unconfirmed
-    // outgoing message (private or channel — whichever came last).
-    for (var i = state.length - 1; i >= 0; i--) {
-      final msg = state[i];
-      if (msg.isOutgoing && !msg.confirmed) {
-        final updated = msg.copyWith(confirmed: true);
-        final newList = List<ChatMessage>.from(state);
-        newList[i] = updated;
-        state = newList;
-        _saveForMessage(updated);
-        return;
-      }
-    }
-  }
-
-  /// Store the route flag on the most recent outgoing *private* message that
-  /// does not yet have a sentRouteFlag.  Channel messages don't use this flag.
-  /// Called when [SentResponse] arrives: 0 = direct, 1 = flood.
-  void markLastOutgoingRoute(int routeFlag) {
-    for (var i = state.length - 1; i >= 0; i--) {
-      final msg = state[i];
-      if (msg.isOutgoing &&
-          msg.sentRouteFlag == null &&
-          msg.channelIndex == null) {
-        final updated = msg.copyWith(sentRouteFlag: routeFlag);
-        final newList = List<ChatMessage>.from(state);
-        newList[i] = updated;
-        state = newList;
-        _saveForMessage(updated);
-        return;
-      }
-    }
-  }
-
-  /// Lazily load persisted messages for a private contact key (hex6).
-  /// No-op if already loaded. Safe to call on every screen open.
-  Future<void> ensureLoadedForContact(String hex6) async {
-    final key = 'contact_$hex6';
-    if (_loadedKeys.contains(key)) return;
-    _loadedKeys.add(key);
-    final stored = await StorageService.instance.loadMessages(key);
-    if (stored.isEmpty) return;
-    _mergeStored(stored);
-  }
-
-  /// Lazily load persisted messages for a channel index.
-  Future<void> ensureLoadedForChannel(int index) async {
-    final key = 'ch_$index';
-    if (_loadedKeys.contains(key)) return;
-    _loadedKeys.add(key);
-    final stored = await StorageService.instance.loadMessages(key);
-    if (stored.isEmpty) return;
-    _mergeStored(stored);
-  }
-
-  void _mergeStored(List<ChatMessage> stored) {
-    // Deduplicate by (timestamp, isOutgoing, text hashCode).
-    final existing = {for (final m in state) _msgId(m)};
-    final incoming =
-        stored.where((m) => !existing.contains(_msgId(m))).toList();
-    if (incoming.isEmpty) return;
-    final merged = [...incoming, ...state]
-      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    state = merged;
-  }
-
-  String _msgId(ChatMessage m) {
-    // Use the full text instead of hashCode — hashCode is not stable and
-    // can collide, causing legitimate messages to be treated as duplicates.
-    final keyPart =
-        m.senderKey != null ? _hex6(m.senderKey!) : 'ch${m.channelIndex}';
-    return '${m.timestamp}_${m.isOutgoing ? 1 : 0}_${m.channelIndex}_${m.text}_$keyPart';
-  }
-
-  /// True when both messages have the same sender (or both have no sender).
-  bool _senderKeyMatch(ChatMessage a, ChatMessage b) {
-    if (a.senderKey == null && b.senderKey == null) return true;
-    if (a.senderKey == null || b.senderKey == null) return false;
-    return _prefixMatch6(a.senderKey!, b.senderKey!);
-  }
-
-  void _saveForMessage(ChatMessage msg) {
-    final String storageKey;
-    if (msg.channelIndex != null) {
-      storageKey = 'ch_${msg.channelIndex}';
-    } else if (msg.senderKey != null) {
-      storageKey = 'contact_${_hex6(msg.senderKey!)}';
-    } else {
-      return;
-    }
-    // Collect all messages for this key (snapshot current state).
-    final forKey =
-        state.where((m) {
-          if (msg.channelIndex != null) {
-            return m.channelIndex == msg.channelIndex;
-          }
-          if (m.senderKey == null) return false;
-          return _prefixMatch6(m.senderKey!, msg.senderKey!);
-        }).toList();
-
-    // Serialise saves per key: chain each save behind the previous one so
-    // a slower earlier future never overwrites a faster later snapshot.
-    final prev = _saveLocks[storageKey] ?? Future.value();
-    final next = prev.then(
-      (_) => StorageService.instance.saveMessages(storageKey, forKey),
-    );
-    _saveLocks[storageKey] = next;
-    // Clean up the lock entry once the save completes to avoid unbounded growth.
-    next.whenComplete(() {
-      if (_saveLocks[storageKey] == next) _saveLocks.remove(storageKey);
-    });
-  }
-
-  bool _prefixMatch6(Uint8List a, Uint8List b) {
-    final len = (a.length < b.length ? a.length : b.length).clamp(0, 6);
-    if (len == 0) return false; // don't match two empty/unknown keys
-    for (var i = 0; i < len; i++) {
-      if (a[i] != b[i]) return false;
+  @override
+  bool operator ==(Object other) {
+    if (other is! _MsgTsSnapshot) return false;
+    if (data.length != other.data.length) return false;
+    for (final e in data.entries) {
+      if (other.data[e.key] != e.value) return false;
     }
     return true;
   }
 
-  /// Get messages for a specific contact (private).
-  List<ChatMessage> forContact(Uint8List? contactKey) {
-    if (contactKey == null) return [];
-    return state.where((m) {
-      if (m.isChannel) return false;
-      if (m.senderKey == null) return false;
-      // Match on the first 6 bytes (prefix)
-      final prefix =
-          contactKey.length >= 6 ? contactKey.sublist(0, 6) : contactKey;
-      final msgPrefix =
-          m.senderKey!.length >= 6 ? m.senderKey!.sublist(0, 6) : m.senderKey!;
-      return _prefixMatch(prefix, msgPrefix);
-    }).toList();
-  }
-
-  /// Get messages for a specific channel.
-  List<ChatMessage> forChannel(int channelIndex) {
-    return state.where((m) => m.channelIndex == channelIndex).toList();
-  }
-
-  /// Delete a single message from state and re-persist its conversation.
-  void deleteMessage(ChatMessage msg) {
-    final targetId = _msgId(msg);
-    state = state.where((m) => _msgId(m) != targetId).toList();
-    if (msg.channelIndex != null) {
-      final forKey =
-          state.where((m) => m.channelIndex == msg.channelIndex).toList();
-      StorageService.instance.saveMessages('ch_${msg.channelIndex}', forKey);
-    } else if (msg.senderKey != null) {
-      final key = 'contact_${_hex6(msg.senderKey!)}';
-      final forKey =
-          state
-              .where(
-                (m) =>
-                    m.senderKey != null &&
-                    _prefixMatch6(m.senderKey!, msg.senderKey!),
-              )
-              .toList();
-      StorageService.instance.saveMessages(key, forKey);
-    }
-  }
-
-  /// Delete all messages for a channel from state and storage.
-  Future<void> deleteChannelHistory(int channelIndex) async {
-    state = state.where((m) => m.channelIndex != channelIndex).toList();
-    await StorageService.instance.clearMessages('ch_$channelIndex');
-  }
-
-  bool _prefixMatch(Uint8List a, Uint8List b) {
-    final len = a.length < b.length ? a.length : b.length;
-    for (var i = 0; i < len; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
-  }
+  @override
+  int get hashCode =>
+      Object.hashAll(data.entries.map((e) => Object.hash(e.key, e.value)));
 }
 
-final messagesProvider =
-    StateNotifierProvider<MessagesNotifier, List<ChatMessage>>((ref) {
-      return MessagesNotifier(ref);
-    });
+final contactLastMsgTsProvider = Provider<Map<String, int>>((ref) {
+  return ref
+      .watch(
+        messagesProvider.select((msgs) {
+          final result = <String, int>{};
+          for (final m in msgs) {
+            if (m.senderKey != null &&
+                m.senderKey!.length >= 6 &&
+                m.channelIndex == null) {
+              final k = _hex6(m.senderKey!);
+              if (m.timestamp > (result[k] ?? 0)) result[k] = m.timestamp;
+            }
+          }
+          return _MsgTsSnapshot(result);
+        }),
+      )
+      .data;
+});
 
 // ---------------------------------------------------------------------------
 // Unread message counts
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Muted channels
+// ---------------------------------------------------------------------------
+
+class MutedChannelsNotifier extends StateNotifier<Set<int>> {
+  MutedChannelsNotifier() : super({}) {
+    _load();
+  }
+
+  static const _key = 'muted_channels_v1';
+  String? _activeDeviceId;
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_key) ?? [];
+    state = list.map(int.parse).toSet();
+  }
+
+  /// Load muted channels scoped to a specific radio device.
+  /// Replaces the current mute set with the device-specific one.
+  Future<void> loadForRadio(String deviceId) async {
+    _activeDeviceId = deviceId;
+    state = await StorageService.instance.loadMutedChannelsForRadio(deviceId);
+  }
+
+  Future<void> toggle(int channelIndex) async {
+    final next = Set<int>.from(state);
+    if (next.contains(channelIndex)) {
+      next.remove(channelIndex);
+    } else {
+      next.add(channelIndex);
+    }
+    state = next;
+    await _save();
+  }
+
+  Future<void> _save() async {
+    if (_activeDeviceId != null) {
+      await StorageService.instance.saveMutedChannelsForRadio(
+        _activeDeviceId!,
+        state,
+      );
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_key, state.map((i) => '$i').toList());
+    }
+  }
+}
+
+final mutedChannelsProvider =
+    StateNotifierProvider<MutedChannelsNotifier, Set<int>>(
+      (ref) => MutedChannelsNotifier(),
+    );
+
+// ---------------------------------------------------------------------------
 /// Immutable snapshot of unread counts per channel and per contact.
 class UnreadCounts {
   const UnreadCounts({this.channels = const {}, this.contacts = const {}});
@@ -1309,31 +567,89 @@ class UnreadCounts {
 class UnreadCountsNotifier extends StateNotifier<UnreadCounts> {
   UnreadCountsNotifier() : super(const UnreadCounts());
 
+  static const _chKey = 'unread_channels_v1';
+  static const _coKey = 'unread_contacts_v1';
+
+  Future<void> loadFromStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final chRaw = prefs.getString(_chKey);
+    final coRaw = prefs.getString(_coKey);
+    Map<int, int> ch = {};
+    Map<String, int> co = {};
+    if (chRaw != null) {
+      for (final part in chRaw.split(',')) {
+        final kv = part.split(':');
+        if (kv.length == 2) {
+          final k = int.tryParse(kv[0]);
+          final v = int.tryParse(kv[1]);
+          if (k != null && v != null && v > 0) ch[k] = v;
+        }
+      }
+    }
+    if (coRaw != null) {
+      for (final part in coRaw.split(',')) {
+        final kv = part.split(':');
+        if (kv.length == 2 && kv[0].isNotEmpty) {
+          final v = int.tryParse(kv[1]);
+          if (v != null && v > 0) co[kv[0]] = v;
+        }
+      }
+    }
+    state = UnreadCounts(channels: ch, contacts: co);
+  }
+
+  Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _chKey,
+      state.channels.entries.map((e) => '${e.key}:${e.value}').join(','),
+    );
+    await prefs.setString(
+      _coKey,
+      state.contacts.entries.map((e) => '${e.key}:${e.value}').join(','),
+    );
+  }
+
   void incrementChannel(int index) {
     final ch = Map<int, int>.from(state.channels)
       ..[index] = (state.channels[index] ?? 0) + 1;
     state = UnreadCounts(channels: ch, contacts: state.contacts);
+    _save();
   }
 
   void incrementContact(String hex6) {
     final co = Map<String, int>.from(state.contacts)
       ..[hex6] = (state.contacts[hex6] ?? 0) + 1;
     state = UnreadCounts(channels: state.channels, contacts: co);
+    _save();
   }
 
   void markChannelRead(int index) {
     if ((state.channels[index] ?? 0) == 0) return;
     final ch = Map<int, int>.from(state.channels)..remove(index);
     state = UnreadCounts(channels: ch, contacts: state.contacts);
+    _save();
   }
 
   void markContactRead(String hex6) {
     if ((state.contacts[hex6] ?? 0) == 0) return;
     final co = Map<String, int>.from(state.contacts)..remove(hex6);
     state = UnreadCounts(channels: state.channels, contacts: co);
+    _save();
   }
 
-  void reset() => state = const UnreadCounts();
+  /// Reset only channel unread counts. Called when connecting to a different
+  /// radio so that slot-index-based counts from the previous radio don't
+  /// carry over to the new radio's channels.
+  void resetChannels() {
+    state = UnreadCounts(channels: {}, contacts: state.contacts);
+    _save();
+  }
+
+  void reset() {
+    state = const UnreadCounts();
+    _save();
+  }
 }
 
 final unreadCountsProvider =
@@ -1364,6 +680,34 @@ class NotificationSettingsNotifier extends StateNotifier<NotificationSettings> {
 final notificationSettingsProvider =
     StateNotifierProvider<NotificationSettingsNotifier, NotificationSettings>(
       (ref) => NotificationSettingsNotifier(),
+    );
+
+// ---------------------------------------------------------------------------
+// Auto-reconnect setting
+// ---------------------------------------------------------------------------
+
+class AutoReconnectNotifier extends StateNotifier<bool> {
+  AutoReconnectNotifier() : super(true) {
+    _load();
+  }
+
+  static const _key = 'auto_reconnect';
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = prefs.getBool(_key) ?? true;
+  }
+
+  Future<void> set(bool value) async {
+    state = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_key, value);
+  }
+}
+
+final autoReconnectProvider =
+    StateNotifierProvider<AutoReconnectNotifier, bool>(
+      (ref) => AutoReconnectNotifier(),
     );
 
 /// Returns the first 6 bytes of [key] as a lowercase hex string.
@@ -1536,6 +880,27 @@ final scannedDevicesProvider = StateProvider<List<RadioDevice>>((_) => []);
 /// Updated whenever a new trace push arrives; null until first trace received.
 final traceResultProvider = StateProvider<TraceResult?>((ref) => null);
 
+/// Session-scoped accumulator of all [TraceResult]s received since the last
+/// connect.  Capped at 50 entries.  Cleared on disconnect.  Used by
+/// [TopologyScreen] to derive inter-node edges from historical trace data.
+class _TraceHistoryNotifier extends StateNotifier<List<TraceResult>> {
+  _TraceHistoryNotifier() : super(const []);
+
+  void add(TraceResult result) {
+    state =
+        state.length >= 50
+            ? [...state.sublist(state.length - 49), result]
+            : [...state, result];
+  }
+
+  void clear() => state = const [];
+}
+
+final traceHistoryProvider =
+    StateNotifierProvider<_TraceHistoryNotifier, List<TraceResult>>(
+      (_) => _TraceHistoryNotifier(),
+    );
+
 /// Cache of outPath bytes per contact, keyed by 6-byte pubKeyPrefix hex.
 /// Populated whenever a PathDiscoveryPush (0x8D) is received.
 /// Used by the trace flow to supply correct hop-hash path bytes.
@@ -1555,136 +920,36 @@ final repeaterStatusProvider = StateProvider<Map<String, RepeaterStats>>(
 final loginResultProvider = StateProvider<bool?>((_) => null);
 
 // ---------------------------------------------------------------------------
-// Contact favorites (app-side, not stored on radio)
+// Contact favorites — derived from the radio's `flags` byte (bit 0).
+// The firmware owns the canonical list; the UI reads Contact.isFavorite
+// directly. ContactsNotifier.setFavorite mutates the bit locally and the
+// caller pushes the updated contact via RadioService.addUpdateContact.
 // ---------------------------------------------------------------------------
 
-class FavoritesNotifier extends StateNotifier<Set<String>> {
-  FavoritesNotifier() : super({});
-
-  Future<void> loadFromStorage() async {
-    state = await StorageService.instance.loadFavorites();
-  }
-
-  void toggle(String keyHex) {
-    final next = Set<String>.from(state);
-    if (next.contains(keyHex)) {
-      next.remove(keyHex);
-    } else {
-      next.add(keyHex);
-    }
-    state = next;
-    StorageService.instance.saveFavorites(next);
-  }
-
-  bool isFavorite(String keyHex) => state.contains(keyHex);
-}
-
-final favoritesProvider = StateNotifierProvider<FavoritesNotifier, Set<String>>(
-  (ref) => FavoritesNotifier(),
-);
-
-// ---------------------------------------------------------------------------
-// Advert auto-add settings (app-side, per contact type)
-// ---------------------------------------------------------------------------
-
-/// Controls whether incoming adverts are automatically written back to the
-/// radio's contact table (via CMD_ADD_UPDATE_CONTACT) for each node type.
-///
-/// All types default to true (auto-add). The user can disable per type
-/// in Radio Settings → "Adição automática de contactos".
-class AdvertAutoAddSettings {
-  const AdvertAutoAddSettings({
-    this.addChat = true,
-    this.addRepeater = true,
-    this.addRoom = true,
-    this.addSensor = true,
-  });
-
-  final bool addChat; // type 1
-  final bool addRepeater; // type 2
-  final bool addRoom; // type 3
-  final bool addSensor; // type 4
-
-  bool allowsType(int type) {
-    switch (type) {
-      case 1:
-        return addChat;
-      case 2:
-        return addRepeater;
-      case 3:
-        return addRoom;
-      case 4:
-        return addSensor;
-      default:
-        return false;
-    }
-  }
-
-  AdvertAutoAddSettings copyWith({
-    bool? addChat,
-    bool? addRepeater,
-    bool? addRoom,
-    bool? addSensor,
-  }) => AdvertAutoAddSettings(
-    addChat: addChat ?? this.addChat,
-    addRepeater: addRepeater ?? this.addRepeater,
-    addRoom: addRoom ?? this.addRoom,
-    addSensor: addSensor ?? this.addSensor,
-  );
-}
-
-class AdvertAutoAddNotifier extends StateNotifier<AdvertAutoAddSettings> {
-  AdvertAutoAddNotifier() : super(const AdvertAutoAddSettings()) {
-    _load();
-  }
-
-  static const _key = 'advert_autoadd_v1';
-
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    state = AdvertAutoAddSettings(
-      addChat: prefs.getBool('${_key}_chat') ?? true,
-      addRepeater: prefs.getBool('${_key}_repeater') ?? true,
-      addRoom: prefs.getBool('${_key}_room') ?? true,
-      addSensor: prefs.getBool('${_key}_sensor') ?? true,
+/// Migrates any app-local favourites (from pre-fix SharedPreferences) to the
+/// radio's `flags` byte. Called once after the initial contact sync on every
+/// connect — it's idempotent: after the first migration, the stored set is
+/// cleared and subsequent calls are no-ops.
+Future<void> _migrateLegacyFavorites(Ref ref, RadioService service) async {
+  final legacy = await StorageService.instance.loadFavorites();
+  if (legacy.isEmpty) return;
+  final contactsNotifier = ref.read(contactsProvider.notifier);
+  for (final contact in ref.read(contactsProvider)) {
+    final keyHex =
+        contact.publicKey
+            .map((b) => b.toRadixString(16).padLeft(2, '0'))
+            .join();
+    if (!legacy.contains(keyHex) || contact.isFavorite) continue;
+    contactsNotifier.setFavorite(contact.publicKey, true);
+    // Fire-and-forget — OkResponse isn't awaited; failures fall through to
+    // the next connect's migration retry (the legacy set is still present
+    // until clearFavorites below runs on success).
+    unawaited(
+      service.addUpdateContact(contact.withFavorite(true)).catchError((_) {}),
     );
   }
-
-  Future<void> _save() async {
-    final prefs = await SharedPreferences.getInstance();
-    await Future.wait([
-      prefs.setBool('${_key}_chat', state.addChat),
-      prefs.setBool('${_key}_repeater', state.addRepeater),
-      prefs.setBool('${_key}_room', state.addRoom),
-      prefs.setBool('${_key}_sensor', state.addSensor),
-    ]);
-  }
-
-  void setChat(bool v) {
-    state = state.copyWith(addChat: v);
-    _save();
-  }
-
-  void setRepeater(bool v) {
-    state = state.copyWith(addRepeater: v);
-    _save();
-  }
-
-  void setRoom(bool v) {
-    state = state.copyWith(addRoom: v);
-    _save();
-  }
-
-  void setSensor(bool v) {
-    state = state.copyWith(addSensor: v);
-    _save();
-  }
+  await StorageService.instance.clearFavorites();
 }
-
-final advertAutoAddProvider =
-    StateNotifierProvider<AdvertAutoAddNotifier, AdvertAutoAddSettings>(
-      (ref) => AdvertAutoAddNotifier(),
-    );
 
 // ---------------------------------------------------------------------------
 // Radio hardware stats (CMD_GET_STATS responses)
@@ -1701,6 +966,71 @@ final radioStatsRadioProvider = StateProvider<StatsRadioResponse?>((_) => null);
 final radioStatsPacketsProvider = StateProvider<StatsPacketsResponse?>(
   (_) => null,
 );
+
+// ---------------------------------------------------------------------------
+// Noise floor history (in-session ring buffer, up to 300 readings)
+// ---------------------------------------------------------------------------
+
+class NoiseFloorReading {
+  const NoiseFloorReading({required this.timestamp, required this.dBm});
+  final DateTime timestamp;
+  final int dBm;
+}
+
+class NoiseFloorHistoryNotifier extends StateNotifier<List<NoiseFloorReading>> {
+  NoiseFloorHistoryNotifier() : super([]);
+
+  static const _maxReadings = 300;
+
+  void add(int dBm) {
+    final next = [
+      ...state,
+      NoiseFloorReading(timestamp: DateTime.now(), dBm: dBm),
+    ];
+    state =
+        next.length > _maxReadings
+            ? next.sublist(next.length - _maxReadings)
+            : next;
+  }
+
+  void clear() => state = [];
+}
+
+final noiseFloorHistoryProvider =
+    StateNotifierProvider<NoiseFloorHistoryNotifier, List<NoiseFloorReading>>(
+      (ref) => NoiseFloorHistoryNotifier(),
+    );
+
+// ---------------------------------------------------------------------------
+// RSSI history (in-session ring buffer, up to 300 readings)
+// ---------------------------------------------------------------------------
+
+class RssiReading {
+  const RssiReading({required this.timestamp, required this.dBm});
+  final DateTime timestamp;
+  final int dBm;
+}
+
+class RssiHistoryNotifier extends StateNotifier<List<RssiReading>> {
+  RssiHistoryNotifier() : super([]);
+
+  static const _maxReadings = 300;
+
+  void add(int dBm) {
+    final next = [...state, RssiReading(timestamp: DateTime.now(), dBm: dBm)];
+    state =
+        next.length > _maxReadings
+            ? next.sublist(next.length - _maxReadings)
+            : next;
+  }
+
+  void clear() => state = [];
+}
+
+final rssiHistoryProvider =
+    StateNotifierProvider<RssiHistoryNotifier, List<RssiReading>>(
+      (ref) => RssiHistoryNotifier(),
+    );
 
 // ---------------------------------------------------------------------------
 // Packet heard tracker (driven by 0x88 raw RF log)
@@ -1836,8 +1166,29 @@ final rxLogProvider = StateNotifierProvider<RxLogNotifier, List<RxLogEntry>>(
 );
 
 // ---------------------------------------------------------------------------
-// Contacts screen persistent UI state (survives app restarts)
+// Best recent signal — derived from the 0x88 RX log.
+//
+// Returns the highest (least negative) SNR in dB from packets received in
+// the last 5 minutes, or null when disconnected / no packets yet received.
+// Used by the AppBar signal indicator in HomeScreen.
 // ---------------------------------------------------------------------------
+
+/// Set to true before navigating to /apps/telemetry to auto-scroll to RF section.
+final telemetryScrollToRfProvider = StateProvider<bool>((_) => false);
+
+final bestSignalSnrProvider = Provider<double?>((ref) {
+  final isConnected = ref.watch(connectionProvider) == TransportState.connected;
+  if (!isConnected) return null;
+
+  final log = ref.watch(rxLogProvider);
+  if (log.isEmpty) return null;
+
+  final cutoff = DateTime.now().subtract(const Duration(minutes: 5));
+  final recent = log.where((e) => e.receivedAt.isAfter(cutoff));
+  if (recent.isEmpty) return null;
+
+  return recent.map((e) => e.snr).reduce((a, b) => a > b ? a : b);
+});
 
 enum ContactFilter {
   todos,
@@ -1951,3 +1302,108 @@ final otherMentionColorProvider =
         'mention_color_other',
       ),
     );
+
+// ---------------------------------------------------------------------------
+// App-wide theme settings (mode + accent), persisted to SharedPreferences.
+// ---------------------------------------------------------------------------
+
+class ThemeModeNotifier extends StateNotifier<ThemeMode> {
+  ThemeModeNotifier() : super(ThemeMode.dark) {
+    _load();
+  }
+
+  static const _key = 'theme_mode_v1';
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_key);
+    state = switch (raw) {
+      'light' => ThemeMode.light,
+      'system' => ThemeMode.system,
+      _ => ThemeMode.dark,
+    };
+  }
+
+  Future<void> set(ThemeMode mode) async {
+    state = mode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_key, mode.name);
+  }
+}
+
+final themeModeProvider = StateNotifierProvider<ThemeModeNotifier, ThemeMode>(
+  (ref) => ThemeModeNotifier(),
+);
+
+const double appTextScaleMin = 0.85;
+const double appTextScaleMax = 1.35;
+const double appTextScaleDefault = 1.0;
+
+/// App-wide text scale factor persisted to SharedPreferences.
+class AppTextScaleNotifier extends StateNotifier<double> {
+  AppTextScaleNotifier() : super(appTextScaleDefault) {
+    _load();
+  }
+
+  static const _key = 'app_text_scale_v1';
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getDouble(_key);
+    if (raw == null) return;
+    state = raw.clamp(appTextScaleMin, appTextScaleMax);
+  }
+
+  Future<void> set(double value) async {
+    final clamped = value.clamp(appTextScaleMin, appTextScaleMax);
+    state = clamped;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_key, clamped);
+  }
+
+  Future<void> reset() => set(appTextScaleDefault);
+}
+
+final appTextScaleProvider =
+    StateNotifierProvider<AppTextScaleNotifier, double>(
+      (ref) => AppTextScaleNotifier(),
+    );
+
+/// User-selected accent colour. `null` means "use brand orange (default)".
+class AccentColorNotifier extends StateNotifier<Color?> {
+  AccentColorNotifier() : super(null) {
+    _load();
+  }
+
+  static const _key = 'accent_color_v1';
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final val = prefs.getInt(_key);
+    if (val == null) return;
+    state = Color.fromARGB(
+      (val >> 24) & 0xFF,
+      (val >> 16) & 0xFF,
+      (val >> 8) & 0xFF,
+      val & 0xFF,
+    );
+  }
+
+  Future<void> set(Color? color) async {
+    state = color;
+    final prefs = await SharedPreferences.getInstance();
+    if (color == null) {
+      await prefs.remove(_key);
+      return;
+    }
+    final a = (color.a * 255).round();
+    final r = (color.r * 255).round();
+    final g = (color.g * 255).round();
+    final b = (color.b * 255).round();
+    await prefs.setInt(_key, (a << 24) | (r << 16) | (g << 8) | b);
+  }
+}
+
+final accentColorProvider = StateNotifierProvider<AccentColorNotifier, Color?>(
+  (ref) => AccentColorNotifier(),
+);

@@ -42,6 +42,9 @@ class CayenneReading {
     required this.displayValue,
     required this.unit,
     required this.rawValue,
+    this.gpsLatitude,
+    this.gpsLongitude,
+    this.gpsAltitude,
   });
 
   final int channel;
@@ -49,6 +52,9 @@ class CayenneReading {
   final String displayValue;
   final String unit;
   final double rawValue;
+  final double? gpsLatitude;
+  final double? gpsLongitude;
+  final double? gpsAltitude;
 
   /// Human-readable label with unit.
   String get formatted =>
@@ -213,6 +219,9 @@ class CayenneLPP {
               '${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}, ${alt.toStringAsFixed(1)}m',
           unit: '',
           rawValue: lat,
+          gpsLatitude: lat,
+          gpsLongitude: lng,
+          gpsAltitude: alt,
         );
 
       case CayenneType.unknown:

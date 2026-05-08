@@ -54,6 +54,128 @@ class StorageService {
   }
 
   // ---------------------------------------------------------------------------
+  // Recent devices — ordered most-recent first, capped at [maxRecentDevices].
+  // ---------------------------------------------------------------------------
+
+  static const _keyRecentDevices = 'recent_devices_v1';
+  static const int maxRecentDevices = 5;
+
+  /// Inserts or moves the device to the front of the recent list, writes the
+  /// legacy single-device keys for backward compat, and persists.
+  /// Returns the updated list (most-recent first).
+  Future<List<LastDevice>> upsertRecentDevice({
+    required String id,
+    required String type,
+    required String name,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Keep legacy keys in sync so loadLastDevice() still works.
+      await prefs.setString(_keyLastDeviceId, id);
+      await prefs.setString(_keyLastDeviceType, type);
+      await prefs.setString(_keyLastDeviceName, name);
+      // Prepend, dedup by id, cap.
+      final existing = _parseRecentDevices(prefs);
+      final updated =
+          [
+            LastDevice(id: id, type: type, name: name),
+            ...existing.where((d) => d.id != id),
+          ].take(maxRecentDevices).toList();
+      await prefs.setString(
+        _keyRecentDevices,
+        jsonEncode(
+          updated
+              .map((d) => {'id': d.id, 'type': d.type, 'name': d.name})
+              .toList(),
+        ),
+      );
+      return updated;
+    } catch (_) {
+      return [LastDevice(id: id, type: type, name: name)];
+    }
+  }
+
+  /// Removes the device with [id] from the recent list and persists.
+  /// Also updates the legacy single-device keys to reflect the new head
+  /// of the list (or clears them if the list becomes empty).
+  /// Returns the updated list.
+  Future<List<LastDevice>> removeRecentDevice(String id) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final existing = _parseRecentDevices(prefs);
+      final updated = existing.where((d) => d.id != id).toList();
+      await prefs.setString(
+        _keyRecentDevices,
+        jsonEncode(
+          updated
+              .map((d) => {'id': d.id, 'type': d.type, 'name': d.name})
+              .toList(),
+        ),
+      );
+      // Sync legacy keys.
+      if (updated.isNotEmpty) {
+        final first = updated.first;
+        await prefs.setString(_keyLastDeviceId, first.id);
+        await prefs.setString(_keyLastDeviceType, first.type);
+        await prefs.setString(_keyLastDeviceName, first.name);
+      } else {
+        await prefs.remove(_keyLastDeviceId);
+        await prefs.remove(_keyLastDeviceType);
+        await prefs.remove(_keyLastDeviceName);
+      }
+      return updated;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Loads the recent-devices list.  On first call after an upgrade migrates
+  /// the legacy single-device keys into a one-element list.
+  Future<List<LastDevice>> loadRecentDevices() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_keyRecentDevices);
+      if (raw != null) return _parseRecentDevices(prefs);
+      // Migration: seed from legacy last_device keys.
+      final id = prefs.getString(_keyLastDeviceId);
+      final type = prefs.getString(_keyLastDeviceType);
+      final name = prefs.getString(_keyLastDeviceName);
+      if (id == null || type == null) return [];
+      final seeded = [LastDevice(id: id, type: type, name: name ?? id)];
+      await prefs.setString(
+        _keyRecentDevices,
+        jsonEncode(
+          seeded
+              .map((d) => {'id': d.id, 'type': d.type, 'name': d.name})
+              .toList(),
+        ),
+      );
+      return seeded;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static List<LastDevice> _parseRecentDevices(SharedPreferences prefs) {
+    try {
+      final raw = prefs.getString(_keyRecentDevices);
+      if (raw == null) return [];
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list
+          .map(
+            (e) => LastDevice(
+              id: e['id'] as String,
+              type: e['type'] as String,
+              name: e['name'] as String,
+            ),
+          )
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Messages  (key = 'contact_<hex6>' or 'ch_<index>')
   // ---------------------------------------------------------------------------
 
@@ -123,7 +245,52 @@ class StorageService {
   // ---------------------------------------------------------------------------
 
   static const _keyChannels = 'channels_v1';
+  static const _keyChannelsV2Prefix = 'channels_v2_';
+  static const _keyMutedChannelsV2Prefix = 'muted_channels_v2_';
 
+  /// Sanitise a device ID for use as a storage key suffix.
+  /// Replaces any non-alphanumeric characters (colons, slashes, etc.) with '_'.
+  static String sanitizeId(String deviceId) =>
+      deviceId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+
+  // ---------------------------------------------------------------------------
+  // Channels — radio-scoped (v2) and legacy global (v1) storage.
+  // ---------------------------------------------------------------------------
+
+  /// Save channels scoped to a specific radio device ID.
+  Future<void> saveChannelsForRadio(
+    String deviceId,
+    List<ChannelInfo> channels,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final json = jsonEncode(channels.map((c) => c.toJson()).toList());
+      await prefs.setString(
+        '$_keyChannelsV2Prefix${sanitizeId(deviceId)}',
+        json,
+      );
+    } catch (_) {}
+  }
+
+  /// Load channels scoped to a specific radio device ID.
+  /// Falls back to the legacy global key on first use so existing users don't
+  /// lose their channel list after upgrading.
+  Future<List<ChannelInfo>> loadChannelsForRadio(String deviceId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final scopedKey = '$_keyChannelsV2Prefix${sanitizeId(deviceId)}';
+      final json = prefs.getString(scopedKey) ?? prefs.getString(_keyChannels);
+      if (json == null) return [];
+      final list = jsonDecode(json) as List<dynamic>;
+      return list
+          .map((e) => ChannelInfo.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // Legacy global channel methods kept for migration / offline startup.
   Future<void> saveChannels(List<ChannelInfo> channels) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -143,6 +310,39 @@ class StorageService {
           .toList();
     } catch (_) {
       return [];
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Muted channels — radio-scoped (v2) storage.
+  // ---------------------------------------------------------------------------
+
+  Future<void> saveMutedChannelsForRadio(
+    String deviceId,
+    Set<int> indices,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        '$_keyMutedChannelsV2Prefix${sanitizeId(deviceId)}',
+        indices.map((i) => '$i').toList(),
+      );
+    } catch (_) {}
+  }
+
+  /// Load muted channel indices for a specific radio device.
+  /// Falls back to the legacy global key on first use.
+  Future<Set<int>> loadMutedChannelsForRadio(String deviceId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final scopedKey = '$_keyMutedChannelsV2Prefix${sanitizeId(deviceId)}';
+      final list =
+          prefs.getStringList(scopedKey) ??
+          prefs.getStringList('muted_channels_v1') ??
+          [];
+      return list.map(int.parse).toSet();
+    } catch (_) {
+      return {};
     }
   }
 
@@ -240,16 +440,13 @@ class StorageService {
   }
 
   // ---------------------------------------------------------------------------
-  // Favorites (app-side, not stored on radio)
+  // Favorites — legacy app-local set. Superseded by the radio's contact
+  // `flags` byte (bit 0). These helpers remain only for one-shot migration
+  // of pre-fix data; see `_migrateLegacyFavorites` in radio_providers.dart.
   // ---------------------------------------------------------------------------
 
-  Future<void> saveFavorites(Set<String> keyHexSet) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_keyFavorites, jsonEncode(keyHexSet.toList()));
-    } catch (_) {}
-  }
-
+  /// Reads the legacy app-local favourites set (hex public keys). Returns an
+  /// empty set after migration has run.
   Future<Set<String>> loadFavorites() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -260,6 +457,15 @@ class StorageService {
     } catch (_) {
       return {};
     }
+  }
+
+  /// Removes the legacy favourites key once migration has pushed the bits
+  /// to the radio.
+  Future<void> clearFavorites() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keyFavorites);
+    } catch (_) {}
   }
 
   // ---------------------------------------------------------------------------
@@ -350,12 +556,14 @@ class NotificationSettings {
         privateMessages: (json['private_messages'] as bool?) ?? true,
         channelMessages: (json['channel_messages'] as bool?) ?? true,
         onlyWhenBackground: (json['only_when_background'] as bool?) ?? false,
+        channelMentionsOnly: (json['channel_mentions_only'] as bool?) ?? false,
       );
   const NotificationSettings({
     this.enabled = true,
     this.privateMessages = true,
     this.channelMessages = true,
     this.onlyWhenBackground = false,
+    this.channelMentionsOnly = false,
   });
 
   /// Master switch — disables all notifications when false.
@@ -370,17 +578,22 @@ class NotificationSettings {
   /// Only fire notifications when the app is in the background.
   final bool onlyWhenBackground;
 
+  /// When true, only notify for channel messages that mention the user.
+  final bool channelMentionsOnly;
+
   NotificationSettings copyWith({
     bool? enabled,
     bool? privateMessages,
     bool? channelMessages,
     bool? onlyWhenBackground,
+    bool? channelMentionsOnly,
   }) {
     return NotificationSettings(
       enabled: enabled ?? this.enabled,
       privateMessages: privateMessages ?? this.privateMessages,
       channelMessages: channelMessages ?? this.channelMessages,
       onlyWhenBackground: onlyWhenBackground ?? this.onlyWhenBackground,
+      channelMentionsOnly: channelMentionsOnly ?? this.channelMentionsOnly,
     );
   }
 
@@ -389,6 +602,7 @@ class NotificationSettings {
     'private_messages': privateMessages,
     'channel_messages': channelMessages,
     'only_when_background': onlyWhenBackground,
+    'channel_mentions_only': channelMentionsOnly,
   };
 }
 

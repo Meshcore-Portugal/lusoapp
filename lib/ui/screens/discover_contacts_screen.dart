@@ -7,23 +7,16 @@ import 'package:go_router/go_router.dart';
 import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
-import '../theme.dart';
 
-/// Contacts discovered via mesh adverts but not (yet) saved to the radio.
+/// Contacts heard via mesh adverts (whether or not stored on the radio).
+/// The contacts screen shows only radio-stored contacts; this screen shows
+/// everything heard on the mesh so the user can decide what to save.
 final discoveredContactsProvider = Provider<List<Contact>>((ref) {
   final allContacts = ref.watch(contactsProvider);
-  final service = ref.watch(radioServiceProvider);
 
-  // Advert-only contacts are those in local cache but not confirmed on radio.
-  if (service == null || service.contacts.isEmpty) {
-    return []; // No radio connected or no radio contacts yet.
-  }
-
-  final radioKeys = service.contacts.map((c) => _hex32(c.publicKey)).toSet();
+  // Show every contact heard via an advert this session (lastAdvertTimestamp > 0).
   final discovered =
-      allContacts
-          .where((c) => !radioKeys.contains(_hex32(c.publicKey)))
-          .toList();
+      allContacts.where((c) => c.lastAdvertTimestamp > 0).toList();
 
   // Sort by last heard (newest first).
   discovered.sort(
@@ -37,6 +30,17 @@ final discoveredContactsProvider = Provider<List<Contact>>((ref) {
 
 String _hex32(Uint8List key) =>
     key.take(32).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+
+class _CleanOption {
+  const _CleanOption({
+    required this.icon,
+    required this.label,
+    this.destructive = false,
+  });
+  final IconData icon;
+  final String label;
+  final bool destructive;
+}
 
 /// Discover new contacts via mesh advertisements.
 class DiscoverContactsScreen extends ConsumerStatefulWidget {
@@ -66,10 +70,204 @@ class _DiscoverContactsScreenState
     super.dispose();
   }
 
+  /// Opens a bottom sheet with several "what to clean" options. Each option
+  /// shows a count of matching contacts; tapping one runs the confirmation
+  /// dialog and removes them. Contacts saved on the radio are always kept.
+  Future<void> _openCleanSheet(
+    BuildContext context,
+    List<Contact> discovered,
+  ) async {
+    final l10n = context.l10n;
+    final radioKeys = ref.read(radioContactsSnapshotProvider);
+    final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    // Pre-compute the local-only set once.
+    final localOnly =
+        discovered
+            .where((c) => !radioKeys.contains(_hex32(c.publicKey)))
+            .toList();
+
+    if (localOnly.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.discoverCleanNothing)));
+      return;
+    }
+
+    // ageSec == null means no advert ever heard.
+    int? ageSec(Contact c) {
+      final ts = c.lastModified ?? c.lastAdvertTimestamp;
+      if (ts <= 0) return null;
+      return nowSec - ts;
+    }
+
+    final options = <(_CleanOption, List<Contact>)>[
+      (
+        _CleanOption(
+          icon: Icons.timer_outlined,
+          label: l10n.discoverCleanOption48h,
+        ),
+        localOnly.where((c) => (ageSec(c) ?? 1 << 30) >= 48 * 3600).toList(),
+      ),
+      (
+        _CleanOption(
+          icon: Icons.history_toggle_off,
+          label: l10n.discoverCleanOption7d,
+        ),
+        localOnly
+            .where((c) => (ageSec(c) ?? 1 << 30) >= 7 * 24 * 3600)
+            .toList(),
+      ),
+      (
+        _CleanOption(icon: Icons.schedule, label: l10n.discoverCleanOption30d),
+        localOnly
+            .where((c) => (ageSec(c) ?? 1 << 30) >= 30 * 24 * 3600)
+            .toList(),
+      ),
+      (
+        _CleanOption(
+          icon: Icons.signal_cellular_off,
+          label: l10n.discoverCleanOptionNever,
+        ),
+        localOnly.where((c) => ageSec(c) == null).toList(),
+      ),
+      (
+        _CleanOption(
+          icon: Icons.delete_sweep_outlined,
+          label: l10n.discoverCleanOptionAll,
+          destructive: true,
+        ),
+        localOnly,
+      ),
+    ];
+
+    final chosen = await showModalBottomSheet<List<Contact>>(
+      context: context,
+      showDragHandle: true,
+      builder:
+          (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                  child: Text(
+                    l10n.discoverCleanSheetTitle,
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Text(
+                    l10n.discoverCleanSheetSubtitle,
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                ),
+                const Divider(height: 1),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final (opt, matches) in options)
+                          ListTile(
+                            enabled: matches.isNotEmpty,
+                            leading: Icon(
+                              opt.icon,
+                              color:
+                                  opt.destructive
+                                      ? Theme.of(ctx).colorScheme.error
+                                      : null,
+                            ),
+                            title: Text(
+                              opt.label,
+                              style: TextStyle(
+                                color:
+                                    opt.destructive
+                                        ? Theme.of(ctx).colorScheme.error
+                                        : null,
+                              ),
+                            ),
+                            trailing: Text(
+                              '${matches.length}',
+                              style: Theme.of(ctx).textTheme.bodyMedium,
+                            ),
+                            onTap:
+                                matches.isEmpty
+                                    ? null
+                                    : () => Navigator.pop(ctx, matches),
+                          ),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+    );
+
+    if (chosen == null || chosen.isEmpty || !context.mounted) return;
+    await _confirmAndRemove(context, chosen);
+  }
+
+  /// Asks for confirmation, then removes the given set of contacts.
+  Future<void> _confirmAndRemove(
+    BuildContext context,
+    List<Contact> targets,
+  ) async {
+    final l10n = context.l10n;
+    final keysHex = targets.map((c) => _hex32(c.publicKey)).toSet();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(l10n.discoverCleanTitle),
+            content: Text(l10n.discoverCleanBody(keysHex.length)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(l10n.commonCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(l10n.commonDelete),
+              ),
+            ],
+          ),
+    );
+    if (confirm != true || !context.mounted) return;
+
+    final notifier = ref.read(contactsProvider.notifier);
+    final beforeTotal = ref.read(contactsProvider).length;
+    final radioKeys = ref.read(radioContactsSnapshotProvider);
+    // Defensive: never delete a contact that the radio has stored.
+    final safeKeys = keysHex.difference(radioKeys);
+    final removed = notifier.removeManyByKeyHex(safeKeys);
+    final afterTotal = ref.read(contactsProvider).length;
+    debugPrint(
+      '[Discover] clean: requested=${keysHex.length} '
+      'safe=${safeKeys.length} removed=$removed '
+      'state $beforeTotal->$afterTotal radioSnapshot=${radioKeys.length}',
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${l10n.discoverCleanDone(removed)}  '
+          '(req ${keysHex.length} / safe ${safeKeys.length} / '
+          'radio ${radioKeys.length})',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final discovered = ref.watch(discoveredContactsProvider);
-    final theme = Theme.of(context);
 
     List<Contact> filtered = discovered;
     if (_query.isNotEmpty) {
@@ -96,11 +294,18 @@ class _DiscoverContactsScreenState
           children: [
             Text(context.l10n.discoverTitle),
             Text(
-              'Anúncios Recentes',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
+              context.l10n.discoverSubtitle,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: context.l10n.discoverCleanTooltip,
+            icon: const Icon(Icons.cleaning_services_outlined),
+            onPressed: () => _openCleanSheet(context, discovered),
+          ),
+        ],
         elevation: 0,
       ),
       body: Column(
@@ -175,8 +380,8 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             hasAny && query.isNotEmpty
-                ? 'Nenhum contacto encontrado'
-                : 'Nenhum contacto descoberto',
+                ? context.l10n.discoverEmpty
+                : context.l10n.discoverNone,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: theme.colorScheme.onSurface.withAlpha(120),
             ),
@@ -184,8 +389,8 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             hasAny && query.isNotEmpty
-                ? 'Tente uma busca diferente'
-                : 'Contactos aparecem enquanto transmitem na rede',
+                ? context.l10n.discoverEmptyHint
+                : context.l10n.discoverNoneHint,
             style: theme.textTheme.bodySmall,
           ),
         ],
@@ -202,7 +407,8 @@ class _DiscoveredContactTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final ts = contact.lastModified ?? contact.lastAdvertTimestamp;
-    final lastSeen = ts > 0 ? _formatTimestamp(ts) : 'Nunca';
+    final lastSeen =
+        ts > 0 ? _formatTimestamp(context, ts) : context.l10n.discoverNever;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -220,7 +426,7 @@ class _DiscoveredContactTile extends ConsumerWidget {
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         subtitle: Text(
-          'Ouvido: $lastSeen  |  Caminho: ${_pathLabel(contact.pathLen)}  |  Saltos: ${contact.pathLen}',
+          '${context.l10n.discoverHeard}: $lastSeen  |  ${context.l10n.commonPath}: ${_pathLabel(context, contact.pathLen)}',
           style: theme.textTheme.bodySmall,
         ),
         trailing: const Icon(Icons.arrow_forward, size: 18),
@@ -286,7 +492,7 @@ class _DiscoveredContactTile extends ConsumerWidget {
                                   ),
                                 ),
                                 Text(
-                                  '${_typeLabel(contact.type)}  •  ${contact.shortId}',
+                                  '${_typeLabel(context, contact.type)}  •  ${contact.shortId}',
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.onSurface
                                         .withAlpha(130),
@@ -303,22 +509,33 @@ class _DiscoveredContactTile extends ConsumerWidget {
 
                       // Info section
                       _infoRow(
-                        'Nome Anunciado',
-                        contact.name.isNotEmpty ? contact.name : 'Sem nome',
+                        context.l10n.discoverAnnouncedName,
+                        contact.name.isNotEmpty
+                            ? contact.name
+                            : context.l10n.discoverNoName,
                         theme,
                       ),
                       const SizedBox(height: 8),
-                      _infoRow('Tipo', _typeLabel(contact.type), theme),
+                      _infoRow(
+                        context.l10n.commonType,
+                        _typeLabel(context, contact.type),
+                        theme,
+                      ),
                       const SizedBox(height: 8),
                       _infoRow(
-                        'Ouvido',
+                        context.l10n.discoverHeard,
                         _formatTimestamp(
+                          context,
                           contact.lastModified ?? contact.lastAdvertTimestamp,
                         ),
                         theme,
                       ),
                       const SizedBox(height: 8),
-                      _infoRow('Caminho', '${contact.pathLen} saltos', theme),
+                      _infoRow(
+                        context.l10n.commonPath,
+                        _pathLabel(context, contact.pathLen),
+                        theme,
+                      ),
                       const SizedBox(height: 16),
                       const Divider(),
                     ],
@@ -437,35 +654,39 @@ class _DiscoveredContactTile extends ConsumerWidget {
     );
   }
 
-  String _typeLabel(int type) {
+  String _typeLabel(BuildContext context, int type) {
     switch (type) {
       case 1:
-        return 'Companheiro';
+        return context.l10n.discoverTypeCompanion;
       case 2:
-        return 'Repetidor';
+        return context.l10n.commonRepeater;
       case 3:
-        return 'Sala';
+        return context.l10n.commonRoom;
       case 4:
-        return 'Sensor';
+        return context.l10n.commonSensor;
       default:
-        return 'Desconhecido';
+        return context.l10n.discoverTypeUnknown;
     }
   }
 
-  String _pathLabel(int pathLen) {
-    if (pathLen == 0) return 'Directo';
-    if (pathLen == 1) return 'Próximo';
-    return '$pathLen hops';
+  String _pathLabel(BuildContext context, int pathLen) {
+    if (pathLen == 0xFF) return context.l10n.commonFlood;
+    final hops = pathLen & 0x3F; // lower 6 bits = actual hop count
+    if (hops == 0) return context.l10n.commonDirect;
+    if (hops == 1) return '1 ${context.l10n.commonSingularHop}';
+    return '$hops ${context.l10n.commonPluralHops}';
   }
 
-  String _formatTimestamp(int ts) {
+  String _formatTimestamp(BuildContext context, int ts) {
     final dt = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
     final now = DateTime.now();
     final diff = now.difference(dt);
-    if (diff.inMinutes < 1) return 'Agora';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m atrás';
-    if (diff.inHours < 24) return '${diff.inHours}h atrás';
-    return '${diff.inDays}d atrás';
+    if (diff.inMinutes < 1) return context.l10n.discoverJustNow;
+    if (diff.inMinutes < 60) {
+      return context.l10n.discoverMinutesAgo(diff.inMinutes);
+    }
+    if (diff.inHours < 24) return context.l10n.discoverHoursAgo(diff.inHours);
+    return context.l10n.discoverDaysAgo(diff.inDays);
   }
 
   IconData _avatarIcon(Contact c) =>

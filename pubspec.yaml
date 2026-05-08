@@ -1,7 +1,7 @@
 name: lusoapp
 description: "MeshCore Companion App - MeshCore Portugal"
 publish_to: "none"
-version: 0.4.1+7
+version: 0.4.3+15
 
 environment:
   sdk: ^3.7.0
@@ -15,10 +15,11 @@ dependencies:
 
   # BLE
   flutter_blue_plus: ^1.35.0
-  permission_handler: ^11.3.1
+  permission_handler: ^12.0.1
 
-  # Serial / USB — flutter_libserialport for Windows/Linux/macOS (COM ports)
-  # usb_serial kept for Android USB OTG (Phase 2)
+  # Serial / USB — flutter_libserialport for Windows/Linux COM ports
+  #   .so files are excluded from the Android APK via build.gradle.kts (not 16 KB page-aligned)
+  #   Runtime guards in serial_transport_native.dart prevent any usage on Android
   flutter_libserialport: ^0.6.0
 
   # State management
@@ -39,6 +40,7 @@ dependencies:
   # QR code
   qr_flutter: ^4.1.0
   mobile_scanner: ^6.0.0
+  image_picker: ^1.1.0
 
   # Cryptography (SHA-256 for hashtag channel key derivation)
   crypto: ^3.0.3
@@ -50,10 +52,10 @@ dependencies:
   flutter_map: ^8.1.0
   flutter_map_tile_caching: ^10.1.1
   latlong2: ^0.9.1
-  geolocator: ^13.0.1
+  geolocator: ^14.0.2
 
   # Android home screen widget bridge
-  home_widget: ^0.6.0
+  home_widget: ^0.9.1
 
   # Timezone support (for Plan 3-3-3 scheduled notifications)
   timezone: ^0.9.0
@@ -64,8 +66,13 @@ dependencies:
   convert: ^3.1.2
   collection: ^1.19.1
   logger: ^2.5.0
-  share_plus: ^12.0.1
-  package_info_plus: ^8.3.0
+  share_plus: ^12.0.2
+  package_info_plus: ^9.0.0
+  url_launcher: ^6.3.1
+
+  # Windows BLE — win_ble uses WinRT via BLEServer.exe subprocess.
+  # Guarded by Platform.isWindows at all call sites; compiles on all platforms.
+  win_ble: ^1.1.1
 
 dev_dependencies:
   flutter_test:
@@ -89,6 +96,11 @@ dependency_overrides:
     path: local_packages/permission_handler_windows
   geolocator_windows:
     path: local_packages/geolocator_windows
+  # flutter_map_tile_caching 10.1.1 pins objectbox ^4.1.0, but objectbox 5.x
+  # is the first release with arm64 iOS 26 simulator slices. Pinned to 5.0.4
+  # because 5.1+ requires flat_buffers 25.x which conflicts with FMTC.
+  objectbox: 5.0.4
+  objectbox_flutter_libs: 5.0.4
 
 flutter:
   uses-material-design: true

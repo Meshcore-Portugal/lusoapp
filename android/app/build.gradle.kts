@@ -20,7 +20,8 @@ plugins {
 android {
     namespace = "pt.meshcore.lusoapp"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // NDK r28+ compiles 16 KB ELF-aligned .so files by default (Google Play requirement since Nov 2025)
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
@@ -66,6 +67,23 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
             isMinifyEnabled = true
+        }
+    }
+
+    // AGP 8.5.1+ with useLegacyPackaging=false produces uncompressed .so files
+    // zip-aligned at 16 KB boundaries — required by Google Play for 16 KB page size support.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+            // flutter_libserialport .so files are not 16 KB page-aligned.
+            // Serial ports are not used on Android (BLE is used instead), so we
+            // exclude them to keep the APK compliant with Google Play requirements.
+            excludes += setOf(
+                "lib/arm64-v8a/libserialport.so",
+                "lib/armeabi-v7a/libserialport.so",
+                "lib/x86_64/libserialport.so",
+                "lib/x86/libserialport.so"
+            )
         }
     }
 }

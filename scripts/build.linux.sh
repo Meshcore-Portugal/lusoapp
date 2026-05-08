@@ -55,7 +55,7 @@ if ! command -v flutter >/dev/null 2>&1; then
     exit 1
 fi
 
-log "lusoapp v$VERSION — Linux ${BUILD_MODE^} Build"
+log "lusoapp v$VERSION — Linux $BUILD_MODE build"
 log "========================================"
 
 log "Getting dependencies..."

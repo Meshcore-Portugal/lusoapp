@@ -36,7 +36,7 @@
 
 ---
 
-### Phase 2 — Persistence & Reliability (Current: v0.2.x)
+### Phase 2 — Persistence & Reliability (Complete: v0.2.x)
 
 **Goal:** Message history, offline support, robust reconnection.
 
@@ -75,7 +75,7 @@
 
 ---
 
-### Phase 3 — Advanced Features (v0.3.x)
+### Phase 3 — Advanced Features (Complete: v0.3.x)
 
 **Goal:** Full companion app parity with richer UX.
 
@@ -116,17 +116,56 @@
 - [ ] Multi-radio support
   - [ ] Connect to multiple radios simultaneously
   - [ ] Radio selector in UI
+- [x] Discover Contacts screen
+  - [x] Lists all mesh-heard contacts (via advert timestamps) not yet in radio storage
+  - [x] Search / filter, add-to-radio, send message, join room actions
+- [x] Noise Floor / RSSI real-time chart
+  - [x] Polls `CMD_GET_STATS` (radio stats) every 2 s
+  - [x] Dual-series area chart (RSSI + Noise Floor, −120…−60 dBm range), toggle each series
+- [x] RX Log screen + PCAP export
+  - [x] Captures raw `0x88 LOG_RX` frames in a live scrolling list
+  - [x] Exports captured frames as `.pcap` file via `share_plus`
+- [x] Plan 3-3-3 emergency CQ tool
+  - [x] Configurable station name, city, locality
+  - [x] Auto-sends CQ on mesh channel during configured event window with live countdown
+  - [x] Parses incoming CQ messages and displays heard-stations list
+- [x] Android home screen widget
+  - [x] Shows radio name, connection state, battery %, contact/channel counts, last-updated timestamp
+  - [x] Updated on every state change via `WidgetService`
+  - [x] Quick-action buttons: 📡 Send Advert · 💬 Chats · 🗺 Map · 🔌 Connect (via deep-link URIs handled by `HomeWidget.widgetClicked` stream)
+  - [x] 🆘 SOS button broadcasts the user-flagged emergency canned message on channel 0
+- [x] Canned messages library
+  - [x] Persisted via `cannedMessagesProvider` (SharedPreferences); 8 ham/mesh defaults seeded on first launch (SOS, QRT, QRX, 73, CQ, OK, QTH?, ETA)
+  - [x] Manage in Settings → Mensagens rápidas (add / edit / delete / reorder / reset, single emergency-flag enforced)
+  - [x] Quick-pick ⚡ icon in private + channel chat composers inserts text into the input
+- [x] User-controlled GPS sharing
+  - [x] **Off by default** — user explicitly opts in via Settings → Partilha de GPS
+  - [x] Three modes: `off` / `manual` (one-shot from Map FAB or Settings) / `auto` (configurable 1–60 min timer)
+  - [x] Privacy precision chips: Exact (~1 m) · Rough (±100 m) · Vague (±1 km) — applied before pushing
+  - [x] Pushes phone GPS via `CMD_SET_ADVERT_LATLON 0x0E` (`radioService.setLocation`) so the radio's outgoing adverts carry the location flag
+  - [x] Toggling `off` automatically clears coords on the radio (sends 0,0 sentinel) and stops the timer
+  - [x] Settings card shows live status badge (DESLIGADA / MANUAL / AUTOMÁTICA), last-shared timestamp + coords, and an explicit privacy disclaimer
+  - [x] Map screen exposes a green "Partilhar agora" FAB **only when sharing is enabled**, never auto-prompting for location
+  - [x] **Move-aware Auto mode** — configurable 0–1000 m threshold (default 50 m); skips redundant pushes when the phone hasn't moved, saving LoRa air-time
+  - [x] **Home-screen widget badge** — green 📍 dot appears in the widget header whenever sharing is enabled, hidden otherwise
+  - [x] **Interactive radio policy toggle** — Switch surfaces the radio's `adv_loc_policy` byte (parsed from `RESP_SELF_INFO` offset 44) and writes it via `CMD_SET_OTHER_PARAMS` (0x26), round-tripping `manual_add_contacts`, `telemetry_mode` and `multi_acks` unchanged so only the location policy is mutated
+- [x] Per-contact map opt-in
+  - [x] `mapHiddenContactsProvider` (SharedPreferences-backed Set of pubKey hex)
+  - [x] Contact bottom sheet on the map exposes a "Mostrar no mapa" switch — user can hide any contact from the map even if their adverts include GPS
+  - [x] Hidden contacts are filtered out of the marker layer, cluster, and fit-all bounds
+- [x] Event Program screen (hidden)
+  - [x] Hardcoded MeshCore PT summit schedule; route wired but tile disabled in Apps screen
 
 ---
 
-### Phase 4 — Community & Polish (v0.4.x)
+### Phase 4 — Community & Polish (Current: v0.4.x)
 
 **Goal:** Community features, localization, and release readiness.
 
-- [ ] Full i18n framework (all UI text currently hard-coded PT-PT literals; no ARB files)
-  - [ ] Portuguese (Portugal) — primary (inline strings to be externalized)
-  - [ ] English — secondary
-  - [ ] Spanish — community contribution
+- [x] Full i18n framework (ARB files generated, `app_localizations` wired via `context.l10n`)
+  - [x] Portuguese (Portugal) — primary
+  - [x] English — secondary
+  - [x] Spanish — community contribution
 - [ ] QR code sharing
   - [x] Share own contact via QR (Settings screen)
   - [x] Share any contact via QR (contact tile icon)
@@ -134,8 +173,8 @@
   - [x] Scan QR to add contact
   - [x] Scan QR to add/configure channel
 - [ ] Theme customization
-  - [ ] Light/dark mode toggle (dark theme defined, no user toggle yet)
-  - [ ] Custom accent colors
+  - [x] Light/dark mode toggle (System / Light / Dark via `themeModeProvider`, persisted to SharedPreferences; selectable in Settings → Appearance)
+  - [x] Custom accent colors (`accentColorProvider` overrides Material `colorScheme.primary`; 16-swatch picker in Settings → Appearance with one-tap reset to brand orange)
 - [ ] Accessibility
   - [ ] Screen reader support
   - [ ] High contrast mode
@@ -151,12 +190,12 @@
 
 **Goal:** Mesh network intelligence and advanced radio features.
 
-- [ ] Mesh topology viewer
-  - [ ] Visual network graph
-  - [ ] Node discovery timeline
-- [ ] Repeater management
-  - [ ] View repeater status
-  - [ ] Configure repeater settings (if admin)
+- [x] Mesh topology viewer
+  - [x] Visual network graph (interactive pan/zoom; concentric rings by hop distance; SNR-coded edges from trace history; tap-to-contact sheet)
+  - [x] Node discovery timeline (contacts sorted by last-heard timestamp)
+- [x] Repeater management
+  - [x] View repeater status
+  - [x] Configure repeater settings (if admin)
 - [ ] Channel management
   - [x] Create/edit channels on radio (FAB + bottom sheet, Phase 2)
   - [ ] Channel encryption key rotation UI
@@ -166,10 +205,10 @@
 - [ ] Power management profiles
   - [ ] Low-power mode scheduling
   - [ ] TX power by time-of-day
-- [ ] Data export
-  - [ ] CSV export of contacts and messages
-  - [ ] KML export for map data
-  - [ ] Protocol log export for debugging
+- [x] Data export
+  - [x] CSV export of contacts and messages
+  - [x] KML export for map data
+  - [x] Protocol log export for debugging (RX Log + PCAP — implemented in Phase 3)
 
 ---
 
@@ -181,7 +220,7 @@
   - [ ] Incoming message webhooks
   - [ ] IFTTT/Home Assistant integration
 - [ ] Widget support
-  - [ ] Android home screen widget (last messages, battery)
+  - [x] Android home screen widget (implemented in Phase 3)
   - [ ] iOS widget
 - [ ] Desktop support
   - [ ] Windows (serial + BLE)
@@ -197,30 +236,30 @@
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                   Flutter App                     │
+│                   Flutter App                   │
 │  ┌──────────┐  ┌──────────┐  ┌───────────────┐  │
 │  │  UI/UX   │  │ Providers│  │  Local DB     │  │
 │  │ (Screens)│◄─┤(Riverpod)│◄─┤  (Isar)       │  │
 │  └──────────┘  └────┬─────┘  └───────────────┘  │
-│                     │                             │
-│              ┌──────┴──────┐                      │
-│              │RadioService │                      │
-│              │(Coordinator)│                      │
-│              └──────┬──────┘                      │
-│                     │                             │
-│           ┌─────────┴─────────┐                   │
-│           │  Protocol Layer   │                   │
-│           │ ┌───────┐ ┌─────┐ │                   │
-│           │ │Encoder│ │Decod│ │                   │
-│           │ └───────┘ └─────┘ │                   │
-│           └─────────┬─────────┘                   │
-│                     │                             │
-│           ┌─────────┴─────────┐                   │
-│           │  Transport Layer  │                   │
-│           │ ┌─────┐ ┌──────┐ │                   │
-│           │ │ BLE │ │Serial│ │                   │
-│           │ └─────┘ └──────┘ │                   │
-│           └───────────────────┘                   │
+│                     │                           │
+│              ┌──────┴──────┐                    │
+│              │RadioService │                    │
+│              │(Coordinator)│                    │
+│              └──────┬──────┘                    │
+│                     │                           │
+│           ┌─────────┴─────────┐                 │
+│           │  Protocol Layer   │                 │
+│           │ ┌───────┐ ┌─────┐ │                 │
+│           │ │Encoder│ │Decod│ │                 │
+│           │ └───────┘ └─────┘ │                 │
+│           └─────────┬─────────┘                 │
+│                     │                           │
+│           ┌─────────┴─────────┐                 │
+│           │  Transport Layer  │                 │
+│           │ ┌─────┐ ┌──────┐  │                 │
+│           │ │ BLE │ │Serial│  │                 │
+│           │ └─────┘ └──────┘  │                 │
+│           └───────────────────┘                 │
 └─────────────────────────────────────────────────┘
                      │
                      ▼

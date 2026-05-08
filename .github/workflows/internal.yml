@@ -1,4 +1,4 @@
-name: Build and Pre-Release
+name: Open testing track release
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: prerelease-${{ github.ref_name }}
+  group: internal-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -47,9 +47,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.pub-cache
-          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          key: ${{ runner.os }}-internal-${{ hashFiles('**/pubspec.lock') }}
           restore-keys: |
-            ${{ runner.os }}-pub-
+            ${{ runner.os }}-internal-
 
       - name: Decode Keystore
         run: |
@@ -78,22 +78,26 @@ jobs:
         id: resolve_version
         run: |
           version=$(grep '^version: ' pubspec.yaml | cut -d ' ' -f 2 | tr -d '\r')
-
-          if git ls-remote --tags origin "refs/tags/v${version}" | grep -q .; then
-            version="${version}-build-${{ github.run_number }}"
-          fi
+          version="${version%%+*}"
+          short_sha=$(git rev-parse --short HEAD)
+          version="${version}-dev-${short_sha}"
 
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "VERSION=${version}" >> "$GITHUB_ENV"
 
       - name: Upload to Play Store (Internal Test)
         id: play_upload
-        uses: r0adkll/upload-google-play@v1
+        uses: r0adkll/upload-google-play@7f5b759879c088a86faf85d18779f7f14e79a086
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: pt.meshcore.lusoapp
           releaseFiles: build/dist/*.aab
-          track: internal
+          tracks: beta,alpha,internal
+          status: completed
+
+      - name: Cleanup
+        if: ${{ always() }}
+        run: rm -f android/key.properties android/app/keystore.jks
 
   build_web:
     runs-on: ubuntu-latest
@@ -113,9 +117,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.pub-cache
-          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          key: ${{ runner.os }}-internal-${{ hashFiles('**/pubspec.lock') }}
           restore-keys: |
-            ${{ runner.os }}-pub-
+            ${{ runner.os }}-internal-
 
       - name: Run Web build script
         run: bash scripts/build.web.sh

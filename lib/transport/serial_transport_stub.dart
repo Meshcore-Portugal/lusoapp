@@ -43,4 +43,7 @@ class SerialTransport implements RadioTransport {
   static Future<List<RadioDevice>> listDevices() async => [];
 
   static Future<SerialTransport?> fromDeviceId(String portName) async => null;
+
+  /// Always false on non-web platforms — port registry is a web-only concept.
+  static bool isRegistered(String portId) => false;
 }

@@ -1,12 +1,10 @@
 {
   "@@locale": "en",
-
   "navChannels": "Channels",
   "navContacts": "Contacts",
   "navMap": "Map",
   "navApps": "Apps",
   "navSettings": "Settings",
-
   "commonSave": "Save",
   "commonSaving": "Saving...",
   "commonCancel": "Cancel",
@@ -20,6 +18,101 @@
   "commonShare": "Share",
   "commonCopy": "Copy",
   "commonRename": "Rename",
+  "commonReset": "Reset",
+  "commonJustNow": "just now",
+  "commonMinutesAgo": "{minutes} min ago",
+  "@commonMinutesAgo": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "commonHoursAgo": "{hours} h ago",
+  "@commonHoursAgo": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "gpsSharingTitle": "GPS sharing",
+  "gpsSharingSubtitle": "You decide whether your location is broadcast in the radio's adverts. Off by default.",
+  "gpsSharingStatusOff": "OFF",
+  "gpsSharingStatusManual": "MANUAL",
+  "gpsSharingStatusAuto": "AUTO",
+  "gpsSharingModeOff": "Off",
+  "gpsSharingModeManual": "Manual",
+  "gpsSharingModeAuto": "Auto",
+  "gpsSharingPrecisionTitle": "Sent precision",
+  "gpsSharingPrecisionExact": "Exact",
+  "gpsSharingPrecisionRough": "Rough",
+  "gpsSharingPrecisionVague": "Vague",
+  "gpsSharingIntervalLabel": "Update interval",
+  "gpsSharingShareNow": "Share now",
+  "gpsSharingClearNow": "Clear from radio",
+  "gpsSharingClearedOnRadio": "Location cleared from the radio.",
+  "gpsSharingPrivacyDisclaimer": "Your position will be included in LoRa adverts your radio transmits and may be visible to other nodes. Only enable this if you accept sharing it.",
+  "gpsSharingLastShared": "Shared {ago} — {lat}, {lon}",
+  "@gpsSharingLastShared": {
+    "placeholders": {
+      "ago": {},
+      "lat": {},
+      "lon": {}
+    }
+  },
+  "gpsSharingOutcomeOk": "✅ Location sent: {lat}, {lon}",
+  "@gpsSharingOutcomeOk": {
+    "placeholders": {
+      "lat": {},
+      "lon": {}
+    }
+  },
+  "gpsSharingOutcomeCleared": "Location cleared from radio.",
+  "gpsSharingOutcomeDisabled": "GPS sharing is off in Settings.",
+  "gpsSharingOutcomeNoPerm": "Location permission denied.",
+  "gpsSharingOutcomeServiceOff": "Phone location service disabled.",
+  "gpsSharingOutcomeNoFix": "No GPS fix available.",
+  "gpsSharingOutcomeDisconnected": "Radio disconnected — connect first.",
+  "gpsSharingOutcomeFailed": "Failed to send location.",
+  "gpsSharingOutcomeSkipped": "Position unchanged — transmit skipped.",
+  "gpsSharingMinMoveLabel": "Minimum movement",
+  "gpsSharingMinMoveAlways": "Always send",
+  "gpsSharingMinMoveHint": "In Auto mode, only push a new fix if you have moved at least this far since the last send. Saves LoRa air-time.",
+  "gpsSharingAdvPolicyTitle": "Broadcast location in adverts",
+  "gpsSharingAdvPolicyNever": "Off — your adverts will not include coordinates.",
+  "gpsSharingAdvPolicyAlways": "On — every advert will include the radio's last known location.",
+  "gpsSharingAdvPolicyUnknown": "Radio policy byte {value} — unknown value.",
+  "@gpsSharingAdvPolicyUnknown": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "mapVisibilityShowTitle": "Show on map",
+  "mapVisibilityShowSubtitle": "Hide this contact from your map, even if its adverts include coordinates.",
+  "cannedMessagesTitle": "Canned messages",
+  "cannedMessagesSubtitle": "Library of pre-written replies to send with one tap (or from the widget's SOS button).",
+  "cannedMessagesAdd": "Add message",
+  "cannedMessagesAddTitle": "New canned message",
+  "cannedMessagesEditTitle": "Edit canned message",
+  "cannedMessagesEmpty": "No saved messages. Tap + to add one.",
+  "cannedMessagesReset": "Reset to defaults",
+  "cannedMessagesResetTitle": "Reset messages?",
+  "cannedMessagesResetConfirm": "You'll lose all changes and restore the original list.",
+  "cannedMessagesDeleteTitle": "Delete message?",
+  "cannedMessagesDeleteConfirm": "You will delete “{label}”.",
+  "@cannedMessagesDeleteConfirm": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "cannedMessagesLabelHint": "Label (optional)",
+  "cannedMessagesTextHint": "Message text",
+  "cannedMessagesEmergencyToggle": "Emergency message",
+  "cannedMessagesEmergencyDesc": "Used by the widget's SOS button. Only one can be flagged.",
+  "cannedMessagesPickerTooltip": "Canned messages",
+  "cannedMessagesPickerTitle": "Insert canned message",
+  "cannedMessagesPickerSubtitle": "Tap to put it into the composer.",
   "commonConfirm": "Confirm",
   "commonError": "Error",
   "commonErrors": "Errors",
@@ -79,11 +172,12 @@
   "commonClearHistory": "Clear history",
   "commonSingularHop": "hop",
   "commonPluralHops": "hops",
-
   "homeDisconnectTitle": "Disconnect radio?",
   "homeDisconnectContent": "The radio connection will be terminated",
   "homeDisconnect": "Disconnect",
-
+  "homeExitTitle": "Exit LusoAPP?",
+  "homeExitContent": "The radio connection will be terminated and the app will close.",
+  "homeExit": "Exit",
   "settingsIdentity": "Identity",
   "settingsPublicKey": "Public Key",
   "settingsCopyPublicKey": "Copy public key",
@@ -93,6 +187,8 @@
   "settingsConnected": "Connected",
   "settingsConnectionError": "Connection error",
   "settingsDisconnected": "Disconnected",
+  "settingsAutoReconnect": "Auto-reconnect",
+  "settingsAutoReconnectDesc": "Automatically reconnect when the connection is lost",
   "settingsRadioConfig": "Radio Configuration",
   "settingsRadioConfigDesc": "LoRa, telemetry and device",
   "settingsReboot": "Reboot",
@@ -102,6 +198,17 @@
   "settingsRebootSent": "Reboot command sent. Waiting for reconnection...",
   "settingsRebootFail": "Failed to send reboot command",
   "settingsAppearance": "Appearance",
+  "settingsTheme": "Theme",
+  "settingsThemeSystem": "System",
+  "settingsThemeLight": "Light",
+  "settingsThemeDark": "Dark",
+  "settingsTextSize": "Text size",
+  "settingsTextSizeDesc": "Adjust the global text size across the app.",
+  "settingsAccent": "Accent color",
+  "settingsAccentDefault": "Default (brand orange)",
+  "settingsAccentCustom": "Custom",
+  "settingsAccentReset": "Reset to default",
+  "settingsMentionColors": "Mention colors",
   "settingsSelfMention": "Self mention (@[You])",
   "settingsOtherMention": "Other mention (@[Name])",
   "settingsChooseColor": "Choose color",
@@ -111,8 +218,42 @@
   "settingsNotificationPermissionDenied": "Notification permission not granted",
   "settingsAllow": "Allow",
   "settingsPrivateMessages": "Private messages",
+  "settingsPrivateMessagesDesc": "Notify when you receive a direct message",
   "settingsChannelMessages": "Channel messages",
+  "settingsChannelMessagesDesc": "Notify for channel messages",
+  "settingsChannelMentionsOnly": "Mentions only",
+  "settingsChannelMentionsOnlyDesc": "Only notify when a channel message mentions your name",
   "settingsBackgroundOnly": "Background only",
+  "settingsBackgroundOnlyDesc": "Only notify when the app is not in the foreground",
+  "settingsSosDesc": "Configure the destination and emergency message. Use '{gps}' in the text to insert coordinates.",
+  "settingsSosTarget": "SOS destination",
+  "settingsSosTargetChannel": "Channel",
+  "settingsSosTargetPrivateContact": "Private contact",
+  "settingsSosChannelLabel": "Send channel",
+  "settingsSosGeneralChannel": "#0 General",
+  "settingsSosDestinationContact": "Destination contact",
+  "settingsSosNoContactsAvailable": "No contacts available",
+  "settingsSosTapToSearchContact": "Tap to search for a contact",
+  "settingsSosClearContact": "Clear contact",
+  "settingsSosMessage": "SOS message",
+  "settingsSosMessageHint": "E.g. SOS - I need help! '{gps}'",
+  "settingsSosIncludeGps": "Include phone GPS coordinates",
+  "settingsSosIncludeGpsDesc": "If GPS or permission is unavailable, the message is sent without coordinates.",
+  "settingsSosSendNow": "Send SOS now",
+  "settingsSosSent": "SOS sent",
+  "settingsSosRadioNotConnected": "Radio not connected",
+  "settingsSosMissingContact": "SOS contact not configured/found",
+  "settingsSosSendFailed": "Failed to send SOS",
+  "settingsSosSendFailedDetail": "SOS failed: {detail}",
+  "@settingsSosSendFailedDetail": {
+    "placeholders": {
+      "detail": {}
+    }
+  },
+  "settingsSosSearchContact": "Search SOS contact",
+  "settingsSosSearchHint": "Name or short ID",
+  "settingsSosNoContactFound": "No contacts found",
+  "settingsSosUnnamedChannel": "(unnamed)",
   "settingsPrivateKeyCopy": "Private Key Backup",
   "settingsPrivateKeyDesc": "Your private key identifies you on the network. Save a secure copy before switching devices.",
   "settingsSaveFromRadio": "Save from radio",
@@ -134,7 +275,6 @@
   "settingsProtocolName": "Companion Radio Protocol v3",
   "settingsLicense": "License",
   "settingsLicenseMIT": "MIT",
-
   "contactsAll": "All",
   "contactsFavorites": "Favorites",
   "contactsCompanions": "Companions",
@@ -230,7 +370,6 @@
   "contactsAirtimeRx": "Airtime (RX)",
   "contactsDuplicates": "Duplicates",
   "contactsNotSavedHint": "This contact was heard but is not saved on the radio",
-
   "channelsCreatePrivate": "Create Private Channel",
   "channelsCreatePrivateDesc": "Secured with a secret key",
   "channelsJoinPrivate": "Join Private Channel",
@@ -279,7 +418,13 @@
   "channelsRemoveTitle": "Remove channel",
   "channelsRemoveConfirm": "Are you sure you want to remove",
   "channelsRemoveWarning": "This action cannot be undone.",
-
+  "channelsMuteTitle": "Channel muted",
+  "channelsUnmuteTitle": "Notifications active",
+  "channelsMuteSubtitleOn": "No alerts — unread badge still shown",
+  "channelsMuteSubtitleOff": "Receives notifications and unread badge",
+  "channelsMuteLabel": "muted",
+  "chatMuteChannel": "Mute channel",
+  "chatUnmuteChannel": "Unmute channel",
   "chatNoMessages": "No messages in this channel",
   "chatSendFirstMessage": "Send the first message!",
   "chatInputHint": "Message to channel...",
@@ -292,6 +437,8 @@
   "chatViaRepeaters": "Received via repeaters",
   "chatAuthenticatedMessage": "Authenticated",
   "chatMsgDetails": "Message details",
+  "chatRetry": "Retry",
+  "chatFailed": "Failed",
   "chatPathLabel": "Path",
   "chatHeardCount": "Heard",
   "chatTimesCount": "times",
@@ -310,7 +457,9 @@
   "chatNoChannelSlots": "No slots available for new channels",
   "chatDeleteMessage": "Delete message",
   "chatMenuOptions": "Channel options",
-
+  "chatNewMessages": "New messages",
+  "chatPingButton": "!ping",
+  "chatViewResultOnline": "view result online",
   "connectTitle": "MeshCore Portugal",
   "connectReconnect": "Reconnect",
   "connectContinueOffline": "Continue offline",
@@ -319,9 +468,18 @@
   "connectBrowserNote": "The browser will show a Bluetooth device selector",
   "connectScanningMessage": "Searching for MeshCore radios...",
   "connectTapHint": "Tap \"Search\" to find devices",
+  "connectSectionBluetooth": "BLUETOOTH",
+  "connectSectionSerial": "USB / SERIAL",
   "connectDeviceBLE": "(Bluetooth LE)",
   "connectDeviceUSB": "(USB Serial — Companion)",
   "connectDeviceKISS": "(KISS TNC)",
+  "connectDeviceWebUSB": "Web USB — Companion",
+  "connectDeviceWebKISS": "Web USB — KISS TNC",
+  "connectWebUsbButton": "Connect via USB (Web Serial)",
+  "connectWebUsbScanning": "Selecting USB port...",
+  "connectWebUsbHint": "Supported on Chrome and Edge. The browser will show a USB port selector.",
+  "connectWebUsbExpiredMessage": "USB port unavailable (page was refreshed). Please select the device again.",
+  "connectWebUsbAction": "Connect via USB",
   "connectStepConnecting": "Connecting...",
   "connectStepWaiting": "Waiting for radio...",
   "connectStepDeviceInfo": "Device information",
@@ -338,7 +496,6 @@
   "connectOpenSettings": "Settings",
   "connectFailTitle": "Failed to connect to device",
   "connectLastFailTitle": "Failed to connect to last device",
-
   "discoverTitle": "Discover",
   "discoverSubtitle": "Recent Adverts",
   "discoverSearchHint": "Search discovered contacts...",
@@ -346,13 +503,68 @@
   "discoverEmptyHint": "Try a different search",
   "discoverNone": "No contacts discovered",
   "discoverNoneHint": "Contacts appear while transmitting on the network",
+  "discoverCleanTooltip": "Clean local-only contacts",
+  "discoverCleanSheetTitle": "Clean local-only contacts",
+  "discoverCleanSheetSubtitle": "Pick which discovered contacts to remove. Contacts stored on the radio are always kept.",
+  "discoverCleanOption48h": "Not heard in 48 hours",
+  "discoverCleanOption7d": "Not heard in 7 days",
+  "discoverCleanOption30d": "Not heard in 30 days",
+  "discoverCleanOptionNever": "Never heard (no advert)",
+  "discoverCleanOptionAll": "All local-only contacts",
+  "discoverCleanTitle": "Clean discovered contacts?",
+  "discoverCleanBody": "This will remove {n, plural, =1{1 contact} other{{n} contacts}} that are not stored on the radio. Contacts saved on the radio are kept.",
+  "@discoverCleanBody": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "discoverCleanNothing": "All discovered contacts are saved on the radio. Nothing to clean.",
+  "discoverCleanDone": "{n, plural, =1{Removed 1 contact} other{Removed {n} contacts}}",
+  "@discoverCleanDone": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "discoverSaveToRadio": "Save to radio",
   "discoverSendMessage": "Send message",
   "discoverJoinRoom": "Join room",
   "discoverAddAndSave": "Add and save",
   "discoverAnnouncedName": "Announced Name",
   "discoverHeard": "Heard",
-
+  "discoverNever": "Never",
+  "discoverNoName": "No name",
+  "discoverTypeCompanion": "Companion",
+  "discoverTypeUnknown": "Unknown",
+  "discoverPathNear": "Nearby",
+  "discoverJustNow": "Just now",
+  "discoverMinutesAgo": "{min}m ago",
+  "@discoverMinutesAgo": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
+  },
+  "discoverHoursAgo": "{hours}h ago",
+  "@discoverHoursAgo": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "discoverDaysAgo": "{days}d ago",
+  "@discoverDaysAgo": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
   "appsPlano333Title": "Plan 3-3-3",
   "appsPlano333Subtitle": "Weekly MeshCore event",
   "appsTelemetryTitle": "Telemetry",
@@ -361,7 +573,6 @@
   "appsRxLogSubtitle": "Capture and export PCAP",
   "appsQrTitle": "QR Reader",
   "appsQrSubtitle": "Scan QR code",
-
   "mapNoGps": "No GPS data. Tap \"Locate\" or wait for contacts with coordinates",
   "mapShareMap": "Share map",
   "mapViewAll": "View all",
@@ -379,10 +590,15 @@
   "mapShowMore": "Show +",
   "mapHops": "hop(s)",
   "mapFinal": "Final:",
+  "mapLegendTitle": "Legend",
+  "mapLegendCompanion": "Companion",
+  "mapLegendRepeater": "Repeater",
+  "mapLegendRoom": "Room",
+  "mapLegendSensor": "Sensor",
+  "mapLegendYou": "You",
   "mapAttribution": "MeshCore Portugal",
   "mapAttributionOSM": "© OpenStreetMap contributors",
   "mapPathPrefix": "Path ·",
-
   "privateNoMessages": "No messages",
   "privateSendFirstMessage": "Send the first message!",
   "privateMessageTo": "Message to {name}...",
@@ -398,17 +614,19 @@
   "privateTraceRoute": "Trace route",
   "privateManagePath": "Manage path",
   "privateContactLabel": "Contact",
-
   "qrTitle": "Read QR Code",
   "qrUnavailable": "QR Code scanner not available on this platform",
   "qrUnavailableHint": "Use an Android or iOS device",
   "qrHint": "Point at a MeshCore QR Code",
-
   "radioSettingsTitle": "Radio Configuration",
   "radioSettingsDevice": "Device",
   "radioSettingsModel": "Model",
   "radioSettingsFirmware": "Firmware",
   "radioSettingsStorage": "Storage",
+  "radioSettingsChannels": "Channels",
+  "radioSettingsContacts": "Contacts",
+  "radioSettingsDiscovered": "Local contacts",
+  "radioSettingsAppVersion": "App Version",
   "radioSettingsLoRa": "LoRa Parameters",
   "radioSettingsFrequency": "Frequency (MHz)",
   "radioSettingsFreqLabel": "Frequency",
@@ -430,13 +648,37 @@
   "radioSettingsSaved": "Configuration saved",
   "radioSettingsPrivKeyCopied": "Private key copied",
   "radioSettingsResetValues": "Reset to current values",
-  "radioSettingsAutoAddTitle": "Automatic contact addition",
+  "radioSettingsExperimentalTitle": "Experimental",
+  "radioSettingsExperimentalWarning": "Use with caution — these settings affect on-air compatibility with other nodes.",
+  "radioSettingsPathHashMode": "Path hash size",
+  "radioSettingsPathHashModeDesc": "Number of bytes used per hop in the routing path. Larger values lower the chance of two distant nodes colliding on the same hash. Requires firmware v1.14.0+. Default: 1 byte.",
+  "radioSettingsPathHashMode1": "1 byte",
+  "radioSettingsPathHashMode2": "2 bytes",
+  "radioSettingsPathHashModeCaptionDefault": "1 byte per hop — default, compatible with all firmwares.",
+  "radioSettingsPathHashModeCaptionExperimental": "Experimental — only nodes running firmware v10+ will route this packet correctly.",
+  "radioSettingsPathHashModeUnsupported": "Not supported by this firmware.",
+  "radioSettingsPathHashModeSaved": "Path hash size updated",
+  "radioSettingsPathHashModeFailed": "Failed to update path hash size",
+  "radioSettingsAutoAddTitle": "Contact Settings",
   "radioSettingsAutoAddDesc": "When a node sends an advert and the radio is in manual mode, automatically add as:",
+  "radioSettingsAutoAddAll": "Auto Add All",
+  "radioSettingsAutoAddAllDesc": "When enabled, all received adverts will be added to contacts.",
+  "radioSettingsAutoAddSelected": "Auto Add Selected",
+  "radioSettingsAutoAddSelectedDesc": "When enabled, only contact types selected below will be auto added to contacts.",
   "radioSettingsAutoAddCompanion": "Companion (Chat)",
   "radioSettingsAutoAddRepeater": "Repeater",
   "radioSettingsAutoAddRoom": "Room",
   "radioSettingsAutoAddSensor": "Sensor",
-
+  "radioSettingsOverwriteOldest": "Overwrite Oldest",
+  "radioSettingsOverwriteOldestDesc": "When enabled, oldest non-favourite contacts are overwritten with new contacts when contacts list is full.",
+  "radioSettingsAutoAddMaxHops": "Auto Add Max Hops",
+  "radioSettingsAutoAddMaxHopsDesc": "Contacts will only be auto added if their advert path has the same or less hops as the configured limit. Leave this field blank for no limit.",
+  "radioSettingsAutoAddMaxHopsHint": "Max Hops (0-63)",
+  "radioSettingsPullToRefresh": "Pull To Refresh",
+  "radioSettingsPullToRefreshDesc": "When enabled, you can swipe down to refresh the contacts list.",
+  "radioSettingsShowPublicKeys": "Show Public Keys",
+  "radioSettingsShowPublicKeysDesc": "When enabled, public keys will be shown in contacts list.",
+  "radioSettingsBandPresetsTitle": "Band Presets",
   "roomJoinTitle": "Join room",
   "roomJoinInstruction": "This room may require a password. Leave blank if public.",
   "roomPasswordLabel": "Password (optional)",
@@ -448,7 +690,6 @@
   "roomMessageHint": "Message to {name} room...",
   "roomMessageFallback": "Write a message...",
   "roomTelemetryData": "Telemetry data",
-
   "rxLogTitle": "RX Log",
   "rxLogExportPcap": "Export PCAPNG",
   "rxLogClearLog": "Clear log",
@@ -465,7 +706,6 @@
   "rxLogPacketTypePrefix": "Type",
   "rxLogEmptyTitle": "No RX packets",
   "rxLogEmptyHint": "When the radio receives mesh traffic, packets appear here.",
-
   "telemetryBattery": "Battery",
   "telemetryNetStats": "Network Statistics",
   "telemetryRadioState": "Radio — State",
@@ -499,7 +739,6 @@
   "telemetryFloodRX": "Flood RX",
   "telemetryDirectTX": "Direct TX",
   "telemetryDirectRX": "Direct RX",
-
   "eventTitle": "Event Program",
   "eventDateLabel": "April 2026",
   "eventSummitTitle": "Tech Summit 2026",
@@ -513,15 +752,11 @@
   "eventChannelAdded": "Channel #plano333 added in slot {slot}",
   "eventChannelNotFound": "Channel #techsummit2026 not found on radio.",
   "eventChannelNoSlots": "No channel slots available to add #techsummit2026.",
-
   "plan333CardTitle": "MESH 3-3-3",
   "plan333EventActive": "● EVENT ACTIVE",
   "plan333PhaseCQ": "CQ 21:00–22:00",
-  "plan333PhaseQSL": "QSL 21:30–22:00",
   "plan333CqSent": "CQ sent:",
   "plan333LastSent": "(last:",
-  "plan333QslSent": "QSL sent:",
-  "plan333NoQslLog": "no QSLs in log",
   "plan333EventSchedule": "Saturdays 21:00–22:00  •  CQ MeshCore Presence",
   "plan333ReportPrefix": "Report at",
   "plan333ConfigTitle": "Event Configuration",
@@ -531,16 +766,13 @@
   "plan333CityHint": "e.g.: Lisbon",
   "plan333Locality": "Locality",
   "plan333LocalityHint": "e.g.: Olaias",
-  "plan333AutoSend": "Automatic CQ and QSL sending",
-  "plan333AutoSendDesc": "CQ: up to 3 messages (21:00–22:00)  •  QSL: confirms each received station (21:30–22:00)",
+  "plan333AutoSend": "Automatic CQ sending",
+  "plan333AutoSendDesc": "CQ: up to 3 messages (21:00–22:00)",
   "plan333CqMessageLabel": "CQ Message:",
   "plan333FormatTitle": "Message Formats",
   "plan333FormatPresence": "Presence (CQ)",
   "plan333FormatPresencePhase": "MeshCore 21:00–22:00",
   "plan333FormatCqTemplate": "CQ Plan 333, [Name], [City], [Locality]",
-  "plan333FormatQSL": "QSL (confirmation)",
-  "plan333FormatQSLPhase": "Optional 21:30–22:00",
-  "plan333FormatQSLTemplate": "QSL, [Received station name], [N] hops, [location]\nEx: QSL, Daytona, 5 hops, Tomar",
   "plan333ConfigureChannel": "Configure MeshCore Channel  (#plano333)",
   "plan333Alerts": "Mesh 3-3-3 Alerts",
   "plan333AlertToggle": "Saturday event reminder",
@@ -550,9 +782,9 @@
   "plan333ShareLog": "Share log",
   "plan333ClearLog": "Clear log",
   "plan333NoStationsYet": "No stations heard yet. CQs received on the channel appear here automatically.",
-  "plan333ClearQslTitle": "Clear QSL?",
-  "plan333ClearQslContent": "All logged QSLs will be deleted.",
-  "plan333AddQslTitle": "Add QSL",
+  "plan333ClearQslTitle": "Clear log?",
+  "plan333ClearQslContent": "All logged stations will be deleted.",
+  "plan333AddQslTitle": "Add station",
   "plan333StationLabel": "Station *",
   "plan333StationHint": "e.g.: Daytona",
   "plan333HopsLabel": "Hops:",
@@ -568,5 +800,154 @@
   "plan333RadioOff": "Radio off — cannot send",
   "plan333ChannelSheetTitle": "MeshCore Channel  #plano333",
   "plan333ChannelSheetDesc": "Add the channel to the connected radio or consult the data manually.",
-  "plan333ChannelAdded": "Channel #plano333 added in slot {slot}"
+  "plan333ChannelAdded": "Channel #plano333 added in slot {slot}",
+  "signalNone": "No signal (no packets in last 5 min)",
+  "signalWeak": "Very weak signal",
+  "signalFair": "Weak signal",
+  "signalGood": "Good signal",
+  "signalExcellent": "Excellent signal",
+  "urlOpenTitle": "Open external link?",
+  "urlOpenConfirm": "Open",
+  "topologyScreenTitle": "Network Topology",
+  "topologyTabGraph": "Graph",
+  "topologyTabTimeline": "Timeline",
+  "topologyEmptyTitle": "No topology data",
+  "topologyEmptyHint": "Connect to a radio to\nvisualize the network",
+  "topologySelf": "Me",
+  "topologyResetView": "Reset view",
+  "topologySnrGood": "SNR ≥ 5 dB",
+  "topologySnrMid": "SNR 0–5 dB",
+  "topologySnrBad": "SNR < 0 dB",
+  "topologyLabelId": "ID",
+  "topologyLabelPath": "Path",
+  "topologyLabelSeen": "Seen",
+  "topologySecondsAgo": "{s}s ago",
+  "@topologySecondsAgo": {
+    "placeholders": {
+      "s": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyMinutesAgo": "{min}min ago",
+  "@topologyMinutesAgo": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyHoursAgo": "{h}h ago",
+  "@topologyHoursAgo": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyDaysAgo": "{d}d ago",
+  "@topologyDaysAgo": {
+    "placeholders": {
+      "d": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyWeeksAgo": "{w}w ago",
+  "@topologyWeeksAgo": {
+    "placeholders": {
+      "w": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyFilterRecent": "Show only contacts on radio",
+  "topologyFilterAll": "Show all (including local-only)",
+  "topologyToggleLabels": "Toggle labels",
+  "topologyNodesShown": "{shown}/{total} nodes",
+  "@topologyNodesShown": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyHopDirect": "Direct",
+  "topologyHop1": "1 hop",
+  "topologyHop2": "2 hops",
+  "topologyHopFlood": "Flood / 3+",
+  "topologyTabPaths": "Paths",
+  "topologyPathsEmptyTitle": "No path data",
+  "topologyPathsEmptyHint": "Run a trace from a contact\nto see its routing path",
+  "topologyPathsCount": "{n, plural, =1{1 path} other{{n} paths}}",
+  "@topologyPathsCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "repeaterTitle": "Manage Repeater",
+  "repeaterConfig": "Remote Configuration",
+  "repeaterApply": "Apply",
+  "repeaterNodeName": "Node name",
+  "repeaterTxPower": "TX Power",
+  "repeaterForwarding": "Packet forwarding",
+  "repeaterForwardingDesc": "Enable or disable packet forwarding",
+  "repeaterAdvertInterval": "Local advert interval",
+  "repeaterAdvertZeroHop": "Auto Advert (Zero Hop)",
+  "repeaterAdvertFlood": "Auto Advert (Flood)",
+  "repeaterIntervalMinutes": "Interval (minutes)",
+  "repeaterIntervalHours": "Interval (hours)",
+  "repeaterMinimalTrafficHint": "To use minimal mesh traffic, please use the refresh icons to request the info you need.",
+  "repeaterValueNotLoaded": "—",
+  "repeaterFloodMax": "Max flood hops",
+  "repeaterClearStats": "Clear Statistics",
+  "repeaterClearStatsDesc": "Resets packet and error counters",
+  "repeaterNoStats": "Authenticate and press \"Refresh\" to fetch repeater statistics.",
+  "repeaterFetchStats": "Refresh",
+  "repeaterAuthenticated": "Authenticated",
+  "repeaterTabStatus": "Status",
+  "repeaterTabCommandLine": "Command Line",
+  "repeaterTabSettings": "Settings",
+  "repeaterCmdHint": "Send a command...",
+  "repeaterCmdEmpty": "No commands sent yet. Use the input below to send raw CLI commands.",
+  "repeaterCmdClear": "Clear history",
+  "repeaterMenuHelp": "Command Help",
+  "repeaterMenuClearHistory": "Delete Command History",
+  "repeaterHelpTitle": "Help",
+  "repeaterHelpSubtitle": "Repeater Commands",
+  "repeaterHelpFirmwareNote": "Some commands require the latest firmware.",
+  "repeaterHelpSearchHint": "Search",
+  "dataExportTitle": "Data Export",
+  "dataExportContactsTitle": "Contacts",
+  "dataExportContactsDesc": "{count} contacts stored",
+  "@dataExportContactsDesc": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dataExportMessagesTitle": "Messages",
+  "dataExportMessagesDesc": "All conversations — private & channels",
+  "dataExportKmlTitle": "Map Data",
+  "dataExportKmlDesc": "{count} contacts with GPS",
+  "@dataExportKmlDesc": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dataExportNote": "Files are exported directly to the share sheet.\nNo data leaves the device unless you choose to share it.",
+  "dataExportNoContacts": "No contacts to export",
+  "dataExportNoMessages": "No messages to export",
+  "dataExportNoGps": "No contacts with GPS coordinates",
+  "dataExportFailed": "Export failed",
+  "appsDataExportTitle": "Data Export",
+  "appsDataExportSubtitle": "Export contacts, messages & map data"
 }

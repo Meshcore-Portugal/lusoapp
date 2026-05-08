@@ -1,12 +1,10 @@
 {
   "@@locale": "pt",
-
   "navChannels": "Canais",
   "navContacts": "Contactos",
   "navMap": "Mapa",
   "navApps": "Apps",
   "navSettings": "Definições",
-
   "commonSave": "Guardar",
   "commonSaving": "A guardar...",
   "commonCancel": "Cancelar",
@@ -20,6 +18,101 @@
   "commonShare": "Partilhar",
   "commonCopy": "Copiar",
   "commonRename": "Renomear",
+  "commonReset": "Repor",
+  "commonJustNow": "agora mesmo",
+  "commonMinutesAgo": "há {minutes} min",
+  "@commonMinutesAgo": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "commonHoursAgo": "há {hours} h",
+  "@commonHoursAgo": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "gpsSharingTitle": "Partilha de GPS",
+  "gpsSharingSubtitle": "Tu decides se a tua localização vai junto nos anúncios da rádio. Por defeito está desligada.",
+  "gpsSharingStatusOff": "DESLIGADA",
+  "gpsSharingStatusManual": "MANUAL",
+  "gpsSharingStatusAuto": "AUTOMÁTICA",
+  "gpsSharingModeOff": "Desligada",
+  "gpsSharingModeManual": "Manual",
+  "gpsSharingModeAuto": "Automática",
+  "gpsSharingPrecisionTitle": "Precisão enviada",
+  "gpsSharingPrecisionExact": "Exacta",
+  "gpsSharingPrecisionRough": "Aproximada",
+  "gpsSharingPrecisionVague": "Vaga",
+  "gpsSharingIntervalLabel": "Intervalo entre actualizações",
+  "gpsSharingShareNow": "Partilhar agora",
+  "gpsSharingClearNow": "Limpar do rádio",
+  "gpsSharingClearedOnRadio": "Localização removida do rádio.",
+  "gpsSharingPrivacyDisclaimer": "A tua posição será incluída nos anúncios LoRa que o teu rádio transmitir, podendo ser vista por outros nós. Liga apenas se aceitas partilhá-la.",
+  "gpsSharingLastShared": "Partilhado {ago} — {lat}, {lon}",
+  "@gpsSharingLastShared": {
+    "placeholders": {
+      "ago": {},
+      "lat": {},
+      "lon": {}
+    }
+  },
+  "gpsSharingOutcomeOk": "✅ Localização enviada: {lat}, {lon}",
+  "@gpsSharingOutcomeOk": {
+    "placeholders": {
+      "lat": {},
+      "lon": {}
+    }
+  },
+  "gpsSharingOutcomeCleared": "Localização limpa do rádio.",
+  "gpsSharingOutcomeDisabled": "A partilha está desligada nas Definições.",
+  "gpsSharingOutcomeNoPerm": "Permissão de localização negada.",
+  "gpsSharingOutcomeServiceOff": "Serviço de localização desligado no telemóvel.",
+  "gpsSharingOutcomeNoFix": "Sem fix de GPS disponível.",
+  "gpsSharingOutcomeDisconnected": "Rádio desligado — liga primeiro.",
+  "gpsSharingOutcomeFailed": "Falha ao enviar localização.",
+  "gpsSharingOutcomeSkipped": "Posição não mudou — envio poupado.",
+  "gpsSharingMinMoveLabel": "Movimento mínimo",
+  "gpsSharingMinMoveAlways": "Sempre enviar",
+  "gpsSharingMinMoveHint": "Em modo automático, só envia novo fix se te moveste pelo menos esta distância desde o último envio. Poupa air-time da rede LoRa.",
+  "gpsSharingAdvPolicyTitle": "Difundir localização nos adverts",
+  "gpsSharingAdvPolicyNever": "Desligado — os teus adverts não incluem coordenadas.",
+  "gpsSharingAdvPolicyAlways": "Ligado — cada advert inclui a última localização conhecida do rádio.",
+  "gpsSharingAdvPolicyUnknown": "Política do rádio: byte {value} — valor desconhecido.",
+  "@gpsSharingAdvPolicyUnknown": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "mapVisibilityShowTitle": "Mostrar no mapa",
+  "mapVisibilityShowSubtitle": "Esconde este contacto do teu mapa, mesmo que os adverts incluam coordenadas.",
+  "cannedMessagesTitle": "Mensagens rápidas",
+  "cannedMessagesSubtitle": "Biblioteca de respostas pré-gravadas para enviar com um toque (ou pelo botão SOS do widget).",
+  "cannedMessagesAdd": "Adicionar mensagem",
+  "cannedMessagesAddTitle": "Nova mensagem rápida",
+  "cannedMessagesEditTitle": "Editar mensagem rápida",
+  "cannedMessagesEmpty": "Sem mensagens guardadas. Toca em + para adicionar.",
+  "cannedMessagesReset": "Repor por defeito",
+  "cannedMessagesResetTitle": "Repor mensagens?",
+  "cannedMessagesResetConfirm": "Vais perder todas as alterações e voltar à lista original.",
+  "cannedMessagesDeleteTitle": "Apagar mensagem?",
+  "cannedMessagesDeleteConfirm": "Vais apagar “{label}”.",
+  "@cannedMessagesDeleteConfirm": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "cannedMessagesLabelHint": "Rótulo (opcional)",
+  "cannedMessagesTextHint": "Texto da mensagem",
+  "cannedMessagesEmergencyToggle": "Mensagem de emergência",
+  "cannedMessagesEmergencyDesc": "É a mensagem usada pelo botão SOS do widget. Só uma pode estar marcada.",
+  "cannedMessagesPickerTooltip": "Mensagens rápidas",
+  "cannedMessagesPickerTitle": "Inserir mensagem rápida",
+  "cannedMessagesPickerSubtitle": "Toca para colocar no campo de texto.",
   "commonConfirm": "Confirmar",
   "commonError": "Erro",
   "commonErrors": "Erros",
@@ -79,11 +172,12 @@
   "commonClearHistory": "Limpar histórico",
   "commonSingularHop": "salto",
   "commonPluralHops": "saltos",
-
   "homeDisconnectTitle": "Desligar rádio?",
   "homeDisconnectContent": "A ligação ao rádio será terminada",
   "homeDisconnect": "Desligar",
-
+  "homeExitTitle": "Sair da LusoAPP?",
+  "homeExitContent": "A ligação ao rádio será terminada e a aplicação encerrada.",
+  "homeExit": "Sair",
   "settingsIdentity": "Identidade",
   "settingsPublicKey": "Chave Pública",
   "settingsCopyPublicKey": "Copiar chave pública",
@@ -93,6 +187,8 @@
   "settingsConnected": "Ligado",
   "settingsConnectionError": "Erro de ligação",
   "settingsDisconnected": "Desligado",
+  "settingsAutoReconnect": "Reconexão automática",
+  "settingsAutoReconnectDesc": "Reconecta automaticamente quando a ligação é perdida",
   "settingsRadioConfig": "Configuração do Rádio",
   "settingsRadioConfigDesc": "LoRa, telemetria e dispositivo",
   "settingsReboot": "Reboot",
@@ -102,6 +198,17 @@
   "settingsRebootSent": "Comando de reboot enviado. A aguardar reconexão...",
   "settingsRebootFail": "Falha ao enviar comando de reboot",
   "settingsAppearance": "Aparência",
+  "settingsTheme": "Tema",
+  "settingsThemeSystem": "Sistema",
+  "settingsThemeLight": "Claro",
+  "settingsThemeDark": "Escuro",
+  "settingsTextSize": "Tamanho do texto",
+  "settingsTextSizeDesc": "Ajusta o tamanho global do texto na app.",
+  "settingsAccent": "Cor de destaque",
+  "settingsAccentDefault": "Predefinido (laranja da marca)",
+  "settingsAccentCustom": "Personalizada",
+  "settingsAccentReset": "Repor predefinida",
+  "settingsMentionColors": "Cores de menção",
   "settingsSelfMention": "Menção própria (@[Você])",
   "settingsOtherMention": "Menção de outros (@[Nome])",
   "settingsChooseColor": "Escolher cor",
@@ -111,8 +218,42 @@
   "settingsNotificationPermissionDenied": "Permissão de notificação não concedida",
   "settingsAllow": "Permitir",
   "settingsPrivateMessages": "Mensagens privadas",
+  "settingsPrivateMessagesDesc": "Notificar quando receber uma mensagem direta",
   "settingsChannelMessages": "Mensagens de canal",
+  "settingsChannelMessagesDesc": "Notificar mensagens em canais",
+  "settingsChannelMentionsOnly": "Apenas menções",
+  "settingsChannelMentionsOnlyDesc": "Só notificar quando houver uma menção ao teu nome no canal",
   "settingsBackgroundOnly": "Apenas em segundo plano",
+  "settingsBackgroundOnlyDesc": "Só notificar quando a app não está em primeiro plano",
+  "settingsSosDesc": "Configura o destino e a mensagem de emergência. Usa '{gps}' no texto para inserir coordenadas.",
+  "settingsSosTarget": "Destino SOS",
+  "settingsSosTargetChannel": "Canal",
+  "settingsSosTargetPrivateContact": "Contacto privado",
+  "settingsSosChannelLabel": "Canal de envio",
+  "settingsSosGeneralChannel": "#0 Geral",
+  "settingsSosDestinationContact": "Contacto de destino",
+  "settingsSosNoContactsAvailable": "Sem contactos disponíveis",
+  "settingsSosTapToSearchContact": "Toque para procurar contacto",
+  "settingsSosClearContact": "Limpar contacto",
+  "settingsSosMessage": "Mensagem SOS",
+  "settingsSosMessageHint": "Ex.: SOS - preciso de ajuda! '{gps}'",
+  "settingsSosIncludeGps": "Incluir coordenadas GPS do telemóvel",
+  "settingsSosIncludeGpsDesc": "Se não houver GPS/permissão, a mensagem é enviada sem coordenadas.",
+  "settingsSosSendNow": "Enviar SOS agora",
+  "settingsSosSent": "SOS enviado",
+  "settingsSosRadioNotConnected": "Rádio não ligado",
+  "settingsSosMissingContact": "Contacto SOS não configurado/encontrado",
+  "settingsSosSendFailed": "Falha ao enviar SOS",
+  "settingsSosSendFailedDetail": "Falha SOS: {detail}",
+  "@settingsSosSendFailedDetail": {
+    "placeholders": {
+      "detail": {}
+    }
+  },
+  "settingsSosSearchContact": "Procurar contacto SOS",
+  "settingsSosSearchHint": "Nome ou ID curto",
+  "settingsSosNoContactFound": "Nenhum contacto encontrado",
+  "settingsSosUnnamedChannel": "(sem nome)",
   "settingsPrivateKeyCopy": "Cópia da Chave Privada",
   "settingsPrivateKeyDesc": "A chave privada identifica-te na rede. Guarda uma cópia segura antes de mudar de dispositivo.",
   "settingsSaveFromRadio": "Guardar do rádio",
@@ -134,7 +275,6 @@
   "settingsProtocolName": "Companion Radio Protocol v3",
   "settingsLicense": "Licença",
   "settingsLicenseMIT": "MIT",
-
   "contactsAll": "Todos",
   "contactsFavorites": "Favoritos",
   "contactsCompanions": "Companheiros",
@@ -180,7 +320,11 @@
   "contactsTypeCompanion": "Tipo: Companheiro",
   "contactsSavedToRadio": "{name} guardado no rádio",
   "@contactsSavedToRadio": {
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "contactsSaveToRadioError": "Erro ao guardar contacto no rádio",
   "contactsSaveTimeout": "Timeout: rádio não respondeu",
@@ -233,7 +377,6 @@
   "contactsAirtimeRx": "Tempo no ar (RX)",
   "contactsDuplicates": "Duplicados",
   "contactsNotSavedHint": "Este contacto foi ouvido mas não está guardado no rádio",
-
   "channelsCreatePrivate": "Criar Canal Privado",
   "channelsCreatePrivateDesc": "Seguro com uma chave secreta",
   "channelsJoinPrivate": "Entrar num Canal Privado",
@@ -282,7 +425,13 @@
   "channelsRemoveTitle": "Remover canal",
   "channelsRemoveConfirm": "Tem a certeza que quer remover",
   "channelsRemoveWarning": "Esta acção não pode ser desfeita.",
-
+  "channelsMuteTitle": "Canal silenciado",
+  "channelsUnmuteTitle": "Notificações activas",
+  "channelsMuteSubtitleOn": "Sem alertas — badge de não lidas ainda visível",
+  "channelsMuteSubtitleOff": "Recebe notificações e badge de não lidas",
+  "channelsMuteLabel": "silenciado",
+  "chatMuteChannel": "Silenciar canal",
+  "chatUnmuteChannel": "Reativar notificações",
   "chatNoMessages": "Sem mensagens neste canal",
   "chatSendFirstMessage": "Envie a primeira mensagem!",
   "chatInputHint": "Mensagem para o canal...",
@@ -295,6 +444,8 @@
   "chatViaRepeaters": "Recebida via repetidores",
   "chatAuthenticatedMessage": "Autenticado",
   "chatMsgDetails": "Detalhes da mensagem",
+  "chatRetry": "Reenviar",
+  "chatFailed": "Falhou",
   "chatPathLabel": "Caminho",
   "chatHeardCount": "Ouvido",
   "chatTimesCount": "vezes",
@@ -313,7 +464,9 @@
   "chatNoChannelSlots": "Sem espaço disponível para novos canais",
   "chatDeleteMessage": "Apagar mensagem",
   "chatMenuOptions": "Opções do canal",
-
+  "chatNewMessages": "Novas mensagens",
+  "chatPingButton": "!ping",
+  "chatViewResultOnline": "ver resultado online",
   "connectTitle": "MeshCore Portugal",
   "connectReconnect": "Ligar novamente",
   "connectContinueOffline": "Continuar offline",
@@ -322,9 +475,18 @@
   "connectBrowserNote": "O browser irá mostrar um seletor de dispositivos Bluetooth",
   "connectScanningMessage": "A procurar rádios MeshCore...",
   "connectTapHint": "Toque em \"Procurar\" para encontrar dispositivos",
+  "connectSectionBluetooth": "BLUETOOTH",
+  "connectSectionSerial": "USB / SÉRIE",
   "connectDeviceBLE": "(Bluetooth LE)",
   "connectDeviceUSB": "(Série USB — Companion)",
   "connectDeviceKISS": "(KISS TNC)",
+  "connectDeviceWebUSB": "Web USB — Companion",
+  "connectDeviceWebKISS": "Web USB — KISS TNC",
+  "connectWebUsbButton": "Ligar via USB (Web Serial)",
+  "connectWebUsbScanning": "A selecionar porta USB...",
+  "connectWebUsbHint": "Suportado no Chrome e Edge. O browser mostrará um seletor de portas USB.",
+  "connectWebUsbExpiredMessage": "Porta USB não disponível (página recarregada). Selecione novamente o dispositivo.",
+  "connectWebUsbAction": "Ligar via USB",
   "connectStepConnecting": "A ligar...",
   "connectStepWaiting": "A aguardar rádio...",
   "connectStepDeviceInfo": "Informação do dispositivo",
@@ -341,7 +503,6 @@
   "connectOpenSettings": "Definições",
   "connectFailTitle": "Falha ao ligar ao dispositivo",
   "connectLastFailTitle": "Falha ao ligar ao último dispositivo",
-
   "discoverTitle": "Descobrir",
   "discoverSubtitle": "Anúncios Recentes",
   "discoverSearchHint": "Procurar contactos descobertos...",
@@ -349,13 +510,68 @@
   "discoverEmptyHint": "Tente uma busca diferente",
   "discoverNone": "Nenhum contacto descoberto",
   "discoverNoneHint": "Contactos aparecem enquanto transmitem na rede",
+  "discoverCleanTooltip": "Limpar contactos só locais",
+  "discoverCleanSheetTitle": "Limpar contactos só locais",
+  "discoverCleanSheetSubtitle": "Escolhe quais contactos descobertos remover. Os contactos guardados no rádio são sempre mantidos.",
+  "discoverCleanOption48h": "Não ouvidos há 48 horas",
+  "discoverCleanOption7d": "Não ouvidos há 7 dias",
+  "discoverCleanOption30d": "Não ouvidos há 30 dias",
+  "discoverCleanOptionNever": "Nunca ouvidos (sem advert)",
+  "discoverCleanOptionAll": "Todos os contactos só locais",
+  "discoverCleanTitle": "Limpar contactos descobertos?",
+  "discoverCleanBody": "Vai remover {n, plural, =1{1 contacto} other{{n} contactos}} que não estão guardados no rádio. Os contactos guardados no rádio são mantidos.",
+  "@discoverCleanBody": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "discoverCleanNothing": "Todos os contactos descobertos estão guardados no rádio. Nada para limpar.",
+  "discoverCleanDone": "{n, plural, =1{Removido 1 contacto} other{Removidos {n} contactos}}",
+  "@discoverCleanDone": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "discoverSaveToRadio": "Guardar no rádio",
   "discoverSendMessage": "Enviar mensagem",
   "discoverJoinRoom": "Entrar na sala",
   "discoverAddAndSave": "Adicionar e guardar",
   "discoverAnnouncedName": "Nome Anunciado",
   "discoverHeard": "Ouvido",
-
+  "discoverNever": "Nunca",
+  "discoverNoName": "Sem nome",
+  "discoverTypeCompanion": "Companheiro",
+  "discoverTypeUnknown": "Desconhecido",
+  "discoverPathNear": "Próximo",
+  "discoverJustNow": "Agora",
+  "discoverMinutesAgo": "{min}m atrás",
+  "@discoverMinutesAgo": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
+  },
+  "discoverHoursAgo": "{hours}h atrás",
+  "@discoverHoursAgo": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "discoverDaysAgo": "{days}d atrás",
+  "@discoverDaysAgo": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
   "appsPlano333Title": "Plano 3-3-3",
   "appsPlano333Subtitle": "Evento semanal MeshCore",
   "appsTelemetryTitle": "Telemetria",
@@ -364,7 +580,6 @@
   "appsRxLogSubtitle": "Captura e exporta PCAP",
   "appsQrTitle": "Leitor QR",
   "appsQrSubtitle": "Digitalizar código QR",
-
   "mapNoGps": "Sem dados GPS. Toca em \"Localizar\" ou aguarda contactos com coordenadas",
   "mapShareMap": "Partilhar mapa",
   "mapViewAll": "Ver todos",
@@ -382,19 +597,32 @@
   "mapShowMore": "Mostrar +",
   "mapHops": "hop(s)",
   "mapFinal": "Final:",
+  "mapLegendTitle": "Legenda",
+  "mapLegendCompanion": "Companheiro",
+  "mapLegendRepeater": "Repetidor",
+  "mapLegendRoom": "Sala",
+  "mapLegendSensor": "Sensor",
+  "mapLegendYou": "Tu",
   "mapAttribution": "MeshCore Portugal",
   "mapAttributionOSM": "© OpenStreetMap contributors",
   "mapPathPrefix": "Path ·",
-
   "privateNoMessages": "Sem mensagens",
   "privateSendFirstMessage": "Envie a primeira mensagem!",
   "privateMessageTo": "Mensagem para {name}...",
   "@privateMessageTo": {
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "privateTracingRoute": "A traçar rota para {name}",
   "@privateTracingRoute": {
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "privateRouteFailed": "Não foi possível descobrir a rota — tente novamente",
   "privateRouteNoResponse": "Sem resposta à rota — tente novamente",
@@ -407,17 +635,19 @@
   "privateTraceRoute": "Traçar rota",
   "privateManagePath": "Gerir caminho",
   "privateContactLabel": "Contacto",
-
   "qrTitle": "Ler QR Code",
   "qrUnavailable": "Scanner de QR Code não disponível nesta plataforma",
   "qrUnavailableHint": "Use um dispositivo Android ou iOS",
   "qrHint": "Aponte para um QR Code MeshCore",
-
   "radioSettingsTitle": "Configuração do Rádio",
   "radioSettingsDevice": "Dispositivo",
   "radioSettingsModel": "Modelo",
   "radioSettingsFirmware": "Firmware",
   "radioSettingsStorage": "Armazenamento",
+  "radioSettingsChannels": "Canais",
+  "radioSettingsContacts": "Contactos",
+  "radioSettingsDiscovered": "Contactos locais",
+  "radioSettingsAppVersion": "Versão da App",
   "radioSettingsLoRa": "Parâmetros LoRa",
   "radioSettingsFrequency": "Frequência (MHz)",
   "radioSettingsFreqLabel": "Frequência",
@@ -439,13 +669,37 @@
   "radioSettingsSaved": "Configuração guardada",
   "radioSettingsPrivKeyCopied": "Chave privada copiada",
   "radioSettingsResetValues": "Repor valores actuais",
-  "radioSettingsAutoAddTitle": "Adição automática de contactos",
+  "radioSettingsExperimentalTitle": "Experimental",
+  "radioSettingsExperimentalWarning": "Usar com cuidado — estas opções afectam a compatibilidade no ar com outros nós.",
+  "radioSettingsPathHashMode": "Tamanho do hash de caminho",
+  "radioSettingsPathHashModeDesc": "Número de bytes usados por salto no caminho de encaminhamento. Valores maiores reduzem a probabilidade de colisão entre nós distantes. Requer firmware v1.14.0+. Predefinição: 1 byte.",
+  "radioSettingsPathHashMode1": "1 byte",
+  "radioSettingsPathHashMode2": "2 bytes",
+  "radioSettingsPathHashModeCaptionDefault": "1 byte por salto — predefinição, compatível com todos os firmwares.",
+  "radioSettingsPathHashModeCaptionExperimental": "Experimental — só nós com firmware v10+ encaminham este pacote correctamente.",
+  "radioSettingsPathHashModeUnsupported": "Não suportado por este firmware.",
+  "radioSettingsPathHashModeSaved": "Tamanho do hash actualizado",
+  "radioSettingsPathHashModeFailed": "Falha ao actualizar o tamanho do hash",
+  "radioSettingsAutoAddTitle": "Definições de Contactos",
   "radioSettingsAutoAddDesc": "Quando um nó envia um advert e o rádio está em modo manual, adicionar automaticamente como:",
+  "radioSettingsAutoAddAll": "Auto Adicionar Todos",
+  "radioSettingsAutoAddAllDesc": "Quando ativo, todos os adverts recebidos serão adicionados aos contactos.",
+  "radioSettingsAutoAddSelected": "Auto Adicionar Selecionados",
+  "radioSettingsAutoAddSelectedDesc": "Quando ativo, apenas os tipos de contactos selecionados abaixo serão auto adicionados.",
   "radioSettingsAutoAddCompanion": "Companheiro (Chat)",
   "radioSettingsAutoAddRepeater": "Repetidor",
   "radioSettingsAutoAddRoom": "Sala (Room)",
   "radioSettingsAutoAddSensor": "Sensor",
-
+  "radioSettingsOverwriteOldest": "Sobrescrever Mais Antigo",
+  "radioSettingsOverwriteOldestDesc": "Quando ativo, os contactos mais antigos sem favorito são substituídos por novos quando a lista está cheia.",
+  "radioSettingsAutoAddMaxHops": "Saltos Máximos de Auto Adição",
+  "radioSettingsAutoAddMaxHopsDesc": "Os contactos só serão auto adicionados se o caminho do advert tiver o mesmo ou menos saltos que o limite. Deixe em branco para sem limite.",
+  "radioSettingsAutoAddMaxHopsHint": "Saltos (0-63)",
+  "radioSettingsPullToRefresh": "Puxar para Atualizar",
+  "radioSettingsPullToRefreshDesc": "Quando ativo, pode deslizar para baixo para atualizar a lista de contactos.",
+  "radioSettingsShowPublicKeys": "Mostrar Chaves Públicas",
+  "radioSettingsShowPublicKeysDesc": "Quando ativo, as chaves públicas serão mostradas na lista de contactos.",
+  "radioSettingsBandPresetsTitle": "Predefinições de Banda",
   "roomJoinTitle": "Entrar na sala",
   "roomJoinInstruction": "Esta sala pode requerer uma palavra-passe. Deixe em branco se for pública.",
   "roomPasswordLabel": "Palavra-passe (opcional)",
@@ -456,11 +710,14 @@
   "roomReplyStrip": "Sala",
   "roomMessageHint": "Mensagem para {name} sala...",
   "@roomMessageHint": {
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "roomMessageFallback": "Escreva uma mensagem...",
   "roomTelemetryData": "Dados de telemetria",
-
   "rxLogTitle": "RX Log",
   "rxLogExportPcap": "Exportar PCAPNG",
   "rxLogClearLog": "Limpar log",
@@ -477,7 +734,6 @@
   "rxLogPacketTypePrefix": "Tipo",
   "rxLogEmptyTitle": "Sem pacotes RX",
   "rxLogEmptyHint": "Quando a rádio receber tráfego mesh, os pacotes aparecem aqui.",
-
   "telemetryBattery": "Bateria",
   "telemetryNetStats": "Estatísticas da Rede",
   "telemetryRadioState": "Rádio — Estado",
@@ -511,7 +767,6 @@
   "telemetryFloodRX": "Flood RX",
   "telemetryDirectTX": "Direto TX",
   "telemetryDirectRX": "Direto RX",
-
   "eventTitle": "Programa do Evento",
   "eventDateLabel": "Abril 2026",
   "eventSummitTitle": "Tech Summit 2026",
@@ -524,19 +779,19 @@
   "eventChannelSheetDesc": "Adiciona o canal ao rádio ligado ou consulte os dados manualmente.",
   "eventChannelAdded": "Canal #plano333 adicionado no slot {slot}",
   "@eventChannelAdded": {
-    "placeholders": { "slot": { "type": "int" } }
+    "placeholders": {
+      "slot": {
+        "type": "int"
+      }
+    }
   },
   "eventChannelNotFound": "Canal #techsummit2026 não encontrado no rádio.",
   "eventChannelNoSlots": "Sem slots de canal disponíveis para adicionar #techsummit2026.",
-
   "plan333CardTitle": "MESH 3-3-3",
   "plan333EventActive": "● EVENTO ACTIVO",
   "plan333PhaseCQ": "CQ 21:00–22:00",
-  "plan333PhaseQSL": "QSL 21:30–22:00",
   "plan333CqSent": "CQ enviados:",
   "plan333LastSent": "(último:",
-  "plan333QslSent": "QSL enviados:",
-  "plan333NoQslLog": "sem QSLs no log",
   "plan333EventSchedule": "Sábados 21:00–22:00  •  CQ Presenças MeshCore",
   "plan333ReportPrefix": "Relatório em",
   "plan333ConfigTitle": "Configuração do Evento",
@@ -546,16 +801,13 @@
   "plan333CityHint": "Ex: Lisboa",
   "plan333Locality": "Localidade",
   "plan333LocalityHint": "Ex: Olaias",
-  "plan333AutoSend": "Envio automático de CQ e QSL",
-  "plan333AutoSendDesc": "CQ: até 3 mensagens (21:00–22:00)  •  QSL: confirma cada estação recebida (21:30–22:00)",
+  "plan333AutoSend": "Envio automático de CQ",
+  "plan333AutoSendDesc": "CQ: até 3 mensagens (21:00–22:00)",
   "plan333CqMessageLabel": "Mensagem CQ:",
   "plan333FormatTitle": "Formatos de Mensagem",
   "plan333FormatPresence": "Presença (CQ)",
   "plan333FormatPresencePhase": "MeshCore 21:00–22:00",
   "plan333FormatCqTemplate": "CQ Plano 333, [Nome], [Cidade], [Localidade]",
-  "plan333FormatQSL": "QSL (confirmação)",
-  "plan333FormatQSLPhase": "Opcional 21:30–22:00",
-  "plan333FormatQSLTemplate": "QSL, [Nome estação recebida], [N] hops, [local]\nEx: QSL, Daytona, 5 hops, Tomar",
   "plan333ConfigureChannel": "Configurar Canal MeshCore  (#plano333)",
   "plan333Alerts": "Alertas Mesh 3-3-3",
   "plan333AlertToggle": "Lembrete do evento de sábado",
@@ -565,9 +817,9 @@
   "plan333ShareLog": "Partilhar log",
   "plan333ClearLog": "Limpar log",
   "plan333NoStationsYet": "Nenhuma estação ouvida ainda. Os CQs recebidos no canal aparecem aqui automaticamente.",
-  "plan333ClearQslTitle": "Limpar QSL?",
-  "plan333ClearQslContent": "Todos os QSL registados serão apagados.",
-  "plan333AddQslTitle": "Adicionar QSL",
+  "plan333ClearQslTitle": "Limpar log?",
+  "plan333ClearQslContent": "Todas as estações registadas serão apagadas.",
+  "plan333AddQslTitle": "Adicionar estação",
   "plan333StationLabel": "Estação *",
   "plan333StationHint": "ex: Daytona",
   "plan333HopsLabel": "Hops:",
@@ -579,7 +831,11 @@
   "plan333AbortedMessage": "Automação abortada — sem mais envios nesta sessão.",
   "plan333SendCqButton": "ENVIAR CQ  ({count}/3)",
   "@plan333SendCqButton": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "plan333AllSent": "✓  3 CQs enviados",
   "plan333ConfigureFirst": "Configure os dados primeiro",
@@ -588,6 +844,159 @@
   "plan333ChannelSheetDesc": "Adiciona o canal ao rádio ligado ou consulte os dados manualmente.",
   "plan333ChannelAdded": "Canal #plano333 adicionado no slot {slot}",
   "@plan333ChannelAdded": {
-    "placeholders": { "slot": { "type": "int" } }
-  }
+    "placeholders": {
+      "slot": {
+        "type": "int"
+      }
+    }
+  },
+  "signalNone": "Sem sinal (nenhum pacote recebido nos últimos 5 min)",
+  "signalWeak": "Sinal muito fraco",
+  "signalFair": "Sinal fraco",
+  "signalGood": "Bom sinal",
+  "signalExcellent": "Sinal excelente",
+  "urlOpenTitle": "Abrir link externo?",
+  "urlOpenConfirm": "Abrir",
+  "topologyScreenTitle": "Topologia da Rede",
+  "topologyTabGraph": "Grafo",
+  "topologyTabTimeline": "Cronologia",
+  "topologyEmptyTitle": "Sem dados de topologia",
+  "topologyEmptyHint": "Liga-te a um rádio para\nvisualizar a rede",
+  "topologySelf": "Eu",
+  "topologyResetView": "Repor vista",
+  "topologySnrGood": "SNR ≥ 5 dB",
+  "topologySnrMid": "SNR 0–5 dB",
+  "topologySnrBad": "SNR < 0 dB",
+  "topologyLabelId": "ID",
+  "topologyLabelPath": "Caminho",
+  "topologyLabelSeen": "Visto",
+  "topologySecondsAgo": "há {s}s",
+  "@topologySecondsAgo": {
+    "placeholders": {
+      "s": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyMinutesAgo": "há {min}min",
+  "@topologyMinutesAgo": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyHoursAgo": "há {h}h",
+  "@topologyHoursAgo": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyDaysAgo": "há {d}d",
+  "@topologyDaysAgo": {
+    "placeholders": {
+      "d": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyWeeksAgo": "há {w} sem.",
+  "@topologyWeeksAgo": {
+    "placeholders": {
+      "w": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyFilterRecent": "Mostrar apenas contactos no rádio",
+  "topologyFilterAll": "Mostrar todos (incl. locais)",
+  "topologyToggleLabels": "Mostrar/ocultar etiquetas",
+  "topologyNodesShown": "{shown}/{total} nós",
+  "@topologyNodesShown": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "topologyHopDirect": "Direto",
+  "topologyHop1": "1 salto",
+  "topologyHop2": "2 saltos",
+  "topologyHopFlood": "Flood / 3+",
+  "topologyTabPaths": "Caminhos",
+  "topologyPathsEmptyTitle": "Sem dados de rota",
+  "topologyPathsEmptyHint": "Faz um trace a partir de um\ncontacto para ver o caminho",
+  "topologyPathsCount": "{n, plural, =1{1 caminho} other{{n} caminhos}}",
+  "@topologyPathsCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "repeaterTitle": "Gerir Repetidor",
+  "repeaterConfig": "Configuração Remota",
+  "repeaterApply": "Aplicar",
+  "repeaterNodeName": "Nome do nó",
+  "repeaterTxPower": "Potência TX",
+  "repeaterForwarding": "Repetição de pacotes",
+  "repeaterForwardingDesc": "Activa ou desactiva o reencaminhamento de pacotes",
+  "repeaterAdvertInterval": "Intervalo anúncio local",
+  "repeaterAdvertZeroHop": "Anúncio Auto (Zero Hop)",
+  "repeaterAdvertFlood": "Anúncio Auto (Flood)",
+  "repeaterIntervalMinutes": "Intervalo (minutos)",
+  "repeaterIntervalHours": "Intervalo (horas)",
+  "repeaterMinimalTrafficHint": "Para usar tráfego mínimo na rede, use os ícones de refrescar para pedir apenas a informação que precisa.",
+  "repeaterValueNotLoaded": "—",
+  "repeaterFloodMax": "Flood máximo (saltos)",
+  "repeaterClearStats": "Limpar Estatísticas",
+  "repeaterClearStatsDesc": "Reinicia contadores de pacotes e erros",
+  "repeaterNoStats": "Autentique-se e prima \"Actualizar\" para obter as estatísticas.",
+  "repeaterFetchStats": "Actualizar",
+  "repeaterAuthenticated": "Autenticado",
+  "repeaterTabStatus": "Estado",
+  "repeaterTabCommandLine": "Linha de comandos",
+  "repeaterTabSettings": "Definições",
+  "repeaterCmdHint": "Enviar um comando...",
+  "repeaterCmdEmpty": "Sem comandos enviados. Use o campo abaixo para enviar comandos CLI directamente.",
+  "repeaterCmdClear": "Limpar histórico",
+  "repeaterMenuHelp": "Ajuda de Comandos",
+  "repeaterMenuClearHistory": "Apagar Histórico de Comandos",
+  "repeaterHelpTitle": "Ajuda",
+  "repeaterHelpSubtitle": "Comandos do Repetidor",
+  "repeaterHelpFirmwareNote": "Alguns comandos requerem firmware recente.",
+  "repeaterHelpSearchHint": "Pesquisar",
+  "dataExportTitle": "Exportar Dados",
+  "dataExportContactsTitle": "Contactos",
+  "dataExportContactsDesc": "{count} contactos guardados",
+  "@dataExportContactsDesc": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dataExportMessagesTitle": "Mensagens",
+  "dataExportMessagesDesc": "Todas as conversas — privadas e canais",
+  "dataExportKmlTitle": "Dados de Mapa",
+  "dataExportKmlDesc": "{count} contactos com GPS",
+  "@dataExportKmlDesc": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dataExportNote": "Os ficheiros são exportados diretamente para o menu de partilha.\nNenhum dado sai do dispositivo sem a tua confirmação.",
+  "dataExportNoContacts": "Sem contactos para exportar",
+  "dataExportNoMessages": "Sem mensagens para exportar",
+  "dataExportNoGps": "Sem contactos com coordenadas GPS",
+  "dataExportFailed": "Falha na exportação",
+  "appsDataExportTitle": "Exportar Dados",
+  "appsDataExportSubtitle": "Exporta contactos, mensagens e dados de mapa"
 }

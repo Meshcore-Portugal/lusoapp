@@ -1,24 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import 'qr_scanner_screen.dart';
+import '../../config/feature_toggles.dart';
 
 /// App launcher grid — shown when the user taps the "Apps" bottom tab.
 ///
 /// Each tile navigates to a sub-route within the shell (so the bottom nav
-/// stays visible) except for the QR scanner, which is pushed as a modal.
+/// stays visible).
 class AppsScreen extends StatelessWidget {
   const AppsScreen({super.key});
 
   static const _apps = [
-    // _AppEntry(
-    //   id: 'event',
-    //   title: 'Summit Edition',
-    //   subtitle: 'Programa do Evento',
-    //   icon: Icons.event_note,
-    //   color: Color(0xFFFF8C00),
-    //   route: '/apps/event',
-    // ),
+    _AppEntry(
+      id: 'topology',
+      title: 'Topologia',
+      subtitle: 'Grafo da rede e cronologia',
+      icon: Icons.hub_outlined,
+      color: Color(0xFFEC4899),
+      route: '/apps/topology',
+      feature: AppFeature.topology,
+    ),
     _AppEntry(
       id: 'plan333',
       title: 'Plano 3-3-3',
@@ -26,6 +27,7 @@ class AppsScreen extends StatelessWidget {
       icon: Icons.crisis_alert,
       color: Color(0xFFFF6B00),
       route: '/apps/plan333',
+      feature: AppFeature.plan333,
     ),
     _AppEntry(
       id: 'telemetry',
@@ -34,6 +36,7 @@ class AppsScreen extends StatelessWidget {
       icon: Icons.analytics_outlined,
       color: Color(0xFF14B8A6),
       route: '/apps/telemetry',
+      feature: AppFeature.telemetry,
     ),
     _AppEntry(
       id: 'rxlog',
@@ -42,20 +45,42 @@ class AppsScreen extends StatelessWidget {
       icon: Icons.radar,
       color: Color(0xFF4F46E5),
       route: '/apps/rxlog',
+      feature: AppFeature.rxlog,
     ),
     _AppEntry(
-      id: 'qr',
-      title: 'Leitor QR',
-      subtitle: 'Digitalizar código QR',
-      icon: Icons.qr_code_scanner,
-      color: Color(0xFF9C6FFF),
-      route: null, // modal — handled separately
+      id: 'noisefloor',
+      title: 'RSSI / Noise Floor',
+      subtitle: 'RSSI e ruído de fundo em tempo real',
+      icon: Icons.graphic_eq,
+      color: Color(0xFF22C55E),
+      route: '/apps/noisefloor',
+      feature: AppFeature.noisefloor,
+    ),
+    _AppEntry(
+      id: 'dataexport',
+      title: 'Exportar Dados',
+      subtitle: 'Contactos, mensagens e mapa',
+      icon: Icons.upload_file_outlined,
+      color: Color(0xFFF59E0B),
+      route: '/apps/dataexport',
+      feature: AppFeature.dataexport,
+    ),
+    _AppEntry(
+      id: 'event',
+      title: 'Summit Edition',
+      subtitle: 'Programa do Evento',
+      icon: Icons.event_note,
+      color: Color(0xFFFF8C00),
+      route: '/apps/event',
+      feature: AppFeature.event,
     ),
   ];
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final enabledApps =
+        _apps.where((app) => FeatureToggles.isEnabled(app.feature)).toList();
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
@@ -66,12 +91,12 @@ class AppsScreen extends StatelessWidget {
             mainAxisSpacing: 14,
             childAspectRatio: 1.0,
           ),
-          itemCount: _apps.length,
+          itemCount: enabledApps.length,
           itemBuilder: (context, index) {
             return _AppTile(
-              entry: _apps[index],
+              entry: enabledApps[index],
               theme: theme,
-              onTap: () => _launch(context, _apps[index]),
+              onTap: () => _launch(context, enabledApps[index]),
             );
           },
         ),
@@ -80,14 +105,7 @@ class AppsScreen extends StatelessWidget {
   }
 
   void _launch(BuildContext context, _AppEntry app) {
-    if (app.route != null) {
-      context.push(app.route!);
-    } else {
-      // QR scanner is a modal that returns the scanned value.
-      Navigator.of(context).push<String>(
-        MaterialPageRoute(builder: (_) => const QrScannerScreen()),
-      );
-    }
+    context.push(app.route);
   }
 }
 
@@ -103,6 +121,7 @@ class _AppEntry {
     required this.icon,
     required this.color,
     required this.route,
+    required this.feature,
   });
 
   final String id;
@@ -111,8 +130,11 @@ class _AppEntry {
   final IconData icon;
   final Color color;
 
-  /// Shell route to navigate to, or null for a modal push.
-  final String? route;
+  /// Shell route to navigate to.
+  final String route;
+
+  /// Feature-flag key for this entry.
+  final AppFeature feature;
 }
 
 // ---------------------------------------------------------------------------

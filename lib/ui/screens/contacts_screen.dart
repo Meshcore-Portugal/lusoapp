@@ -12,7 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
-import '../theme.dart';
+import '../../transport/transport.dart';
 import '../widgets/path_sheet.dart';
 import 'qr_scanner_screen.dart';
 
@@ -186,28 +186,40 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
         .join();
   }
 
+  static String _radioKeyHex(Uint8List key) =>
+      key.take(32).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+
   @override
   Widget build(BuildContext context) {
     final filter = ref.watch(contactFilterProvider);
     final sort = ref.watch(contactSortProvider);
-    final contacts = ref.watch(contactsProvider);
-    final favorites = ref.watch(favoritesProvider);
-    final messages = ref.watch(messagesProvider);
+    final allContacts = ref.watch(contactsProvider);
+    final radioKeys = ref.watch(radioContactsSnapshotProvider);
+    final transportState = ref.watch(connectionProvider);
+    final contactsSynced = ref.watch(contactsSyncedProvider);
+    // Watch the stable per-contact last-message timestamp map instead of the
+    // full messages list — channel messages no longer cause this screen to
+    // rebuild and re-sort (#3 perf fix).
+    final lastMsgTs = ref.watch(contactLastMsgTsProvider);
+    final autoAddSettings = ref.watch(advertAutoAddProvider);
+
+    // Only show contacts actually stored on the radio. Advert-heard contacts
+    // that haven't been saved to the radio appear in the discover screen only.
+    // Fall back to the full cache while disconnected or while the initial
+    // sync is still in progress (so the list isn't blank during connect).
+    final isConnected = transportState == TransportState.connected;
+    final contacts =
+        (!isConnected || !contactsSynced)
+            ? allContacts // Not yet synced — show cached list
+            : allContacts
+                .where((c) => radioKeys.contains(_radioKeyHex(c.publicKey)))
+                .toList();
 
     final chatContacts = contacts.where((c) => c.isChat).toList();
     final repeaters = contacts.where((c) => c.isRepeater).toList();
     final rooms = contacts.where((c) => c.isRoom).toList();
     final sensors = contacts.where((c) => c.isSensor).toList();
-    final favoriteContacts =
-        contacts
-            .where(
-              (c) => favorites.contains(
-                c.publicKey
-                    .map((b) => b.toRadixString(16).padLeft(2, '0'))
-                    .join(),
-              ),
-            )
-            .toList();
+    final favoriteContacts = contacts.where((c) => c.isFavorite).toList();
 
     List<Contact> filtered;
     switch (filter) {
@@ -226,25 +238,10 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     }
 
     if (_query.isNotEmpty) {
-      filtered =
-          filtered
-              .where(
-                (c) =>
-                    c.displayName.toLowerCase().contains(_query) ||
-                    c.name.toLowerCase().contains(_query) ||
-                    c.shortId.toLowerCase().contains(_query),
-              )
-              .toList();
+      filtered = filtered.where((c) => c.searchKey.contains(_query)).toList();
     }
 
-    // Build last-message timestamp index keyed by 6-byte public-key prefix.
-    final lastMsgTs = <String, int>{};
-    for (final msg in messages) {
-      if (msg.senderKey != null && msg.senderKey!.length >= 6) {
-        final k = _hex6(msg.senderKey!);
-        if (msg.timestamp > (lastMsgTs[k] ?? 0)) lastMsgTs[k] = msg.timestamp;
-      }
-    }
+    // lastMsgTs is already computed by contactLastMsgTsProvider — no scan here.
 
     filtered = [...filtered];
     switch (sort) {
@@ -457,39 +454,46 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
               child:
                   filtered.isEmpty
                       ? _EmptyState(filter: filter)
-                      : RefreshIndicator(
-                        onRefresh:
-                            () async =>
-                                ref
-                                    .read(radioServiceProvider)
-                                    ?.requestContacts(),
-                        child: ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 80),
-                          itemCount: filtered.length,
-                          itemBuilder: (context, i) {
-                            final contact = filtered[i];
-                            final keyHex =
-                                contact.publicKey
-                                    .map(
-                                      (b) =>
-                                          b.toRadixString(16).padLeft(2, '0'),
-                                    )
-                                    .join();
-                            final isSelected = _selectedContactKeys.contains(
-                              keyHex,
-                            );
-                            return _ContactTile(
-                              contact: contact,
-                              isMultiSelectMode: _multiSelectMode,
-                              isSelected: isSelected,
-                              onSelected:
-                                  _multiSelectMode
-                                      ? () => _toggleSelection(keyHex)
-                                      : null,
-                              onLongPress: null,
-                            );
-                          },
-                        ),
+                      : Builder(
+                        builder: (context) {
+                          final list = ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 80),
+                            itemCount: filtered.length,
+                            itemBuilder: (context, i) {
+                              final contact = filtered[i];
+                              final keyHex =
+                                  contact.publicKey
+                                      .map(
+                                        (b) =>
+                                            b.toRadixString(16).padLeft(2, '0'),
+                                      )
+                                      .join();
+                              final isSelected = _selectedContactKeys.contains(
+                                keyHex,
+                              );
+                              return _ContactTile(
+                                contact: contact,
+                                isMultiSelectMode: _multiSelectMode,
+                                isSelected: isSelected,
+                                showPublicKey: autoAddSettings.showPublicKeys,
+                                onSelected:
+                                    _multiSelectMode
+                                        ? () => _toggleSelection(keyHex)
+                                        : null,
+                                onLongPress: null,
+                              );
+                            },
+                          );
+                          if (!autoAddSettings.pullToRefresh) return list;
+                          return RefreshIndicator(
+                            onRefresh:
+                                () async =>
+                                    ref
+                                        .read(radioServiceProvider)
+                                        ?.requestContacts(),
+                            child: list,
+                          );
+                        },
                       ),
             ),
           ],
@@ -533,7 +537,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
 // Filter bar
 // ---------------------------------------------------------------------------
 
-typedef _Counts =
+typedef ContactFilterCounts =
     ({
       int todos,
       int favoritos,
@@ -545,13 +549,14 @@ typedef _Counts =
 
 class ContactFilterBar extends StatelessWidget {
   const ContactFilterBar({
+    super.key,
     required this.filter,
     required this.counts,
     required this.onChanged,
   });
 
   final ContactFilter filter;
-  final _Counts counts;
+  final ContactFilterCounts counts;
   final ValueChanged<ContactFilter> onChanged;
 
   @override
@@ -697,6 +702,7 @@ class _ContactTile extends ConsumerWidget {
     required this.contact,
     this.isMultiSelectMode = false,
     this.isSelected = false,
+    this.showPublicKey = true,
     this.onSelected,
     this.onLongPress,
   });
@@ -704,6 +710,7 @@ class _ContactTile extends ConsumerWidget {
   final Contact contact;
   final bool isMultiSelectMode;
   final bool isSelected;
+  final bool showPublicKey;
   final VoidCallback? onSelected;
   final VoidCallback? onLongPress;
 
@@ -729,9 +736,7 @@ class _ContactTile extends ConsumerWidget {
             )
             : 0;
 
-    final isFavorite = ref.watch(
-      favoritesProvider.select((s) => s.contains(keyHex)),
-    );
+    final isFavorite = contact.isFavorite;
 
     final ts = _bestTs(contact);
     final lastSeen = ts > 0 ? _formatTimestamp(ts) : 'Nunca';
@@ -767,12 +772,16 @@ class _ContactTile extends ConsumerWidget {
             fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.w600,
           ),
         ),
-        subtitle: Text(
-          contact.customName != null
-              ? '${contact.name.isNotEmpty ? contact.name : contact.shortId}  •  Visto: $lastSeen  |  Caminho: ${contactPathLabel(contact.pathLen)}'
-              : 'Visto: $lastSeen  |  Caminho: ${contactPathLabel(contact.pathLen)}',
-          style: theme.textTheme.bodySmall,
-        ),
+        subtitle: Text(() {
+          final base =
+              'Visto: $lastSeen  |  Caminho: ${contactPathLabel(contact.pathLen)}';
+          final namePrefix =
+              contact.customName != null
+                  ? '${contact.name.isNotEmpty ? contact.name : contact.shortId}  •  '
+                  : '';
+          final keyPart = showPublicKey ? '  •  ${contact.shortId}' : '';
+          return '$namePrefix$base$keyPart';
+        }(), style: theme.textTheme.bodySmall),
         trailing:
             isFavorite
                 ? const Icon(Icons.star, color: Colors.amber, size: 20)
@@ -871,14 +880,6 @@ class _ContactTile extends ConsumerWidget {
     WidgetsBinding.instance.addPostFrameCallback((_) => ctrl.dispose());
   }
 
-  void _showAdminSheet(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _RepeaterAdminSheet(contact: contact),
-    );
-  }
-
   void _showPathSheet(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
@@ -919,6 +920,92 @@ class _ContactTile extends ConsumerWidget {
     }
   }
 
+  /// Flip the favourite bit on [contact] and push the updated flags byte to
+  /// the radio. Optimistically updates the local contact list so the UI
+  /// reflects the change immediately — the radio's OkResponse is not awaited.
+  void _toggleFavorite(WidgetRef ref) {
+    final updated = contact.withFavorite(!contact.isFavorite);
+    ref
+        .read(contactsProvider.notifier)
+        .setFavorite(contact.publicKey, updated.isFavorite);
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+    unawaited(service.addUpdateContact(updated).catchError((_) {}));
+  }
+
+  int _setTelemetryModeField(int current, int shift, int mode) {
+    final mask = 0x03 << shift;
+    return (current & ~mask) | ((mode & 0x03) << shift);
+  }
+
+  Future<void> _ensurePrivateLocationTelemetryMode(WidgetRef ref) async {
+    final service = ref.read(radioServiceProvider);
+    final self = ref.read(selfInfoProvider);
+    if (service == null || self == null) return;
+
+    final current = self.telemetryMode ?? 0;
+    var next = current;
+    next = _setTelemetryModeField(next, 0, 1);
+    next = _setTelemetryModeField(next, 2, 1);
+    if (next == current) return;
+
+    await service.setOtherParams(
+      manualAddContacts: self.manualAddContacts ?? 0,
+      telemetryMode: next,
+      advLocPolicy: self.advLocPolicy ?? 0,
+      multiAcks: self.multiAcks ?? 0,
+    );
+    ref.read(selfInfoProvider.notifier).state = self.copyWith(
+      telemetryMode: next,
+    );
+  }
+
+  Future<void> _togglePrivateLocationOnRequest(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final enable = !contact.allowsPrivateLocationOnRequest;
+    final updated = contact.withPrivateLocationOnRequest(enable);
+    ref
+        .read(contactsProvider.notifier)
+        .setPrivateLocationOnRequest(contact.publicKey, enable);
+
+    final service = ref.read(radioServiceProvider);
+    if (service != null) {
+      if (enable) {
+        await _ensurePrivateLocationTelemetryMode(ref);
+      }
+      unawaited(service.addUpdateContact(updated).catchError((_) {}));
+    }
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          enable
+              ? 'Partilha GPS privada activada para ${contact.displayName}.'
+              : 'Partilha GPS privada desactivada para ${contact.displayName}.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _requestPrivateLocation(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+    await service.sendTelemetryRequest(contact.publicKey);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Pedido de localização enviado para ${contact.displayName}.',
+        ),
+      ),
+    );
+  }
+
   Future<void> _saveToRadio(BuildContext context, WidgetRef ref) async {
     final service = ref.read(radioServiceProvider);
     if (service == null) return;
@@ -931,6 +1018,7 @@ class _ContactTile extends ConsumerWidget {
       if (!context.mounted) return;
       if (resp is OkResponse) {
         await service.requestContacts();
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -1044,8 +1132,38 @@ class _ContactTile extends ConsumerWidget {
                         : context.l10n.contactsAddFavorites,
                   ),
                   onTap: () {
-                    ref.read(favoritesProvider.notifier).toggle(keyHex);
                     Navigator.pop(ctx);
+                    _toggleFavorite(ref);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(
+                    contact.allowsPrivateLocationOnRequest
+                        ? Icons.location_searching
+                        : Icons.location_disabled,
+                  ),
+                  title: Text(
+                    contact.allowsPrivateLocationOnRequest
+                        ? 'Desactivar partilha GPS privada'
+                        : 'Activar partilha GPS privada',
+                  ),
+                  subtitle: const Text(
+                    'Permite a este contacto pedir a tua localização on-demand, sem beacon público.',
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    unawaited(_togglePrivateLocationOnRequest(context, ref));
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.my_location_outlined),
+                  title: const Text('Pedir localização'),
+                  subtitle: const Text(
+                    'Envia um pedido privado de localização/telemetria a este contacto.',
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    unawaited(_requestPrivateLocation(context, ref));
                   },
                 ),
                 // QR
@@ -1087,11 +1205,11 @@ class _ContactTile extends ConsumerWidget {
                   ),
                 if (contact.isRepeater)
                   ListTile(
-                    leading: const Icon(Icons.admin_panel_settings),
+                    leading: const Icon(Icons.cell_tower),
                     title: Text(context.l10n.contactsRemoteAdmin),
                     onTap: () {
                       Navigator.pop(ctx);
-                      _showAdminSheet(context, ref);
+                      context.push('/repeater/$keyHex');
                     },
                   ),
                 // Path management — available for all node types
@@ -1556,638 +1674,6 @@ class _TypeChip extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Path management sheet → lives in lib/ui/widgets/path_sheet.dart
-// Repeater remote-admin bottom sheet
-// ---------------------------------------------------------------------------
-
-class _RepeaterAdminSheet extends ConsumerStatefulWidget {
-  const _RepeaterAdminSheet({required this.contact});
-  final Contact contact;
-
-  @override
-  ConsumerState<_RepeaterAdminSheet> createState() =>
-      _RepeaterAdminSheetState();
-}
-
-class _RepeaterAdminSheetState extends ConsumerState<_RepeaterAdminSheet> {
-  final _passCtrl = TextEditingController();
-  bool _obscure = true;
-  bool _waiting = false;
-  String? _loginError;
-  String? _lastResponse;
-  bool _pendingCommand = false;
-  String? _pendingLabel;
-
-  String get _prefixHex =>
-      widget.contact.publicKey
-          .take(6)
-          .map((b) => b.toRadixString(16).padLeft(2, '0'))
-          .join();
-
-  @override
-  void initState() {
-    super.initState();
-    // Reset any stale login result so the listener starts clean.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(loginResultProvider.notifier).state = null;
-    });
-  }
-
-  @override
-  void dispose() {
-    _passCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _login() async {
-    final password = _passCtrl.text;
-    final service = ref.read(radioServiceProvider);
-    if (service == null) return;
-
-    ref.read(loginResultProvider.notifier).state = null;
-    setState(() {
-      _waiting = true;
-      _loginError = null;
-    });
-
-    // Listen for the radio response directly so we can catch ErrorResponse
-    // (e.g. ERR_NOT_FOUND when the contact isn't in the radio's table) and
-    // show a useful message instead of spinning forever.
-    final completer = Completer<String?>(); // null = success, non-null = error
-    late StreamSubscription<CompanionResponse> sub;
-    sub = service.responses.listen((r) {
-      if (completer.isCompleted) return;
-      if (r is LoginSuccessPush) {
-        completer.complete(null);
-      } else if (r is LoginFailPush) {
-        completer.complete('Falhou — verifique a palavra-passe');
-      } else if (r is ErrorResponse) {
-        final msg =
-            r.errorCode == 2
-                ? 'Contacto não encontrado no rádio — force um advert deste nó'
-                : 'Erro do rádio (código ${r.errorCode})';
-        completer.complete(msg);
-      }
-    });
-
-    await service.login(widget.contact.publicKey, password);
-
-    // Timeout after 10 s if radio never replies.
-    final error = await completer.future
-        .timeout(
-          const Duration(seconds: 10),
-          onTimeout: () => 'Sem resposta do rádio (timeout)',
-        )
-        .whenComplete(sub.cancel);
-
-    if (!mounted) return;
-    if (error == null) {
-      // Success — loginResultProvider listener handles the UI transition.
-      ref.read(loginResultProvider.notifier).state = true;
-    } else {
-      setState(() {
-        _waiting = false;
-        _loginError = error;
-      });
-    }
-  }
-
-  Future<void> _requestStatus() async {
-    final service = ref.read(radioServiceProvider);
-    await service?.sendStatusRequest(widget.contact.publicKey);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pedido de estado enviado...')),
-      );
-    }
-  }
-
-  Future<void> _sendAdminCommand(String command, String label) async {
-    final service = ref.read(radioServiceProvider);
-    if (service == null) return;
-
-    setState(() {
-      _pendingCommand = true;
-      _pendingLabel = label;
-      _lastResponse = null;
-    });
-
-    final prefix = Uint8List.fromList(
-      widget.contact.publicKey.take(6).toList(),
-    );
-
-    final completer = Completer<String>();
-    late StreamSubscription<CompanionResponse> sub;
-    sub = service.responses.listen((r) {
-      if (completer.isCompleted) return;
-      if (r is PrivateMessageResponse && r.message.senderKey != null) {
-        final key = r.message.senderKey!;
-        if (key.length >= 6 &&
-            key[0] == prefix[0] &&
-            key[1] == prefix[1] &&
-            key[2] == prefix[2] &&
-            key[3] == prefix[3] &&
-            key[4] == prefix[4] &&
-            key[5] == prefix[5]) {
-          completer.complete(r.message.text.trim());
-        }
-      }
-    });
-
-    await service.sendAdminCommand(widget.contact.publicKey, command);
-
-    final response = await completer.future
-        .timeout(
-          const Duration(seconds: 15),
-          onTimeout: () => '(sem resposta do nó)',
-        )
-        .whenComplete(sub.cancel);
-
-    if (!mounted) return;
-    setState(() {
-      _pendingCommand = false;
-      _pendingLabel = null;
-      _lastResponse = response;
-    });
-
-    if (command == 'start ota' &&
-        response.toLowerCase().startsWith('ok - mac:')) {
-      _showOtaDialog(response);
-    }
-  }
-
-  void _showOtaDialog(String response) {
-    showDialog<void>(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: const Text('OTA Iniciado'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.system_update_alt,
-                  size: 48,
-                  color: Colors.blue,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  response,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Ligue-se ao nó via BLE DFU (ex: nRF Connect) para actualizar o firmware.',
-                  style: TextStyle(fontSize: 12),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-            actions: [
-              FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final bottom = MediaQuery.viewInsetsOf(context).bottom;
-
-    // Listen for login success from loginResultProvider (set by _login() on success).
-    ref.listen<bool?>(loginResultProvider, (_, result) {
-      if (result == true && mounted) {
-        setState(() {
-          _waiting = false;
-          _loginError = null;
-        });
-      }
-    });
-
-    final loginResult = ref.watch(loginResultProvider);
-    final loggedIn = loginResult == true;
-
-    final stats = ref.watch(
-      repeaterStatusProvider.select((m) => m[_prefixHex]),
-    );
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottom),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurface.withAlpha(40),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(Icons.cell_tower, color: AppTheme.primary, size: 22),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Admin: ${widget.contact.name.isNotEmpty ? widget.contact.name : widget.contact.shortId}',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'ID: ${widget.contact.shortId}  |  Saltos: ${widget.contact.pathLen}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const Divider(height: 20),
-
-            if (!loggedIn) ...[
-              Text(
-                'Autenticação',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _passCtrl,
-                obscureText: _obscure,
-                decoration: InputDecoration(
-                  labelText: 'Palavra-passe (opcional)',
-                  hintText: 'Deixar em branco se sem palavra-passe',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  errorText: _loginError,
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscure ? Icons.visibility : Icons.visibility_off,
-                    ),
-                    onPressed: () => setState(() => _obscure = !_obscure),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              FilledButton.icon(
-                onPressed: _waiting ? null : _login,
-                icon:
-                    _waiting
-                        ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                        : const Icon(Icons.login),
-                label: Text(_waiting ? 'A ligar...' : 'Entrar'),
-              ),
-            ] else ...[
-              // ── Auth status row ──────────────────────────────────────
-              Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.green, size: 18),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Autenticado',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Spacer(),
-                  OutlinedButton.icon(
-                    onPressed: _pendingCommand ? null : _requestStatus,
-                    icon: const Icon(Icons.refresh, size: 16),
-                    label: const Text('Estado'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-
-              // ── Pending indicator ─────────────────────────────────────
-              if (_pendingCommand) ...[
-                Row(
-                  children: [
-                    const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'A enviar: $_pendingLabel...',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-              ],
-
-              // ── Last CLI response ─────────────────────────────────────
-              if (_lastResponse != null) ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.terminal,
-                        size: 14,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _lastResponse!,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-
-              // ── Remote actions ────────────────────────────────────────
-              const Divider(height: 20),
-              Text(
-                'Acções Remotas',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 4),
-              _AdminTile(
-                icon: Icons.broadcast_on_home,
-                title: 'Anúncio Flood',
-                subtitle: 'Força o nó a enviar um anúncio flood',
-                enabled: !_pendingCommand,
-                onTap: () => _sendAdminCommand('advert', 'Anúncio Flood'),
-              ),
-              _AdminTile(
-                icon: Icons.wifi_tethering,
-                title: 'Anúncio Zero-Hop',
-                subtitle: 'Anúncio só para vizinhos directos',
-                enabled: !_pendingCommand,
-                onTap:
-                    () =>
-                        _sendAdminCommand('advert.zerohop', 'Anúncio Zero-Hop'),
-              ),
-              _AdminTile(
-                icon: Icons.schedule,
-                title: 'Sincronizar Relógio',
-                subtitle: 'Envia o timestamp actual para o nó',
-                enabled: !_pendingCommand,
-                onTap: () => _sendAdminCommand('clock sync', 'Sync Clock'),
-              ),
-              _AdminTile(
-                icon: Icons.system_update_alt,
-                title: 'Iniciar OTA',
-                subtitle: 'Inicia actualização OTA — NRF DFU / ESP32',
-                enabled: !_pendingCommand,
-                onTap: () async {
-                  final ok = await showDialog<bool>(
-                    context: context,
-                    builder:
-                        (ctx) => AlertDialog(
-                          title: Text(context.l10n.contactsConfirmOTATitle),
-                          content: const Text(
-                            'O rádio vai entrar em modo de actualização OTA e ficará '
-                            'temporariamente inacessível.\n\n'
-                            'Tens a certeza?',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, false),
-                              child: const Text('Cancelar'),
-                            ),
-                            FilledButton(
-                              onPressed: () => Navigator.pop(ctx, true),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: Colors.orange,
-                              ),
-                              child: const Text('Iniciar OTA'),
-                            ),
-                          ],
-                        ),
-                  );
-                  if (ok == true) await _sendAdminCommand('start ota', 'OTA');
-                },
-              ),
-
-              // ── Stats ─────────────────────────────────────────────────
-              if (stats != null) ...[
-                const Divider(height: 20),
-                _StatsCard(stats: stats, theme: theme),
-              ] else ...[
-                const SizedBox(height: 4),
-                Text(
-                  'Prima "Estado" para obter as estatísticas do repetidor.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Admin action tile
-// ---------------------------------------------------------------------------
-
-class _AdminTile extends StatelessWidget {
-  const _AdminTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return ListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(
-        icon,
-        size: 22,
-        color:
-            enabled
-                ? theme.colorScheme.primary
-                : theme.colorScheme.onSurface.withAlpha(60),
-      ),
-      title: Text(
-        title,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          fontWeight: FontWeight.w500,
-          color: enabled ? null : theme.colorScheme.onSurface.withAlpha(80),
-        ),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      ),
-      onTap: enabled ? onTap : null,
-    );
-  }
-}
-
-class _StatsCard extends StatelessWidget {
-  const _StatsCard({required this.stats, required this.theme});
-  final RepeaterStats stats;
-  final ThemeData theme;
-
-  @override
-  Widget build(BuildContext context) {
-    final ts =
-        '${stats.receivedAt.hour.toString().padLeft(2, '0')}:'
-        '${stats.receivedAt.minute.toString().padLeft(2, '0')}:'
-        '${stats.receivedAt.second.toString().padLeft(2, '0')}';
-
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  'Estatísticas',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  'Actualizado: $ts',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 12),
-            _row(
-              'Bateria',
-              '${stats.batteryVolts.toStringAsFixed(2)} V',
-              theme,
-            ),
-            _row('Uptime', stats.uptimeFormatted, theme),
-            _row(
-              'SNR (último)',
-              '${stats.lastSnrDb.toStringAsFixed(1)} dB',
-              theme,
-            ),
-            _row('RSSI (último)', '${stats.lastRssi} dBm', theme),
-            _row('Ruído', '${stats.noiseFloor} dBm', theme),
-            const Divider(height: 12),
-            _row(
-              'RX / TX',
-              '${stats.packetsRecv} / ${stats.packetsSent}',
-              theme,
-            ),
-            _row(
-              'Flood RX/TX',
-              '${stats.recvFlood} / ${stats.sentFlood}',
-              theme,
-            ),
-            _row(
-              'Directo RX/TX',
-              '${stats.recvDirect} / ${stats.sentDirect}',
-              theme,
-            ),
-            _row('Tempo no ar (TX)', '${stats.airTimeSecs}s', theme),
-            if (stats.rxAirTimeSecs != null)
-              _row('Tempo no ar (RX)', '${stats.rxAirTimeSecs}s', theme),
-            _row('Duplicados', '${stats.directDups + stats.floodDups}', theme),
-            if (stats.errEvents > 0)
-              _row(
-                'Erros',
-                '${stats.errEvents}',
-                theme,
-                valueColor: theme.colorScheme.error,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _row(
-    String label,
-    String value,
-    ThemeData theme, {
-    Color? valueColor,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          Text(
-            value,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: valueColor,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
 // QR code dialog with system share
 // ---------------------------------------------------------------------------
 

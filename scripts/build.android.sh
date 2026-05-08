@@ -55,7 +55,7 @@ if ! command -v adb >/dev/null 2>&1 && [ -z "${ANDROID_HOME:-}" ] && [ -z "${AND
     exit 1
 fi
 
-log "lusoapp v$VERSION — Android ${BUILD_MODE^} Build"
+log "lusoapp v$VERSION — Android $BUILD_MODE build"
 log "=========================================="
 
 log "Getting dependencies..."

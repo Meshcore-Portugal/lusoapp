@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand colours matching the Flutter app theme (AppTheme in lib/ui/theme.dart) -->
+    <color name="app_background">#111111</color>
+    <color name="app_surface">#1C1C1C</color>
+    <color name="app_primary">#FF6B00</color>
+</resources>
