@@ -4,7 +4,10 @@ import 'dart:typed_data';
 import 'package:logger/logger.dart';
 
 import 'commands.dart';
+import 'companion_responses.dart';
 import 'models.dart';
+
+export 'companion_responses.dart';
 
 final _log = Logger(printer: SimplePrinter(printTime: false));
 
@@ -111,7 +114,14 @@ class CompanionDecoder {
       case pushTraceData:
         return TraceDataPush(data);
       case pushTelemetryResponse:
-        return TelemetryPush(data);
+        // Official firmware layout: reserved(1) + pubkey_prefix(6) + payload.
+        if (data.length < 7) {
+          return TelemetryPush(Uint8List(0), Uint8List(0));
+        }
+        return TelemetryPush(
+          Uint8List.fromList(data.sublist(1, 7)),
+          Uint8List.fromList(data.sublist(7)),
+        );
       case pushBinaryResponse:
         return _parseBinaryResponse(data);
       case pushPathDiscoveryResponse:
@@ -128,6 +138,9 @@ class CompanionDecoder {
         return StatusResponsePush(data);
       case pushRawData:
         return RawDataPush(data);
+      case respAutoAddConfig:
+        if (data.length < 2) return null;
+        return AutoAddConfigResponse(bitmask: data[0], maxHops: data[1]);
       default:
         _log.w('Unknown response code: 0x${code.toRadixString(16)}');
         return UnknownResponse(code, data);
@@ -226,6 +239,10 @@ class CompanionDecoder {
     final pubKey = Uint8List.fromList(data.sublist(3, 35));
     final lat = _readInt32LE(data, 35) / 1e6;
     final lon = _readInt32LE(data, 39) / 1e6;
+    final multiAcks = data.length > 43 ? data[43] : null;
+    final advLocPolicy = data.length > 44 ? data[44] : null;
+    final telemetryMode = data.length > 45 ? data[45] : null;
+    final manualAddContacts = data.length > 46 ? data[46] : null;
 
     final radioFreq = _readUint32LE(data, 47);
     final radioBw = _readUint32LE(data, 51);
@@ -256,6 +273,10 @@ class CompanionDecoder {
         maxTxPower: maxTxPower,
         latitude: lat,
         longitude: lon,
+        advLocPolicy: advLocPolicy,
+        multiAcks: multiAcks,
+        telemetryMode: telemetryMode,
+        manualAddContacts: manualAddContacts,
       ),
     );
   }
@@ -453,6 +474,12 @@ class CompanionDecoder {
       final versionStr =
           _decodeRadioString(data.sublist(59, versionEnd)).trim();
 
+      // Optional trailing prefs bytes (firmware companion_radio):
+      //   data[79] = client_repeat (v9+)
+      //   data[80] = path_hash_mode (v10+)
+      final clientRepeat = data.length >= 80 ? data[79] : null;
+      final pathHashMode = data.length >= 81 ? data[80] : null;
+
       return DeviceInfoResponse(
         DeviceInfo(
           firmwareVersion: version,
@@ -464,6 +491,8 @@ class CompanionDecoder {
           firmwareBuild: fwBuild,
           model: model,
           versionString: versionStr,
+          clientRepeat: clientRepeat,
+          pathHashMode: pathHashMode,
         ),
       );
     }
@@ -506,15 +535,31 @@ class CompanionDecoder {
     if (data.length < 32) return null;
     final pubKey = Uint8List.fromList(data.sublist(0, 32));
 
-    // Both pushAdvert (0x80) and pushNewAdvert (0x8A) use the same layout:
-    // pubkey[0..31] type[32] name[33..end] (null-terminated or end-of-data)
-    if (data.length < 33) {
-      return AdvertPush(pubKey, 0, '', isNew: isNew);
+    // The firmware emits two different push frames:
+    //
+    //   PUSH_CODE_ADVERT     (0x80) — payload = pubkey (32 bytes only).
+    //                                  Sent for path/profile updates of an
+    //                                  already-known contact.
+    //
+    //   PUSH_CODE_NEW_ADVERT (0x8A) — payload = full RESP_CODE_CONTACT frame
+    //                                  body (pubkey, type, flags, path_len,
+    //                                  out_path[64], name[32 null-padded],
+    //                                  last_advert_timestamp, gps_lat,
+    //                                  gps_lon, lastmod). Sent for newly
+    //                                  discovered contacts (firmware uses
+    //                                  writeContactRespFrame).
+    //
+    // Use the full-contact layout for the 0x8A case so we get the real name.
+    if (isNew && data.length >= 131) {
+      final type = data[32];
+      // flags @33, path_len @34, path @35..98 are not surfaced here.
+      final nameEnd = _findNullTerminator(data, 99, 131);
+      final name = _decodeRadioString(data.sublist(99, nameEnd));
+      return AdvertPush(pubKey, type, name.trim(), isNew: isNew);
     }
-    final type = data[32];
-    final nameEnd = _findNullTerminator(data, 33, data.length);
-    final name = _decodeRadioString(data.sublist(33, nameEnd));
-    return AdvertPush(pubKey, type, name.trim(), isNew: isNew);
+
+    // PUSH_CODE_ADVERT (0x80) — pubkey only, no type/name carried.
+    return AdvertPush(pubKey, 0, '', isNew: isNew);
   }
 
   static BinaryResponsePush? _parseBinaryResponse(Uint8List data) {
@@ -636,265 +681,4 @@ class CompanionDecoder {
     }
     return end;
   }
-}
-
-// ---------------------------------------------------------------------------
-// Response types
-// ---------------------------------------------------------------------------
-
-sealed class CompanionResponse {
-  const CompanionResponse();
-}
-
-class OkResponse extends CompanionResponse {
-  const OkResponse();
-}
-
-class ErrorResponse extends CompanionResponse {
-  const ErrorResponse(this.errorCode);
-  final int errorCode;
-}
-
-class ContactsStartResponse extends CompanionResponse {
-  const ContactsStartResponse();
-}
-
-class ContactResponse extends CompanionResponse {
-  const ContactResponse(this.contact);
-  final Contact contact;
-}
-
-class EndContactsResponse extends CompanionResponse {
-  const EndContactsResponse();
-}
-
-class SelfInfoResponse extends CompanionResponse {
-  const SelfInfoResponse(this.info);
-  final SelfInfo info;
-}
-
-class SentResponse extends CompanionResponse {
-  const SentResponse({this.routeFlag = 0});
-
-  /// 0 = direct, 1 = flood (via repeaters)
-  final int routeFlag;
-  bool get isFlood => routeFlag == 1;
-}
-
-class PrivateMessageResponse extends CompanionResponse {
-  const PrivateMessageResponse(this.message);
-  final ChatMessage message;
-}
-
-class ChannelMessageResponse extends CompanionResponse {
-  const ChannelMessageResponse(this.message);
-  final ChatMessage message;
-}
-
-class CurrTimeResponse extends CompanionResponse {
-  const CurrTimeResponse(this.timestamp);
-  final int timestamp;
-}
-
-class NoMoreMessagesResponse extends CompanionResponse {
-  const NoMoreMessagesResponse();
-}
-
-class BattAndStorageResponse extends CompanionResponse {
-  const BattAndStorageResponse(
-    this.batteryMv,
-    this.storageUsed,
-    this.storageTotal,
-  );
-  final int batteryMv;
-  final int? storageUsed;
-  final int? storageTotal;
-}
-
-class DeviceInfoResponse extends CompanionResponse {
-  const DeviceInfoResponse(this.info);
-  final DeviceInfo info;
-}
-
-class ChannelInfoResponse extends CompanionResponse {
-  const ChannelInfoResponse(this.channel);
-  final ChannelInfo channel;
-}
-
-// --- Push responses ---
-
-class AdvertPush extends CompanionResponse {
-  const AdvertPush(this.publicKey, this.type, this.name, {this.isNew = false});
-  final Uint8List publicKey;
-  final int type;
-  final String name;
-
-  /// True when push code was pushNewAdvert (0x8A). The radio may NOT have saved
-  /// this contact to its own table (manual-contact mode). The app must reply
-  /// with CMD_ADD_UPDATE_CONTACT to ensure the contact is stored on the radio.
-  final bool isNew;
-}
-
-class PathUpdatedPush extends CompanionResponse {
-  const PathUpdatedPush(this.data);
-  final Uint8List data;
-}
-
-class SendConfirmedPush extends CompanionResponse {
-  const SendConfirmedPush();
-}
-
-class MsgWaitingPush extends CompanionResponse {
-  const MsgWaitingPush();
-}
-
-class LoginSuccessPush extends CompanionResponse {
-  const LoginSuccessPush();
-}
-
-class LoginFailPush extends CompanionResponse {
-  const LoginFailPush();
-}
-
-class TraceDataPush extends CompanionResponse {
-  const TraceDataPush(this.data);
-  final Uint8List data;
-}
-
-class TelemetryPush extends CompanionResponse {
-  const TelemetryPush(this.data);
-  final Uint8List data;
-}
-
-class ContactDeletedPush extends CompanionResponse {
-  const ContactDeletedPush();
-}
-
-class ContactsFullPush extends CompanionResponse {
-  const ContactsFullPush();
-}
-
-class LogRxDataPush extends CompanionResponse {
-  const LogRxDataPush(this.data);
-  final Uint8List data;
-}
-
-class StatusResponsePush extends CompanionResponse {
-  const StatusResponsePush(this.data);
-  final Uint8List data;
-}
-
-class RawDataPush extends CompanionResponse {
-  const RawDataPush(this.data);
-  final Uint8List data;
-}
-
-class BinaryResponsePush extends CompanionResponse {
-  const BinaryResponsePush(this.tag, this.responseData);
-  final int tag;
-  final Uint8List responseData;
-}
-
-class PathDiscoveryPush extends CompanionResponse {
-  const PathDiscoveryPush(this.pubKeyPrefix, this.outPath, this.inPath);
-  final Uint8List pubKeyPrefix;
-  final List<int> outPath;
-  final List<int> inPath;
-}
-
-class ControlDataPush extends CompanionResponse {
-  const ControlDataPush(this.snr, this.rssi, this.pathLen, this.payload);
-  final double snr;
-  final int rssi;
-  final int pathLen;
-  final Uint8List payload;
-}
-
-class SignatureResponse extends CompanionResponse {
-  const SignatureResponse(this.signature);
-  final Uint8List signature;
-}
-
-class PrivateKeyResponse extends CompanionResponse {
-  const PrivateKeyResponse(this.privateKey);
-
-  /// Raw 64-byte private key received from the radio.
-  final Uint8List privateKey;
-}
-
-/// Core device statistics (CMD_GET_STATS + STATS_TYPE_CORE).
-class StatsCoreResponse extends CompanionResponse {
-  const StatsCoreResponse({
-    required this.batteryMv,
-    required this.uptimeSecs,
-    required this.errors,
-    required this.queueLen,
-  });
-
-  /// Battery voltage in millivolts.
-  final int batteryMv;
-
-  /// Device uptime in seconds since last boot.
-  final int uptimeSecs;
-
-  /// Error flags bitmask.
-  final int errors;
-
-  /// Outbound packet queue length.
-  final int queueLen;
-}
-
-/// Radio statistics (CMD_GET_STATS + STATS_TYPE_RADIO).
-class StatsRadioResponse extends CompanionResponse {
-  const StatsRadioResponse({
-    required this.noiseFloor,
-    required this.lastRssi,
-    required this.lastSnrDb,
-    required this.txAirSecs,
-    required this.rxAirSecs,
-  });
-
-  /// Radio noise floor in dBm.
-  final int noiseFloor;
-
-  /// Last received signal strength in dBm.
-  final int lastRssi;
-
-  /// Last SNR in dB (already divided by 4, 0.25 dB precision).
-  final double lastSnrDb;
-
-  /// Cumulative transmit airtime in seconds.
-  final int txAirSecs;
-
-  /// Cumulative receive airtime in seconds.
-  final int rxAirSecs;
-}
-
-/// Packet counters (CMD_GET_STATS + STATS_TYPE_PACKETS).
-class StatsPacketsResponse extends CompanionResponse {
-  const StatsPacketsResponse({
-    required this.recv,
-    required this.sent,
-    required this.floodTx,
-    required this.directTx,
-    required this.floodRx,
-    required this.directRx,
-    this.recvErrors,
-  });
-
-  final int recv;
-  final int sent;
-  final int floodTx;
-  final int directTx;
-  final int floodRx;
-  final int directRx;
-
-  /// Receive/CRC errors (RadioLib); present only in 30-byte frame.
-  final int? recvErrors;
-}
-
-class UnknownResponse extends CompanionResponse {
-  const UnknownResponse(this.code, this.data);
-  final int code;
-  final Uint8List data;
 }

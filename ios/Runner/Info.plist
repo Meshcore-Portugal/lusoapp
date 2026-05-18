@@ -66,5 +66,15 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Utilizado para leitura de QR Codes MeshCore</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Seleccionar imagem com QR Code MeshCore para importar contacto ou canal</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Necessário para ligar ao rádio MeshCore via Bluetooth</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Utilizado para mostrar a sua posição no mapa MeshCore</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Utilizado para mostrar a sua posição no mapa MeshCore</string>
 </dict>
 </plist>

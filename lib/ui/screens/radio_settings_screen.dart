@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
-import 'telemetry_screen.dart';
+import 'discover_contacts_screen.dart';
+
+part 'parts/radio_summary_card.dart';
+part 'parts/radio_device_info_card.dart';
+part 'parts/radio_advert_card.dart';
 
 /// Drill-down page for radio configuration and telemetry.
 ///
@@ -30,6 +35,7 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
 
   bool _dirty = false;
   bool _saving = false;
+  String _appVersion = '';
 
   static const _bandwidths = [
     (label: '7.8 kHz', hz: 7800),
@@ -52,11 +58,66 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
     (label: '4/8', val: 8),
   ];
 
+  // 433.375 MHz and 869.618 MHz are the MeshCore community defaults for PT/EU.
+  // freqKHz is stored in MHz×1000 units (same as RadioConfig.frequencyHz).
+  static const _bandPresets = [
+    (
+      label: '433 MHz',
+      freqKHz: 433375,
+      bandwidthHz: 62500,
+      sf: 9,
+      cr: 6,
+      txPower: 10,
+    ),
+    (
+      label: '868 MHz',
+      freqKHz: 869618,
+      bandwidthHz: 62500,
+      sf: 7,
+      cr: 6,
+      txPower: 27,
+    ),
+  ];
+
+  /// Returns the index of the matching band preset, or null if the current
+  /// form values don't match any preset (i.e. user has custom settings).
+  int? get _activePresetIndex {
+    final freqKHz =
+        ((double.tryParse(_freqController.text) ?? 0) * 1e3).round();
+    final txPower = int.tryParse(_txPowerController.text);
+    for (var i = 0; i < _bandPresets.length; i++) {
+      final p = _bandPresets[i];
+      if (freqKHz == p.freqKHz &&
+          _bandwidthHz == p.bandwidthHz &&
+          _spreadingFactor == p.sf &&
+          _codingRate == p.cr &&
+          txPower == p.txPower) {
+        return i;
+      }
+    }
+    return null;
+  }
+
+  void _applyPreset(int index) {
+    final p = _bandPresets[index];
+    setState(() {
+      _freqController.text = (p.freqKHz / 1e3).toStringAsFixed(4);
+      _bandwidthHz = p.bandwidthHz;
+      _spreadingFactor = p.sf;
+      _codingRate = p.cr;
+      _txPowerController.text = '${p.txPower}';
+      _dirty = true;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     final config = ref.read(radioConfigProvider);
     _populateFrom(config);
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) setState(() => _appVersion = info.version);
+    });
   }
 
   void _populateFrom(RadioConfig? config) {
@@ -123,6 +184,9 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
     final config = ref.watch(radioConfigProvider);
     final deviceInfo = ref.watch(deviceInfoProvider);
     final selfInfo = ref.watch(selfInfoProvider);
+    final radioContactsSnapshot = ref.watch(radioContactsSnapshotProvider);
+    final channels = ref.watch(channelsProvider);
+    final discovered = ref.watch(discoveredContactsProvider);
     final theme = Theme.of(context);
 
     // Keep form in sync with radio-pushed config while user hasn't edited.
@@ -151,47 +215,13 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
 
               // ----- Device info -----
               if (deviceInfo != null || selfInfo != null)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.l10n.radioSettingsDevice,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        if (selfInfo != null)
-                          _InfoRow(
-                            label: context.l10n.commonName,
-                            value: selfInfo.name,
-                          ),
-                        if (deviceInfo != null) ...[
-                          _InfoRow(
-                            label: context.l10n.radioSettingsModel,
-                            value: deviceInfo.model ?? deviceInfo.deviceName,
-                          ),
-                          _InfoRow(
-                            label: context.l10n.radioSettingsFirmware,
-                            value:
-                                deviceInfo.versionString ??
-                                'v${deviceInfo.firmwareVersion}',
-                          ),
-                          if (deviceInfo.storageUsed != null &&
-                              deviceInfo.storageTotal != null)
-                            _InfoRow(
-                              label: context.l10n.radioSettingsStorage,
-                              value:
-                                  '${deviceInfo.storageUsed} / ${deviceInfo.storageTotal} bytes',
-                            ),
-                        ],
-                      ],
-                    ),
-                  ),
+                _DeviceInfoCard(
+                  selfInfo: selfInfo,
+                  deviceInfo: deviceInfo,
+                  contactCount: radioContactsSnapshot.length,
+                  activeChannelCount: channels.where((c) => !c.isEmpty).length,
+                  discoveredCount: discovered.length,
+                  appVersion: _appVersion,
                 ),
               if (deviceInfo != null || selfInfo != null)
                 const SizedBox(height: 16),
@@ -209,6 +239,33 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.bold,
                         ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // ----- Band presets -----
+                      Text(
+                        context.l10n.radioSettingsBandPresetsTitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SegmentedButton<int>(
+                        emptySelectionAllowed: true,
+                        segments: [
+                          for (var i = 0; i < _bandPresets.length; i++)
+                            ButtonSegment(
+                              value: i,
+                              label: Text(_bandPresets[i].label),
+                              icon: const Icon(Icons.radio, size: 16),
+                            ),
+                        ],
+                        selected: {
+                          if (_activePresetIndex != null) _activePresetIndex!,
+                        },
+                        onSelectionChanged: (sel) {
+                          if (sel.isNotEmpty) _applyPreset(sel.first);
+                        },
                       ),
                       const SizedBox(height: 16),
 
@@ -404,17 +461,9 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
               const SizedBox(height: 24),
               const _AdvertAutoAddCard(),
 
-              // ----- Telemetry section -----
-              const SizedBox(height: 32),
-              Text(
-                context.l10n.commonTelemetry,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              // Embed telemetry as a non-scrollable column (parent scrolls).
-              const _EmbeddedTelemetry(),
+              // ----- Experimental settings -----
+              const SizedBox(height: 24),
+              const _ExperimentalCard(),
             ],
           ),
         ),
@@ -423,174 +472,73 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Embedded telemetry — wraps TelemetryScreen content without its own scroll
-// ---------------------------------------------------------------------------
-
-class _EmbeddedTelemetry extends StatelessWidget {
-  const _EmbeddedTelemetry();
+/// Experimental, firmware-specific settings. Currently exposes the
+/// `path_hash_mode` byte (firmware v10+, companion radio firmware) which
+/// switches the per-hop path hash size between 1, 2 or 3 bytes.
+class _ExperimentalCard extends ConsumerStatefulWidget {
+  const _ExperimentalCard();
 
   @override
-  Widget build(BuildContext context) {
-    // TelemetryScreen is a ConsumerWidget with a ListView.
-    // We embed it with constrained height so it doesn't conflict with the
-    // parent scroll. SizedBox with a generous height lets it render fully.
-    return const SizedBox(height: 600, child: TelemetryScreen());
-  }
+  ConsumerState<_ExperimentalCard> createState() => _ExperimentalCardState();
 }
 
-// ---------------------------------------------------------------------------
-// Compact config summary card
-// ---------------------------------------------------------------------------
+class _ExperimentalCardState extends ConsumerState<_ExperimentalCard> {
+  bool _saving = false;
 
-class _ConfigSummaryCard extends StatelessWidget {
-  const _ConfigSummaryCard({required this.config});
-  final RadioConfig config;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final freqMHz = config.frequencyHz / 1e3;
-    final bwKHz = config.bandwidthHz / 1e3;
-
-    return Card(
-      color: theme.colorScheme.primaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.radio,
-                  size: 18,
-                  color: theme.colorScheme.onPrimaryContainer,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  context.l10n.radioSettingsActiveConfig,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: theme.colorScheme.onPrimaryContainer,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _ConfigRow(
-              label: context.l10n.radioSettingsFreqLabel,
-              value: '${freqMHz.toStringAsFixed(4)} MHz',
-            ),
-            _ConfigRow(
-              label: context.l10n.radioSettingsBandwidth,
-              value: '${bwKHz % 1 == 0 ? bwKHz.toInt() : bwKHz} kHz',
-            ),
-            _ConfigRow(
-              label: context.l10n.radioSettingsSpreadingFactor,
-              value: 'SF${config.spreadingFactor}',
-            ),
-            _ConfigRow(
-              label: context.l10n.radioSettingsCodingRate,
-              value: _crLabel(config.codingRate),
-            ),
-            _ConfigRow(
-              label: context.l10n.radioSettingsTxPower,
-              value: '${config.txPowerDbm} dBm',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _crLabel(int cr) {
-    switch (cr) {
-      case 5:
-        return '4/5';
-      case 6:
-        return '4/6';
-      case 7:
-        return '4/7';
-      case 8:
-        return '4/8';
-      default:
-        return 'CR$cr';
+  Future<void> _setPathHashMode(int mode) async {
+    final l10n = context.l10n;
+    final service = ref.read(radioServiceProvider);
+    if (service == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.commonRadioDisconnected)));
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await service.setPathHashMode(mode);
+      // Optimistically update the cached DeviceInfo so the chooser reflects
+      // the new value without waiting for a fresh DeviceQuery roundtrip.
+      final current = ref.read(deviceInfoProvider);
+      if (current != null) {
+        ref.read(deviceInfoProvider.notifier).state = DeviceInfo(
+          firmwareVersion: current.firmwareVersion,
+          deviceName: current.deviceName,
+          batteryMillivolts: current.batteryMillivolts,
+          storageUsed: current.storageUsed,
+          storageTotal: current.storageTotal,
+          maxContacts: current.maxContacts,
+          maxChannels: current.maxChannels,
+          blePin: current.blePin,
+          firmwareBuild: current.firmwareBuild,
+          model: current.model,
+          versionString: current.versionString,
+          clientRepeat: current.clientRepeat,
+          pathHashMode: mode,
+        );
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.radioSettingsPathHashModeSaved)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.radioSettingsPathHashModeFailed)),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
-}
-
-class _ConfigRow extends StatelessWidget {
-  const _ConfigRow({required this.label, required this.value});
-  final String label;
-  final String value;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final theme = Theme.of(context);
-    final color = theme.colorScheme.onPrimaryContainer;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: theme.textTheme.bodyMedium?.copyWith(color: color),
-          ),
-          Text(
-            value,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value});
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withAlpha(140),
-              ),
-            ),
-          ),
-          Expanded(child: Text(value, style: theme.textTheme.bodyMedium)),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Advert auto-add card
-// ---------------------------------------------------------------------------
-
-class _AdvertAutoAddCard extends ConsumerWidget {
-  const _AdvertAutoAddCard();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final s = ref.watch(advertAutoAddProvider);
-    final n = ref.read(advertAutoAddProvider.notifier);
+    final deviceInfo = ref.watch(deviceInfoProvider);
+    // path_hash_mode is reported only by firmware v10+ companion radio.
+    final supported = deviceInfo?.pathHashMode != null;
+    final mode = deviceInfo?.pathHashMode ?? 0;
 
     return Card(
       child: Padding(
@@ -601,81 +549,96 @@ class _AdvertAutoAddCard extends ConsumerWidget {
             Row(
               children: [
                 Icon(
-                  Icons.person_add_alt_1,
+                  Icons.science_outlined,
                   size: 18,
-                  color: theme.colorScheme.primary,
+                  color: theme.colorScheme.tertiary,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Text(
-                  context.l10n.radioSettingsAutoAddTitle,
+                  l10n.radioSettingsExperimentalTitle,
                   style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
+                    color: theme.colorScheme.tertiary,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.radioSettingsExperimentalWarning,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const Divider(height: 24),
+            Text(
+              l10n.radioSettingsPathHashMode,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 4),
             Text(
-              context.l10n.radioSettingsAutoAddDesc,
+              l10n.radioSettingsPathHashModeDesc,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 8),
-            _AutoAddTile(
-              icon: Icons.person,
-              label: context.l10n.radioSettingsAutoAddCompanion,
-              value: s.addChat,
-              onChanged: n.setChat,
-            ),
-            _AutoAddTile(
-              icon: Icons.cell_tower,
-              label: context.l10n.radioSettingsAutoAddRepeater,
-              value: s.addRepeater,
-              onChanged: n.setRepeater,
-            ),
-            _AutoAddTile(
-              icon: Icons.meeting_room,
-              label: context.l10n.radioSettingsAutoAddRoom,
-              value: s.addRoom,
-              onChanged: n.setRoom,
-            ),
-            _AutoAddTile(
-              icon: Icons.sensors,
-              label: context.l10n.radioSettingsAutoAddSensor,
-              value: s.addSensor,
-              onChanged: n.setSensor,
-            ),
+            if (!supported)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  l10n.radioSettingsPathHashModeUnsupported,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              )
+            else ...[
+              SegmentedButton<int>(
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment(
+                    value: 0,
+                    label: Text(l10n.radioSettingsPathHashMode1),
+                  ),
+                  ButtonSegment(
+                    value: 1,
+                    label: Text(l10n.radioSettingsPathHashMode2),
+                  ),
+                ],
+                selected: {mode},
+                onSelectionChanged:
+                    _saving
+                        ? null
+                        : (sel) {
+                          if (sel.isNotEmpty && sel.first != mode) {
+                            _setPathHashMode(sel.first);
+                          }
+                        },
+              ),
+              const SizedBox(height: 6),
+              Text(
+                mode == 0
+                    ? l10n.radioSettingsPathHashModeCaptionDefault
+                    : l10n.radioSettingsPathHashModeCaptionExperimental,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color:
+                      mode == 0
+                          ? theme.colorScheme.onSurfaceVariant
+                          : theme.colorScheme.tertiary,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+            if (_saving) ...[
+              const SizedBox(height: 8),
+              const LinearProgressIndicator(),
+            ],
           ],
         ),
       ),
-    );
-  }
-}
-
-class _AutoAddTile extends StatelessWidget {
-  const _AutoAddTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return SwitchListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      secondary: Icon(icon, size: 20),
-      title: Text(label),
-      value: value,
-      onChanged: onChanged,
     );
   }
 }

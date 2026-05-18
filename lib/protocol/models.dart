@@ -3,6 +3,49 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
 
+/// Sanitize a string that may have been stored with lone UTF-16 surrogates
+/// (WTF-8 artefacts from the radio) or embedded null bytes.
+/// Flutter's TextPainter throws "not well-formed UTF-16" on lone surrogates;
+/// this function replaces them with U+FFFD and strips null bytes.
+String _san(String s) {
+  // Fast path: scan once — most strings are clean.
+  bool dirty = false;
+  for (var i = 0; i < s.length; i++) {
+    final c = s.codeUnitAt(i);
+    if (c == 0 || (c >= 0xD800 && c <= 0xDFFF)) {
+      dirty = true;
+      break;
+    }
+  }
+  if (!dirty) return s;
+
+  final buf = StringBuffer();
+  for (var i = 0; i < s.length; i++) {
+    final u = s.codeUnitAt(i);
+    if (u == 0) continue; // strip null bytes
+    if (u >= 0xD800 && u <= 0xDBFF) {
+      // High surrogate — valid only when immediately followed by a low surrogate.
+      if (i + 1 < s.length) {
+        final u2 = s.codeUnitAt(i + 1);
+        if (u2 >= 0xDC00 && u2 <= 0xDFFF) {
+          buf.write(s[i]);
+          buf.write(s[i + 1]);
+          i++;
+          continue;
+        }
+      }
+      buf.writeCharCode(0xFFFD); // lone high surrogate
+    } else if (u >= 0xDC00 && u <= 0xDFFF) {
+      buf.writeCharCode(0xFFFD); // lone low surrogate
+    } else {
+      buf.write(s[i]);
+    }
+  }
+  return buf.toString();
+}
+
+String? _sanOpt(String? s) => s == null ? null : _san(s);
+
 /// Derives the 16-byte hashtag channel key used by MeshCore firmware.
 /// Key = first 16 bytes of SHA-256("#name"), where [name] gets a '#' prefix
 /// if it does not already start with one.
@@ -19,12 +62,12 @@ class Contact extends Equatable {
     type: json['type'] as int,
     flags: json['flags'] as int,
     pathLen: json['pathLen'] as int,
-    name: json['name'] as String,
+    name: _san(json['name'] as String),
     lastAdvertTimestamp: json['lastAdvertTimestamp'] as int,
     latitude: (json['latitude'] as num?)?.toDouble(),
     longitude: (json['longitude'] as num?)?.toDouble(),
     lastModified: json['lastModified'] as int?,
-    customName: json['customName'] as String?,
+    customName: _sanOpt(json['customName'] as String?),
   );
   const Contact({
     required this.publicKey,
@@ -84,10 +127,113 @@ class Contact extends Equatable {
         .join();
   }
 
+  /// Lowercased search string combining displayName, name, and shortId.
+  /// Use this for filtering to avoid repeated toLowerCase() calls per field.
+  String get searchKey =>
+      '${displayName.toLowerCase()} ${name.toLowerCase()} ${shortId.toLowerCase()}';
+
   bool get isChat => type == 0x01;
   bool get isRepeater => type == 0x02;
   bool get isRoom => type == 0x03;
   bool get isSensor => type == 0x04;
+
+  /// Bit 0 (LSB, mask 0x01) of [flags] is the 'favourite' flag on the radio
+  /// firmware. See MeshCore `examples/companion_radio/MyMesh.cpp` where the
+  /// telemetry permission lookup does `uint8_t cp = contact.flags >> 1;`
+  /// with the comment: "LSB used as 'favourite' bit (so only use upper bits)".
+  /// The whole [flags] byte is round-tripped unchanged through RESP_CONTACT /
+  /// CMD_ADD_UPDATE_CONTACT, so toggling bit 0 on the app side is authoritative.
+  static const int _flagFavoriteMask = 0x01;
+  static const int _flagTelemetryBaseMask = 0x02;
+  static const int _flagTelemetryLocationMask = 0x04;
+  static const int _flagTelemetryEnvironmentMask = 0x08;
+
+  /// True when this contact is marked as a favourite on the radio.
+  bool get isFavorite => (flags & _flagFavoriteMask) != 0;
+
+  /// True when this contact is allowed to request base telemetry
+  /// (required for any telemetry response to be sent at all).
+  bool get allowsTelemetryBase => (flags & _flagTelemetryBaseMask) != 0;
+
+  /// True when this contact is allowed to receive location via on-demand
+  /// telemetry requests.
+  bool get allowsTelemetryLocation => (flags & _flagTelemetryLocationMask) != 0;
+
+  /// True when this contact is allowed to receive environment telemetry.
+  bool get allowsTelemetryEnvironment =>
+      (flags & _flagTelemetryEnvironmentMask) != 0;
+
+  /// Convenience view for the GPS-sharing Delta01 flow: a contact needs both
+  /// BASE and LOCATION permission bits set for the firmware to answer with
+  /// coordinates on request.
+  bool get allowsPrivateLocationOnRequest =>
+      allowsTelemetryBase && allowsTelemetryLocation;
+
+  /// Returns a copy of this contact with bit 0 of [flags] set to [value].
+  /// All other bits (permissions encoded in the upper bits) are preserved.
+  Contact withFavorite(bool value) {
+    final newFlags =
+        value ? (flags | _flagFavoriteMask) : (flags & ~_flagFavoriteMask);
+    if (newFlags == flags) return this;
+    return Contact(
+      publicKey: publicKey,
+      type: type,
+      flags: newFlags,
+      pathLen: pathLen,
+      name: name,
+      lastAdvertTimestamp: lastAdvertTimestamp,
+      latitude: latitude,
+      longitude: longitude,
+      lastModified: lastModified,
+      customName: customName,
+    );
+  }
+
+  /// Returns a copy with the telemetry permission bits updated while keeping
+  /// the favourite bit and all unrelated flags intact.
+  Contact withTelemetryPermissions({
+    bool? base,
+    bool? location,
+    bool? environment,
+  }) {
+    var newFlags = flags;
+    if (base != null) {
+      newFlags =
+          base
+              ? (newFlags | _flagTelemetryBaseMask)
+              : (newFlags & ~_flagTelemetryBaseMask);
+    }
+    if (location != null) {
+      newFlags =
+          location
+              ? (newFlags | _flagTelemetryLocationMask)
+              : (newFlags & ~_flagTelemetryLocationMask);
+    }
+    if (environment != null) {
+      newFlags =
+          environment
+              ? (newFlags | _flagTelemetryEnvironmentMask)
+              : (newFlags & ~_flagTelemetryEnvironmentMask);
+    }
+    if (newFlags == flags) return this;
+    return Contact(
+      publicKey: publicKey,
+      type: type,
+      flags: newFlags,
+      pathLen: pathLen,
+      name: name,
+      lastAdvertTimestamp: lastAdvertTimestamp,
+      latitude: latitude,
+      longitude: longitude,
+      lastModified: lastModified,
+      customName: customName,
+    );
+  }
+
+  /// Enable/disable the specific flag combination the firmware needs to serve
+  /// location privately on request for this contact.
+  Contact withPrivateLocationOnRequest(bool value) =>
+      withTelemetryPermissions(base: value, location: value);
 
   @override
   List<Object?> get props => [publicKey, type, name, customName];
@@ -153,7 +299,7 @@ class MessagePath {
 /// A chat message (private or channel).
 class ChatMessage extends Equatable {
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
-    text: json['text'] as String,
+    text: _san(json['text'] as String),
     timestamp: json['timestamp'] as int,
     isOutgoing: json['isOutgoing'] as bool,
     senderKey:
@@ -161,7 +307,7 @@ class ChatMessage extends Equatable {
             ? base64Decode(json['senderKey'] as String)
             : null,
     channelIndex: json['channelIndex'] as int?,
-    senderName: json['senderName'] as String?,
+    senderName: _sanOpt(json['senderName'] as String?),
     confirmed: json['confirmed'] as bool? ?? false,
     snr: (json['snr'] as num?)?.toDouble(),
     pathLen: json['pathLen'] as int?,
@@ -170,6 +316,8 @@ class ChatMessage extends Equatable {
         json['sentRouteFlag'] as int? ??
         (json['sentViaFlood'] == true ? 1 : null),
     packetHashHex: json['packetHashHex'] as String?,
+    failed: json['failed'] as bool? ?? false,
+    retryCount: json['retryCount'] as int? ?? 0,
   );
   const ChatMessage({
     required this.text,
@@ -185,6 +333,8 @@ class ChatMessage extends Equatable {
     this.sentRouteFlag,
     this.packetHashHex,
     this.isCliResponse = false,
+    this.failed = false,
+    this.retryCount = 0,
   });
 
   final String text;
@@ -210,6 +360,12 @@ class ChatMessage extends Equatable {
   /// CLI command response, not a user-visible chat message.
   final bool isCliResponse;
 
+  /// True when the radio failed to send this message (timeout waiting for SentResponse).
+  final bool failed;
+
+  /// Number of retry attempts made for this message (passed as the `attempt` byte).
+  final int retryCount;
+
   bool get isChannel => channelIndex != null;
   bool get isPrivate => channelIndex == null;
 
@@ -227,6 +383,8 @@ class ChatMessage extends Equatable {
     int? sentRouteFlag,
     String? packetHashHex,
     bool? isCliResponse,
+    bool? failed,
+    int? retryCount,
   }) {
     return ChatMessage(
       text: text ?? this.text,
@@ -242,6 +400,8 @@ class ChatMessage extends Equatable {
       sentRouteFlag: sentRouteFlag ?? this.sentRouteFlag,
       packetHashHex: packetHashHex ?? this.packetHashHex,
       isCliResponse: isCliResponse ?? this.isCliResponse,
+      failed: failed ?? this.failed,
+      retryCount: retryCount ?? this.retryCount,
     );
   }
 
@@ -258,6 +418,8 @@ class ChatMessage extends Equatable {
     'heardCount': heardCount,
     'sentRouteFlag': sentRouteFlag,
     'packetHashHex': packetHashHex,
+    if (failed) 'failed': failed,
+    if (retryCount > 0) 'retryCount': retryCount,
   };
 
   @override
@@ -269,6 +431,8 @@ class ChatMessage extends Equatable {
     heardCount,
     sentRouteFlag,
     packetHashHex,
+    failed,
+    retryCount,
   ];
 }
 
@@ -334,6 +498,8 @@ class DeviceInfo extends Equatable {
     this.firmwareBuild,
     this.model,
     this.versionString,
+    this.clientRepeat,
+    this.pathHashMode,
   });
 
   final int firmwareVersion;
@@ -347,6 +513,14 @@ class DeviceInfo extends Equatable {
   final String? firmwareBuild;
   final String? model;
   final String? versionString;
+
+  /// Radio's `client_repeat` byte (firmware v9+).
+  final int? clientRepeat;
+
+  /// Radio's `path_hash_mode` byte (firmware v10+).
+  /// 0 = 1-byte hop hashes (default), 1 = 2-byte, 2 = 3-byte.
+  /// Effective bytes on the wire = `pathHashMode + 1`.
+  final int? pathHashMode;
 
   double get batteryVolts => batteryMillivolts / 1000.0;
 
@@ -365,6 +539,10 @@ class SelfInfo extends Equatable {
     this.maxTxPower = 0,
     this.latitude,
     this.longitude,
+    this.advLocPolicy,
+    this.multiAcks,
+    this.telemetryMode,
+    this.manualAddContacts,
   });
 
   final Uint8List publicKey; // 32 bytes
@@ -375,6 +553,48 @@ class SelfInfo extends Equatable {
   final int maxTxPower;
   final double? latitude;
   final double? longitude;
+
+  /// Radio's stored "advert location policy" byte. Writable via
+  /// `CMD_SET_OTHER_PARAMS` (0x26): 0 = never broadcast location,
+  /// 1 = broadcast with every advert.
+  final int? advLocPolicy;
+
+  /// Radio's `multi_acks` byte (v7+). Round-tripped via `CMD_SET_OTHER_PARAMS`.
+  final int? multiAcks;
+
+  /// Packed telemetry mode byte: `(env<<4)|(loc<<2)|base` (v5+).
+  /// Round-tripped via `CMD_SET_OTHER_PARAMS`.
+  final int? telemetryMode;
+
+  /// `manual_add_contacts` flag. Round-tripped via `CMD_SET_OTHER_PARAMS`.
+  final int? manualAddContacts;
+
+  SelfInfo copyWith({
+    String? name,
+    RadioConfig? radioConfig,
+    int? advType,
+    int? txPower,
+    int? maxTxPower,
+    double? latitude,
+    double? longitude,
+    int? advLocPolicy,
+    int? multiAcks,
+    int? telemetryMode,
+    int? manualAddContacts,
+  }) => SelfInfo(
+    publicKey: publicKey,
+    name: name ?? this.name,
+    radioConfig: radioConfig ?? this.radioConfig,
+    advType: advType ?? this.advType,
+    txPower: txPower ?? this.txPower,
+    maxTxPower: maxTxPower ?? this.maxTxPower,
+    latitude: latitude ?? this.latitude,
+    longitude: longitude ?? this.longitude,
+    advLocPolicy: advLocPolicy ?? this.advLocPolicy,
+    multiAcks: multiAcks ?? this.multiAcks,
+    telemetryMode: telemetryMode ?? this.telemetryMode,
+    manualAddContacts: manualAddContacts ?? this.manualAddContacts,
+  );
 
   @override
   List<Object?> get props => [publicKey, name, radioConfig];
@@ -539,7 +759,7 @@ class ChannelInfo extends Equatable {
 
   factory ChannelInfo.fromJson(Map<String, dynamic> json) => ChannelInfo(
     index: json['index'] as int,
-    name: json['name'] as String,
+    name: _san(json['name'] as String),
     secret:
         json['secret'] != null ? base64Decode(json['secret'] as String) : null,
   );

@@ -17,7 +17,15 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../protocol/models.dart';
 import '../../l10n/l10n.dart';
+import '../../providers/gps_sharing_provider.dart';
+import '../../providers/map_visibility_provider.dart';
 import '../../providers/radio_providers.dart';
+import '../../services/gps_sharing_service.dart';
+import '../../transport/radio_transport.dart' show TransportState;
+
+part 'parts/map_contact_sheets.dart';
+part 'parts/map_cluster.dart';
+part 'parts/map_trace_card.dart';
 
 /// Full-screen map showing all contacts with GPS coordinates and the device's
 /// own position.  Uses OpenStreetMap tiles via flutter_map (no API key needed).
@@ -117,6 +125,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   /// Rejects null values and the [0, 0] sentinel used when no fix is available.
   static bool _isValidGps(double? lat, double? lng) =>
       lat != null && lng != null && !(lat == 0.0 && lng == 0.0);
+
+  /// Lowercase hex of a contact's full 32-byte public key (used as the
+  /// stable map-visibility opt-out key).
+  static String _pubKeyHex(Uint8List key) =>
+      key.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 
   /// True on platforms where Geolocator works.
   bool get _locationSupported =>
@@ -240,13 +253,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final contacts = ref.watch(contactsProvider);
+    // Select only contacts with valid GPS coordinates to avoid rebuilding
+    // when other contact properties change (minimizes tab switching lag).
+    final gpsContacts = ref.watch(
+      contactsProvider.select(
+        (contacts) =>
+            contacts
+                .where((c) => _isValidGps(c.latitude, c.longitude))
+                .toList(),
+      ),
+    );
     final selfInfo = ref.watch(selfInfoProvider);
     final traceResult = ref.watch(traceResultProvider);
+    final hidden = ref.watch(mapHiddenContactsProvider);
     final theme = Theme.of(context);
 
-    final gpsContacts =
-        contacts.where((c) => _isValidGps(c.latitude, c.longitude)).toList();
+    // Apply hidden filter
+    final visibleGpsContacts =
+        gpsContacts
+            .where((c) => !hidden.contains(_pubKeyHex(c.publicKey)))
+            .toList();
 
     // Prefer GPS from radio self-info; fall back to device GPS.
     // Treat [0, 0] as "no fix" — do not snap the map to null-island.
@@ -257,7 +283,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             : _myLocation;
 
     final allPoints = [
-      ...gpsContacts.map((c) => LatLng(c.latitude!, c.longitude!)),
+      ...visibleGpsContacts.map((c) => LatLng(c.latitude!, c.longitude!)),
       if (selfPos != null) selfPos,
     ];
 
@@ -265,8 +291,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     final initialCenter =
         selfPos ??
-        (gpsContacts.isNotEmpty
-            ? LatLng(gpsContacts.first.latitude!, gpsContacts.first.longitude!)
+        (visibleGpsContacts.isNotEmpty
+            ? LatLng(
+              visibleGpsContacts.first.latitude!,
+              visibleGpsContacts.first.longitude!,
+            )
             : _defaultCenter);
 
     return Stack(
@@ -326,12 +355,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   MarkerLayer(
                     markers: [
                       if (traceResult == null)
-                        for (final cluster in _computeClusters(gpsContacts))
+                        for (final cluster in _computeClusters(
+                          visibleGpsContacts,
+                        ))
                           if (cluster.isSingle)
                             Marker(
                               point: cluster.center,
-                              width: 44,
-                              height: 44,
+                              width: 84,
+                              height: 64,
                               child: GestureDetector(
                                 onTap:
                                     () => _showContactSheet(
@@ -346,8 +377,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           else
                             Marker(
                               point: cluster.center,
-                              width: 52,
-                              height: 52,
+                              width: 42,
+                              height: 42,
                               child: GestureDetector(
                                 onTap: () => _onClusterTap(cluster),
                                 child: _buildClusterMarker(cluster, theme),
@@ -356,9 +387,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       if (selfPos != null)
                         Marker(
                           point: selfPos,
-                          width: 44,
-                          height: 44,
-                          child: _buildSelfMarker(theme),
+                          width: 84,
+                          height: 64,
+                          child: _buildSelfMarker(theme, selfInfo?.name),
                         ),
                     ],
                   ),
@@ -373,8 +404,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                 traceResult.hops[hi].latitude!,
                                 traceResult.hops[hi].longitude!,
                               ),
-                              width: 140,
-                              height: 130,
+                              width: 126,
+                              height: 118,
                               alignment: Alignment.center,
                               child: _buildHopMarker(
                                 traceResult.hops[hi],
@@ -384,6 +415,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                   hi,
                                   selfPos,
                                 ),
+                                showSnr: hi == traceResult.hops.length - 1,
                               ),
                             ),
                       ],
@@ -490,6 +522,52 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 ),
                 const SizedBox(height: 8),
               ],
+              // Quick "share my GPS to the radio" — only visible when the user
+              // has explicitly enabled GPS sharing in Settings.
+              Consumer(
+                builder: (context, ref, _) {
+                  final settings = ref.watch(gpsSharingProvider);
+                  final connected =
+                      ref.watch(connectionProvider) == TransportState.connected;
+                  if (!settings.isEnabled) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: FloatingActionButton.small(
+                      heroTag: 'map_share_gps',
+                      backgroundColor: Colors.green.shade700,
+                      foregroundColor: Colors.white,
+                      onPressed:
+                          connected
+                              ? () async {
+                                final svc = ref.read(gpsSharingServiceProvider);
+                                final res = await svc.shareNow();
+                                if (!context.mounted) return;
+                                final l10n = context.l10n;
+                                final msg = switch (res.outcome) {
+                                  GpsShareOutcome.ok => l10n
+                                      .gpsSharingOutcomeOk(
+                                        (res.lat ?? 0).toStringAsFixed(4),
+                                        (res.lon ?? 0).toStringAsFixed(4),
+                                      ),
+                                  GpsShareOutcome.noPermission =>
+                                    l10n.gpsSharingOutcomeNoPerm,
+                                  GpsShareOutcome.serviceDisabled =>
+                                    l10n.gpsSharingOutcomeServiceOff,
+                                  GpsShareOutcome.notConnected =>
+                                    l10n.gpsSharingOutcomeDisconnected,
+                                  _ => l10n.gpsSharingOutcomeFailed,
+                                };
+                                ScaffoldMessenger.of(
+                                  context,
+                                ).showSnackBar(SnackBar(content: Text(msg)));
+                              }
+                              : null,
+                      tooltip: context.l10n.gpsSharingShareNow,
+                      child: const Icon(Icons.upload_outlined),
+                    ),
+                  );
+                },
+              ),
               // If we already know the position, show a "center" button that
               // just pans without a new GPS fetch.  If position is unknown,
               // the button fetches GPS first.
@@ -569,7 +647,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
-  Widget _buildHopMarker(TraceHop hop, ThemeData theme, {double? distanceM}) {
+  Widget _buildHopMarker(
+    TraceHop hop,
+    ThemeData theme, {
+    double? distanceM,
+    bool showSnr = true,
+  }) {
     final snr = hop.snrDb.toStringAsFixed(1);
     final distLabel = distanceM != null ? '  ${_formatDist(distanceM)}' : '';
     // Layout (top → bottom):
@@ -590,7 +673,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             border: Border.all(color: Colors.white, width: 1),
           ),
           child: Text(
-            '${hop.name ?? hop.hashHex.substring(0, 4)}  $snr dB',
+            '${hop.name ?? hop.hashHex.substring(0, 4)}${showSnr ? '  $snr dB' : ''}',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 9,
@@ -619,8 +702,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         Container(width: 2, height: 8, color: theme.colorScheme.primary),
         // Repeater icon circle — CENTER is at the LatLng geographic point
         Container(
-          width: 36,
-          height: 36,
+          width: 30,
+          height: 30,
           decoration: BoxDecoration(
             color: Colors.orange.shade700,
             shape: BoxShape.circle,
@@ -634,12 +717,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ],
           ),
           child: const Center(
-            child: Icon(Icons.cell_tower, color: Colors.white, size: 20),
+            child: Icon(Icons.cell_tower, color: Colors.white, size: 16),
           ),
         ),
         // Balancing spacer = label + dist-pill + connector height above icon
         // so the icon center lands at the widget midpoint = LatLng anchor.
-        const SizedBox(height: 40),
+        const SizedBox(height: 34),
       ],
     );
   }
@@ -649,43 +732,101 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // ---------------------------------------------------------------------------
 
   Widget _buildContactMarker(Contact contact, ThemeData theme) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _contactColor(contact),
-        shape: BoxShape.circle,
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x50000000),
-            blurRadius: 4,
-            offset: Offset(0, 2),
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: _contactColor(contact),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 1.8),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x50000000),
+                blurRadius: 3,
+                offset: Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Center(
-        child: Icon(_contactIconData(contact), color: Colors.white, size: 22),
-      ),
+          child: Center(
+            child: Icon(
+              _contactIconData(contact),
+              color: Colors.white,
+              size: 15,
+            ),
+          ),
+        ),
+        Positioned(top: 44, child: _markerNameTag(contact.displayName)),
+      ],
     );
   }
 
-  Widget _buildSelfMarker(ThemeData theme) {
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
-        shape: BoxShape.circle,
-        border: Border.all(color: theme.colorScheme.primary, width: 2.5),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x50000000),
-            blurRadius: 4,
-            offset: Offset(0, 2),
+  Widget _buildSelfMarker(ThemeData theme, String? selfName) {
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primaryContainer,
+            shape: BoxShape.circle,
+            border: Border.all(color: theme.colorScheme.primary, width: 2.5),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x50000000),
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
           ),
-        ],
+          child: Center(
+            child: Icon(
+              Icons.navigation,
+              color: theme.colorScheme.primary,
+              size: 15,
+            ),
+          ),
+        ),
+        Positioned(
+          top: 44,
+          child: _markerNameTag(
+            (selfName != null && selfName.trim().isNotEmpty)
+                ? selfName
+                : context.l10n.mapLegendYou,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _markerNameTag(String text) {
+    final compact = text.trim();
+    const maxChars = 12;
+    final label =
+        compact.length > maxChars
+            ? '${compact.substring(0, maxChars - 1)}...'
+            : compact;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 80),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(5),
       ),
-      child: Center(
-        child: Icon(
-          Icons.navigation,
-          color: theme.colorScheme.primary,
-          size: 22,
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 9,
+          fontWeight: FontWeight.w600,
+          height: 1.0,
         ),
       ),
     );
@@ -736,7 +877,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
-            fontSize: 16,
+            fontSize: 13,
           ),
         ),
       ),
@@ -787,524 +928,5 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       isScrollControlled: true,
       builder: (ctx) => _ContactInfoSheet(contact: contact),
     );
-  }
-}
-
-/// Bottom sheet shown when tapping a contact marker on the map.
-class _ContactInfoSheet extends ConsumerWidget {
-  const _ContactInfoSheet({required this.contact});
-  final Contact contact;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final keyHex =
-        contact.publicKey
-            .map((b) => b.toRadixString(16).padLeft(2, '0'))
-            .join();
-
-    final typeLabel =
-        contact.isChat
-            ? 'Companheiro'
-            : contact.isRepeater
-            ? 'Repetidor'
-            : contact.isRoom
-            ? 'Sala'
-            : 'Sensor';
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        16 + MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Icon + type chip on one line
-          Row(
-            children: [
-              Icon(
-                _iconData(contact),
-                color: theme.colorScheme.primary,
-                size: 28,
-              ),
-              const SizedBox(width: 10),
-              Chip(
-                label: Text(typeLabel),
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-
-          // Full name — wraps freely, no truncation
-          Text(
-            contact.name,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-            softWrap: true,
-          ),
-          const SizedBox(height: 12),
-
-          // Details
-          _DetailRow(
-            icon: Icons.fingerprint,
-            label: 'ID',
-            value: contact.shortId,
-            monospace: true,
-            theme: theme,
-          ),
-          if (contact.latitude != null && contact.longitude != null)
-            _DetailRow(
-              icon: Icons.location_on_outlined,
-              label: 'GPS',
-              value:
-                  '${contact.latitude!.toStringAsFixed(5)},  '
-                  '${contact.longitude!.toStringAsFixed(5)}',
-              theme: theme,
-            ),
-          const SizedBox(height: 20),
-
-          // Action button — only for chat contacts
-          if (contact.isChat)
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                icon: const Icon(Icons.chat),
-                label: Text(context.l10n.commonSendMessage),
-                onPressed: () {
-                  Navigator.pop(context);
-                  context.push('/chat/$keyHex');
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  IconData _iconData(Contact c) {
-    if (c.isChat) return Icons.person;
-    if (c.isRepeater) return Icons.cell_tower;
-    if (c.isRoom) return Icons.meeting_room;
-    return Icons.sensors;
-  }
-}
-
-/// A labelled detail row used in the contact bottom sheet.
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.theme,
-    this.monospace = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final ThemeData theme;
-  final bool monospace;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: 6),
-          SizedBox(
-            width: 36,
-            child: Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              value,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontFamily: monospace ? 'monospace' : null,
-              ),
-              softWrap: true,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Cluster data model
-// ---------------------------------------------------------------------------
-
-class _ContactCluster {
-  const _ContactCluster({required this.members, required this.center});
-  final List<Contact> members;
-  final LatLng center;
-  bool get isSingle => members.length == 1;
-}
-
-// ---------------------------------------------------------------------------
-// Cluster list bottom sheet
-// ---------------------------------------------------------------------------
-
-class _ClusterListSheet extends StatelessWidget {
-  const _ClusterListSheet({required this.cluster, required this.onContactTap});
-
-  final _ContactCluster cluster;
-  final void Function(Contact) onContactTap;
-
-  static Color _typeColor(Contact c) {
-    if (c.isChat) return Colors.blue.shade600;
-    if (c.isRepeater) return Colors.orange.shade700;
-    if (c.isRoom) return Colors.purple.shade600;
-    return Colors.teal.shade600;
-  }
-
-  static IconData _typeIcon(Contact c) {
-    if (c.isChat) return Icons.person;
-    if (c.isRepeater) return Icons.cell_tower;
-    if (c.isRoom) return Icons.meeting_room;
-    return Icons.sensors;
-  }
-
-  static String _typeLabel(Contact c) {
-    if (c.isChat) return 'Companheiro';
-    if (c.isRepeater) return 'Repetidor';
-    if (c.isRoom) return 'Sala';
-    return 'Sensor';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.65,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(
-              '${cluster.members.length} ${context.l10n.mapNodesAtLocation}',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const Divider(height: 1),
-          Flexible(
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                for (final contact in cluster.members)
-                  ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: _typeColor(contact),
-                      child: Icon(
-                        _typeIcon(contact),
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                    title: Text(
-                      contact.name,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    subtitle: Text(
-                      '${_typeLabel(contact)}  ·  ${contact.shortId}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => onContactTap(contact),
-                  ),
-              ],
-            ),
-          ),
-          SizedBox(height: MediaQuery.of(context).viewInsets.bottom + 16),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Trace result overlay card
-// ---------------------------------------------------------------------------
-
-/// Formats a distance in metres as a human-readable string.
-String _formatDist(double m) {
-  if (m >= 1000) return '${(m / 1000).toStringAsFixed(1)} km';
-  return '${m.round()} m';
-}
-
-class _TraceResultCard extends StatefulWidget {
-  const _TraceResultCard({
-    required this.result,
-    required this.onClear,
-    required this.onFit,
-    required this.theme,
-    this.selfPos,
-  });
-
-  final TraceResult result;
-  final VoidCallback onClear;
-  final VoidCallback onFit;
-  final ThemeData theme;
-  final LatLng? selfPos;
-
-  @override
-  State<_TraceResultCard> createState() => _TraceResultCardState();
-}
-
-class _TraceResultCardState extends State<_TraceResultCard> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final ts =
-        '${widget.result.timestamp.hour.toString().padLeft(2, '0')}:'
-        '${widget.result.timestamp.minute.toString().padLeft(2, '0')}:'
-        '${widget.result.timestamp.second.toString().padLeft(2, '0')}';
-
-    const collapsedVisibleHops = 4;
-    final totalHops = widget.result.hops.length;
-    final canCollapse = totalHops > collapsedVisibleHops;
-    final visibleHops =
-        (_expanded || !canCollapse) ? totalHops : collapsedVisibleHops;
-    final hiddenCount = totalHops - visibleHops;
-
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header row
-            Row(
-              children: [
-                Icon(
-                  Icons.route,
-                  size: 16,
-                  color: widget.theme.colorScheme.primary,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Path · $ts · ${widget.result.hopCount} hop${widget.result.hopCount != 1 ? 's' : ''}',
-                    style: widget.theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: widget.theme.colorScheme.primary,
-                    ),
-                  ),
-                ),
-                InkWell(
-                  onTap: widget.onFit,
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(
-                      Icons.fit_screen,
-                      size: 16,
-                      color: widget.theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                InkWell(
-                  onTap: widget.onClear,
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(
-                      Icons.close,
-                      size: 16,
-                      color: widget.theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            // Hop list
-            if (widget.result.hops.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              for (int i = 0; i < visibleHops; i++)
-                Builder(
-                  builder: (ctx) {
-                    final hop = widget.result.hops[i];
-                    // Distance from the previous GPS point (or selfPos) to this hop.
-                    double? distM;
-                    if (hop.hasGps) {
-                      LatLng? prevPt;
-                      if (i == 0) {
-                        prevPt = widget.selfPos;
-                      } else {
-                        for (int k = i - 1; k >= 0; k--) {
-                          final prev = widget.result.hops[k];
-                          if (prev.hasGps) {
-                            prevPt = LatLng(prev.latitude!, prev.longitude!);
-                            break;
-                          }
-                        }
-                      }
-                      if (prevPt != null) {
-                        distM = const Distance().as(
-                          LengthUnit.Meter,
-                          prevPt,
-                          LatLng(hop.latitude!, hop.longitude!),
-                        );
-                      }
-                    }
-                    return _HopRow(
-                      index: i + 1,
-                      hop: hop,
-                      theme: widget.theme,
-                      distanceM: distM,
-                    );
-                  },
-                ),
-              if (canCollapse)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: () => setState(() => _expanded = !_expanded),
-                    icon: Icon(
-                      _expanded ? Icons.expand_less : Icons.expand_more,
-                      size: 16,
-                    ),
-                    label: Text(
-                      _expanded
-                          ? context.l10n.mapMinimizeList
-                          : '${context.l10n.mapShowMore}$hiddenCount hop${hiddenCount == 1 ? '' : 's'}',
-                    ),
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 0,
-                        vertical: 2,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-            // Final SNR
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.arrow_downward,
-                    size: 12,
-                    color: Colors.green.shade600,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${context.l10n.mapFinal} ${widget.result.finalSnrDb.toStringAsFixed(1)} dB',
-                    style: widget.theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.green.shade600,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HopRow extends StatelessWidget {
-  const _HopRow({
-    required this.index,
-    required this.hop,
-    required this.theme,
-    this.distanceM,
-  });
-
-  final int index;
-  final TraceHop hop;
-  final ThemeData theme;
-  final double? distanceM;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 16,
-            child: Text(
-              '$index.',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          Icon(
-            hop.hasGps ? Icons.location_on : Icons.location_off,
-            size: 12,
-            color:
-                hop.hasGps
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.outlineVariant,
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              hop.name ?? hop.hashHex,
-              style: theme.textTheme.labelSmall?.copyWith(
-                fontFamily: hop.name == null ? 'monospace' : null,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (distanceM != null) ...[
-            Text(
-              _formatDist(distanceM!),
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(width: 6),
-          ],
-          Text(
-            '${hop.snrDb.toStringAsFixed(1)} dB',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: _snrColor(hop.snrDb),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _snrColor(double snr) {
-    if (snr > 5) return Colors.green.shade600;
-    if (snr > 0) return Colors.orange.shade700;
-    return Colors.red.shade600;
   }
 }

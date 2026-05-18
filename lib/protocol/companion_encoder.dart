@@ -128,6 +128,13 @@ class CompanionEncoder {
     return _frame(cmdSetTxPower, Uint8List.fromList([powerDbm & 0xFF]));
   }
 
+  /// SET_PATH_HASH_MODE — experimental path hash width.
+  /// [mode] is 0 (1-byte), 1 (2-byte) or 2 (3-byte). Firmware rejects >= 3.
+  /// Wire format: `[cmd, 0x00 reserved, mode]`.
+  static Uint8List setPathHashMode(int mode) {
+    return _frame(cmdSetPathHashMode, Uint8List.fromList([0x00, mode & 0xFF]));
+  }
+
   /// GET_BATT_AND_STORAGE — query battery and storage info.
   static Uint8List getBattAndStorage() => _frame(cmdGetBattAndStorage);
 
@@ -242,6 +249,31 @@ class CompanionEncoder {
     payload.add(_int32LE((lat * 1e6).round()));
     payload.add(_int32LE((lon * 1e6).round()));
     return _frame(cmdSetAdvertLatLon, payload.toBytes());
+  }
+
+  /// SET_OTHER_PARAMS (0x26) — update the four bundled radio prefs in one frame.
+  ///
+  /// Layout (per `MyMesh.cpp` `CMD_SET_OTHER_PARAMS`):
+  ///   [0] cmd                        (handled by `_frame`)
+  ///   [1] manualAddContacts          (uint8, 0/1)
+  ///   [2] telemetryMode bitfield     (env<<4 | loc<<2 | base)
+  ///   [3] advLocPolicy               (0 = never, 1 = every advert)
+  ///   [4] multiAcks                  (uint8, v7+)
+  ///
+  /// Callers MUST pass the radio's current values for fields they don't
+  /// want to change — this is a write-all command, not a partial update.
+  static Uint8List setOtherParams({
+    required int manualAddContacts,
+    required int telemetryMode,
+    required int advLocPolicy,
+    required int multiAcks,
+  }) {
+    final payload = BytesBuilder();
+    payload.addByte(manualAddContacts & 0xFF);
+    payload.addByte(telemetryMode & 0xFF);
+    payload.addByte(advLocPolicy & 0xFF);
+    payload.addByte(multiAcks & 0xFF);
+    return _frame(cmdSetOtherParams, payload.toBytes());
   }
 
   /// SHARE_CONTACT — share a contact via radio broadcast.
@@ -364,6 +396,20 @@ class CompanionEncoder {
       buf.add(payload);
     }
     return _frame(cmdSendControlData, buf.toBytes());
+  }
+
+  /// GET_AUTOADD_CONFIG — read the radio's auto-add bitmask and max-hops.
+  static Uint8List getAutoAddConfig() => _frame(cmdGetAutoAddConfig);
+
+  /// SET_AUTOADD_CONFIG — write the radio's auto-add bitmask and max-hops.
+  ///
+  /// [bitmask] is a combination of [autoAddChat], [autoAddRepeater], etc.
+  /// [maxHops] : 0 = no limit, 1 = direct only (0 hops), N = up to N-1 hops.
+  static Uint8List setAutoAddConfig(int bitmask, int maxHops) {
+    return _frame(
+      cmdSetAutoAddConfig,
+      Uint8List.fromList([bitmask & 0xFF, maxHops & 0xFF]),
+    );
   }
 
   // --- Utility ---

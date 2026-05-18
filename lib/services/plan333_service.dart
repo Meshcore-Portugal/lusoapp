@@ -33,7 +33,7 @@ class Plan333Config {
   final String city;
   final String locality;
 
-  /// MeshCore channel index (0-based) used to send CQ and QSL messages.
+  /// MeshCore channel index (0-based) used to send CQ messages.
   final int meshChannelIndex;
 
   /// When true, CQ messages are sent automatically during the event window.
@@ -81,8 +81,6 @@ class Plan333AutoSendState {
   const Plan333AutoSendState({
     this.cqSentCount = 0,
     this.lastCqTime,
-    this.qslSentStations = const {},
-    this.lastQslTime,
     this.aborted = false,
   });
 
@@ -92,29 +90,17 @@ class Plan333AutoSendState {
   /// Timestamp of the most recent CQ send.
   final DateTime? lastCqTime;
 
-  /// Station names for which a QSL has been auto-sent this session.
-  final Set<String> qslSentStations;
-
-  /// Timestamp of the most recent QSL auto-send.
-  final DateTime? lastQslTime;
-
   /// When true, the user aborted the auto-send session — no further
-  /// automatic CQ/QSL messages will be sent until the state is reset.
+  /// automatic CQ messages will be sent until the state is reset.
   final bool aborted;
-
-  int get qslSentCount => qslSentStations.length;
 
   Plan333AutoSendState copyWith({
     int? cqSentCount,
     DateTime? lastCqTime,
-    Set<String>? qslSentStations,
-    DateTime? lastQslTime,
     bool? aborted,
   }) => Plan333AutoSendState(
     cqSentCount: cqSentCount ?? this.cqSentCount,
     lastCqTime: lastCqTime ?? this.lastCqTime,
-    qslSentStations: qslSentStations ?? this.qslSentStations,
-    lastQslTime: lastQslTime ?? this.lastQslTime,
     aborted: aborted ?? this.aborted,
   );
 }
@@ -126,7 +112,7 @@ class Plan333AutoSendState {
 /// Pure business logic for the Portuguese Plano 3-3-3.
 ///
 /// CB/PMR: windows every 3 hours (00:00 03:00 … 21:00), ±3 min each.
-/// Mesh:   weekly Saturdays 21:00–22:00 (presence) / 21:30–22:00 (QSL).
+/// Mesh:   weekly Saturdays 21:00–22:00 (presence).
 class Plan333Service {
   Plan333Service._();
 
@@ -189,19 +175,12 @@ class Plan333Service {
   // ── Mesh ─────────────────────────────────────────────────────────────────
   static const int _meshHour = 21; // event start
   static const int _meshEnd = 22; // event end (exclusive)
-  static const int _qslMinute = 30; // QSL phase starts at xx:30
 
   /// True when [now] is Saturday 21:00–22:00 (presence window for MeshCore).
   static bool isMeshEventActive(DateTime now) =>
       now.weekday == DateTime.saturday &&
       now.hour >= _meshHour &&
       now.hour < _meshEnd;
-
-  /// True when [now] is Saturday 21:30–22:00 (QSL confirmation window).
-  static bool isMeshQslActive(DateTime now) =>
-      now.weekday == DateTime.saturday &&
-      now.hour == _meshHour &&
-      now.minute >= _qslMinute;
 
   /// Next Saturday 21:00:00.
   static DateTime nextMeshEvent(DateTime now) {
@@ -221,7 +200,7 @@ class Plan333Service {
   ///
   /// Accepted format: `CQ Plano 333, <station>, <city>[, <locality>]`
   /// Returns null if the text is not a CQ Plano 333 message.
-  /// [pathLen] is used as the hop count.
+  /// [pathLen] follows MeshCore semantics: lower 6 bits are hop count.
   static QslRecord? tryParseCq(String text, {int? pathLen}) {
     final trimmed = text.trim();
 
@@ -251,54 +230,7 @@ class Plan333Service {
 
     return QslRecord(
       stationName: station,
-      hops: pathLen ?? 0,
-      location: location,
-      timestamp: DateTime.now(),
-    );
-  }
-
-  /// Try to parse an incoming channel message as a QSL confirmation.
-  ///
-  /// Accepted format: `QSL, <station>, <N hops|Direto>, <location>`
-  /// All parts after station are optional.  Returns null if the text is not a
-  /// QSL message.  [pathLen] is used as the hop count when the text carries no
-  /// explicit hops value.
-  static QslRecord? tryParseQsl(String text, {int? pathLen}) {
-    final trimmed = text.trim();
-    if (!trimmed.toUpperCase().startsWith('QSL')) return null;
-
-    // Split on commas (with optional surrounding spaces).
-    final parts = trimmed.split(RegExp(r',\s*'));
-    if (parts.length < 2) return null;
-
-    final station = parts[1].trim();
-    if (station.isEmpty) return null;
-
-    int hops = pathLen ?? 0;
-    String location = '';
-
-    if (parts.length >= 3) {
-      final hopsPart = parts[2].trim().toLowerCase();
-      final hopsMatch = RegExp(r'(\d+)\s*hops?').firstMatch(hopsPart);
-      if (hopsMatch != null) {
-        hops = int.tryParse(hopsMatch.group(1) ?? '') ?? hops;
-      } else if (hopsPart == 'direto' ||
-          hopsPart == 'directo' ||
-          hopsPart == 'direct') {
-        hops = 0;
-      } else {
-        // No hops info — treat as location.
-        location = parts[2].trim();
-      }
-    }
-
-    if (parts.length >= 4 && location.isEmpty) {
-      location = parts.sublist(3).join(', ').trim();
-    }
-
-    return QslRecord(
-      stationName: station,
-      hops: hops,
+      hops: QslRecord.normalizeHops(pathLen),
       location: location,
       timestamp: DateTime.now(),
     );
@@ -316,7 +248,7 @@ class Plan333Service {
 }
 
 // ---------------------------------------------------------------------------
-// QslRecord — one received QSL confirmation
+// QslRecord — one received/heard station
 // ---------------------------------------------------------------------------
 
 class QslRecord {
@@ -330,32 +262,42 @@ class QslRecord {
 
   factory QslRecord.fromJson(Map<String, dynamic> j) => QslRecord(
     stationName: (j['station'] as String?) ?? '',
-    hops: (j['hops'] as int?) ?? 0,
+    hops: normalizeHops((j['hops'] as int?) ?? 0),
     location: (j['location'] as String?) ?? '',
     timestamp: DateTime.fromMillisecondsSinceEpoch((j['ts'] as int?) ?? 0),
     notes: (j['notes'] as String?) ?? '',
   );
 
-  /// Station callsign / name that sent the QSL.
+  /// Station callsign / name.
   final String stationName;
 
   /// Number of hops (0 = direct).
   final int hops;
 
+  /// Normalizes raw route byte/pathLen values to hop count (0..63).
+  static int normalizeHops(int? raw) {
+    if (raw == null || raw <= 0) return 0;
+    if (raw == 0xFF) return 0;
+    return raw & 0x3F;
+  }
+
   /// Their reported location / city.
   final String location;
 
-  /// When the QSL was logged (local device time).
+  /// When the station was logged (local device time).
   final DateTime timestamp;
 
   /// Optional free-form notes.
   final String notes;
 
-  String get hopsLabel => hops == 0 ? 'Direto' : '$hops hops';
+  String get hopsLabel {
+    final normalized = normalizeHops(hops);
+    return normalized == 0 ? 'Direto' : '$normalized hops';
+  }
 
   Map<String, dynamic> toJson() => {
     'station': stationName,
-    'hops': hops,
+    'hops': normalizeHops(hops),
     'location': location,
     'ts': timestamp.millisecondsSinceEpoch,
     'notes': notes,
@@ -506,7 +448,7 @@ class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
     // Reset session state when the Mesh event window closes.
     if (!allowOutsideEvent &&
         !Plan333Service.isMeshEventActive(now) &&
-        (state.cqSentCount > 0 || state.qslSentStations.isNotEmpty)) {
+        state.cqSentCount > 0) {
       state = const Plan333AutoSendState();
       return;
     }
@@ -524,18 +466,6 @@ class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
         return; // one action per tick
       }
     }
-
-    // ── QSL confirmation phase (21:30–22:00) ─────────────────────────────
-    if (!allowOutsideEvent && !Plan333Service.isMeshQslActive(now)) return;
-
-    final qslLog = _ref.read(qslLogProvider);
-    final unsent =
-        qslLog
-            .where((r) => !state.qslSentStations.contains(r.stationName))
-            .toList();
-    if (unsent.isEmpty) return;
-
-    _doSendQsl(config, unsent.first);
   }
 
   /// Debug helper: execute one automation scheduler pass at [simulatedNow].
@@ -550,7 +480,7 @@ class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
     );
   }
 
-  /// Stop any further automatic CQ/QSL sends for the rest of this session.
+  /// Stop any further automatic CQ sends for the rest of this session.
   ///
   /// The aborted flag is cleared automatically when the event window closes
   /// (next [_tick] after 22:00 on Saturday) or via [debugResetAutomationState].
@@ -558,7 +488,7 @@ class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
     state = state.copyWith(aborted: true);
   }
 
-  /// Debug helper: clear CQ/QSL session counters immediately.
+  /// Debug helper: clear CQ session counters immediately.
   void debugResetAutomationState() {
     state = const Plan333AutoSendState();
   }
@@ -611,34 +541,6 @@ class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
     state = state.copyWith(
       cqSentCount: state.cqSentCount + 1,
       lastCqTime: DateTime.now(),
-    );
-  }
-
-  void _doSendQsl(Plan333Config config, QslRecord record) {
-    final service = _ref.read(radioServiceProvider);
-    if (service == null || !service.isConnected) return;
-
-    final channelIndex = _resolvePlan333ChannelIndex(config);
-
-    final ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final loc = record.location.isNotEmpty ? ', ${record.location}' : '';
-    final msg = 'QSL, ${record.stationName}, ${record.hopsLabel}$loc';
-
-    _ref
-        .read(messagesProvider.notifier)
-        .addOutgoing(
-          ChatMessage(
-            text: msg,
-            timestamp: ts,
-            isOutgoing: true,
-            channelIndex: channelIndex,
-          ),
-        );
-    service.sendChannelMessage(channelIndex, msg, timestamp: ts);
-
-    state = state.copyWith(
-      qslSentStations: {...state.qslSentStations, record.stationName},
-      lastQslTime: DateTime.now(),
     );
   }
 

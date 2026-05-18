@@ -12,15 +12,19 @@ import '../theme.dart';
 
 /// Main shell screen with bottom navigation.
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key, required this.child});
-  final Widget child;
+  const HomeScreen({
+    super.key,
+    required this.navigationShell,
+    required this.currentPath,
+  });
+  final StatefulNavigationShell navigationShell;
+  final String currentPath;
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  int _currentIndex = 0;
   bool _showVolts = false;
   bool _exitDialogOpen = false;
 
@@ -36,33 +40,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     };
   }
 
-  /// Returns the tab index whose prefix matches [path].
-  static int _tabIndexForPath(String path) {
-    // Private chat and room screens are launched from the Contacts tab.
-    if (path.startsWith('/chat/') || path.startsWith('/room/')) return 1;
-    for (var i = 0; i < _tabs.length; i++) {
-      if (path == _tabs[i] || path.startsWith('${_tabs[i]}/')) return i;
-    }
-    return 0;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final connectionState = ref.watch(connectionProvider);
-    final selfInfo = ref.watch(selfInfoProvider);
+    // Watch only the connection state enum, not the full object
+    final connectionState = ref.watch(
+      connectionProvider.select((state) => state),
+    );
+    final selfName = ref.watch(selfInfoProvider.select((info) => info?.name));
     final batteryMv = ref.watch(batteryProvider);
-    final unread = ref.watch(unreadCountsProvider);
+    final unreadChannels = ref.watch(
+      unreadCountsProvider.select((counts) => counts.totalChannels),
+    );
+    final unreadContacts = ref.watch(
+      unreadCountsProvider.select((counts) => counts.totalContacts),
+    );
     final theme = Theme.of(context);
 
-    // Keep the nav bar indicator in sync with the live route (handles deep
-    // links and context.go() calls from within sub-screens).
-    final currentPath = GoRouterState.of(context).uri.path;
-    final tabIndex = _tabIndexForPath(currentPath);
-    if (tabIndex != _currentIndex) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _currentIndex = tabIndex);
-      });
-    }
+    final currentPath = widget.currentPath;
+    final tabIndex = widget.navigationShell.currentIndex;
 
     // When inside an apps sub-page, show a back arrow and the app's name.
     final appSubTitle = _appSubTitle(context, currentPath);
@@ -74,6 +69,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return true;
       },
       child: Scaffold(
+        backgroundColor: AppTheme.background,
         appBar: AppBar(
           leading:
               isAppsSubPage
@@ -100,10 +96,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         size: 24,
                       ),
                       const SizedBox(width: 8),
-                      Text(selfInfo?.name ?? 'LusoAPP'),
+                      Text(selfName ?? 'LusoAPP'),
                     ],
                   ),
           actions: [
+            // Signal bars indicator — best SNR from last 5 min of RX log
+            const _SignalIndicator(),
             // Battery indicator — tap to toggle % / voltage
             if (batteryMv > 0)
               Padding(
@@ -139,44 +137,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ],
         ),
-        body: widget.child,
+        body: widget.navigationShell,
         bottomNavigationBar: NavigationBar(
-          selectedIndex: _currentIndex,
+          selectedIndex: tabIndex,
           onDestinationSelected: (index) {
-            setState(() => _currentIndex = index);
-            context.go(_tabs[index]);
+            widget.navigationShell.goBranch(index, initialLocation: true);
           },
           destinations: [
             NavigationDestination(
               icon: Badge(
-                isLabelVisible: unread.totalChannels > 0,
-                label: Text(
-                  unread.totalChannels > 99 ? '99+' : '${unread.totalChannels}',
-                ),
+                isLabelVisible: unreadChannels > 0,
+                label: Text(unreadChannels > 99 ? '99+' : '${unreadChannels}'),
                 child: const Icon(Icons.forum_outlined),
               ),
               selectedIcon: Badge(
-                isLabelVisible: unread.totalChannels > 0,
-                label: Text(
-                  unread.totalChannels > 99 ? '99+' : '${unread.totalChannels}',
-                ),
+                isLabelVisible: unreadChannels > 0,
+                label: Text(unreadChannels > 99 ? '99+' : '${unreadChannels}'),
                 child: const Icon(Icons.forum),
               ),
               label: context.l10n.navChannels,
             ),
             NavigationDestination(
               icon: Badge(
-                isLabelVisible: unread.totalContacts > 0,
-                label: Text(
-                  unread.totalContacts > 99 ? '99+' : '${unread.totalContacts}',
-                ),
+                isLabelVisible: unreadContacts > 0,
+                label: Text(unreadContacts > 99 ? '99+' : '${unreadContacts}'),
                 child: const Icon(Icons.contacts_outlined),
               ),
               selectedIcon: Badge(
-                isLabelVisible: unread.totalContacts > 0,
-                label: Text(
-                  unread.totalContacts > 99 ? '99+' : '${unread.totalContacts}',
-                ),
+                isLabelVisible: unreadContacts > 0,
+                label: Text(unreadContacts > 99 ? '99+' : '${unreadContacts}'),
                 child: const Icon(Icons.contacts),
               ),
               label: context.l10n.navContacts,
@@ -203,14 +192,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _handleBack(BuildContext context) {
-    final currentPath = GoRouterState.of(context).uri.path;
+    final currentPath = widget.currentPath;
     final isRootTab = _tabs.contains(currentPath);
     if (isRootTab) {
       if (currentPath == _tabs[0]) {
         unawaited(_confirmExit(context));
       } else {
-        context.go(_tabs[0]);
-        setState(() => _currentIndex = 0);
+        widget.navigationShell.goBranch(0, initialLocation: false);
       }
       return;
     }
@@ -218,8 +206,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (router.canPop()) {
       router.pop();
     } else {
-      context.go(_tabs[0]);
-      setState(() => _currentIndex = 0);
+      widget.navigationShell.goBranch(0, initialLocation: false);
     }
   }
 
@@ -232,18 +219,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         context: context,
         builder:
             (ctx) => AlertDialog(
-              title: const Text('Sair da LusoAPP?'),
-              content: const Text(
-                'A ligação ao rádio será terminada e a aplicação encerrada.',
-              ),
+              title: Text(context.l10n.homeExitTitle),
+              content: Text(context.l10n.homeExitContent),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Cancelar'),
+                  child: Text(context.l10n.commonCancel),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Sair'),
+                  child: Text(context.l10n.homeExit),
                 ),
               ],
             ),
@@ -301,5 +286,126 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (mv > 3600) return Colors.green;
     if (mv > 3300) return AppTheme.primary;
     return Colors.red;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Signal bars indicator (best LoRa SNR from last 5 min of received packets)
+// ---------------------------------------------------------------------------
+
+class _SignalIndicator extends ConsumerWidget {
+  const _SignalIndicator();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final snr = ref.watch(bestSignalSnrProvider);
+    return GestureDetector(
+      onTap: () {
+        ref.read(telemetryScrollToRfProvider.notifier).state = true;
+        context.go('/apps/telemetry');
+      },
+      child: _SignalBarsIcon(snr: snr),
+    );
+  }
+}
+
+class _SignalBarsIcon extends StatelessWidget {
+  const _SignalBarsIcon({required this.snr});
+  final double? snr;
+
+  /// Map LoRa SNR → 0-4 bar count.
+  /// LoRa SNR range: typically -20 dB (marginal) to +10 dB (excellent).
+  static int _bars(double snr) {
+    if (snr >= 0) return 4; // excellent
+    if (snr >= -5) return 3; // good
+    if (snr >= -10) return 2; // fair
+    return 1; // weak
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final snrValue =
+        snr; // local copy — required for null promotion of public field
+
+    if (snrValue == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Tooltip(
+          message: context.l10n.signalNone,
+          child: _SignalBars(
+            bars: 0,
+            color: theme.colorScheme.onSurface.withAlpha(80),
+          ),
+        ),
+      );
+    }
+
+    final bars = _bars(snrValue);
+    final Color color;
+    final String quality;
+
+    switch (bars) {
+      case 4:
+        color = Colors.green;
+        quality = context.l10n.signalExcellent;
+      case 3:
+        color = Colors.lightGreen;
+        quality = context.l10n.signalGood;
+      case 2:
+        color = Colors.orange;
+        quality = context.l10n.signalFair;
+      default:
+        color = Colors.red;
+        quality = context.l10n.signalWeak;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Tooltip(
+        message: '$quality — SNR ${snrValue.toStringAsFixed(1)} dB',
+        child: _SignalBars(bars: bars, color: color),
+      ),
+    );
+  }
+}
+
+/// Draws 4 vertical bars of increasing height — like a phone signal indicator.
+/// [bars] = 0 means all bars are hollow (no signal).
+class _SignalBars extends StatelessWidget {
+  const _SignalBars({required this.bars, required this.color});
+  final int bars; // 0–4
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    const totalBars = 4;
+    const maxHeight = 18.0;
+    const barWidth = 4.0;
+
+    return SizedBox(
+      width: totalBars * barWidth + (totalBars - 1) * 1.5,
+      height: maxHeight,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: List.generate(totalBars, (i) {
+          final barH = maxHeight * (i + 1) / totalBars;
+          final filled = i < bars;
+          return SizedBox(
+            width: barWidth,
+            height: barH,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: filled ? color : color.withAlpha(55),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(1.5),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
   }
 }

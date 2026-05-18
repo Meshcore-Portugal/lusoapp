@@ -42,6 +42,10 @@ class SerialTransport implements RadioTransport {
 
   @override
   Future<bool> connect() async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      _log.d('Serial not supported on mobile — use BLE');
+      return false;
+    }
     try {
       _port = SerialPort(_portName);
 
@@ -156,4 +160,8 @@ class SerialTransport implements RadioTransport {
   static Future<SerialTransport?> fromDeviceId(String portName) async {
     return SerialTransport(portName);
   }
+
+  /// Always false on native — port registry is a web-only concept.
+  /// Native serial ports are enumerated fresh on every [listDevices] call.
+  static bool isRegistered(String portId) => false;
 }

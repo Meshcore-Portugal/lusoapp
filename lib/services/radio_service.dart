@@ -79,9 +79,15 @@ class RadioService {
     Uint8List recipientPrefix,
     String text, {
     int attempt = 0,
+    int? timestamp,
   }) async {
     await _send(
-      CompanionEncoder.sendMessage(recipientPrefix, text, attempt: attempt),
+      CompanionEncoder.sendMessage(
+        recipientPrefix,
+        text,
+        attempt: attempt,
+        timestamp: timestamp,
+      ),
     );
   }
 
@@ -117,6 +123,13 @@ class RadioService {
 
   Future<void> setTxPower(int powerDbm) async {
     await _send(CompanionEncoder.setTxPower(powerDbm));
+  }
+
+  /// Experimental: change the wire-level path hash size used by sendFlood.
+  /// [mode] is 0 (1-byte hops, default), 1 (2-byte), 2 (3-byte).
+  /// Firmware v10+ only — older firmwares answer with ERR.
+  Future<void> setPathHashMode(int mode) async {
+    await _send(CompanionEncoder.setPathHashMode(mode));
   }
 
   Future<void> requestDeviceInfo({int appVersion = 3}) async {
@@ -168,8 +181,36 @@ class RadioService {
     await _send(CompanionEncoder.setAdvertLatLon(lat, lon));
   }
 
+  /// Update the bundled "other params" frame (manual-add, telemetry mode,
+  /// adv-loc-policy, multi-acks). All four are written atomically — the
+  /// caller is responsible for passing the radio's current values for the
+  /// fields it does not want to change.
+  Future<void> setOtherParams({
+    required int manualAddContacts,
+    required int telemetryMode,
+    required int advLocPolicy,
+    required int multiAcks,
+  }) async {
+    await _send(
+      CompanionEncoder.setOtherParams(
+        manualAddContacts: manualAddContacts,
+        telemetryMode: telemetryMode,
+        advLocPolicy: advLocPolicy,
+        multiAcks: multiAcks,
+      ),
+    );
+  }
+
   Future<void> reboot() async {
     await _send(CompanionEncoder.reboot());
+  }
+
+  Future<void> requestAutoAddConfig() async {
+    await _send(CompanionEncoder.getAutoAddConfig());
+  }
+
+  Future<void> setAutoAddConfig(int bitmask, int maxHops) async {
+    await _send(CompanionEncoder.setAutoAddConfig(bitmask, maxHops));
   }
 
   Future<void> requestPrivateKeyExport() async {
@@ -188,8 +229,7 @@ class RadioService {
   /// Must be called after a successful [login] to that peer.
   /// The response arrives as a [PrivateMessageResponse] on [responses].
   Future<void> sendAdminCommand(Uint8List pubKey, String command) async {
-    final prefix =
-        pubKey.sublist(0, pubKey.length < 6 ? pubKey.length : 6);
+    final prefix = pubKey.sublist(0, pubKey.length < 6 ? pubKey.length : 6);
     await _send(CompanionEncoder.sendAdminCommand(prefix, command));
   }
 
@@ -199,6 +239,10 @@ class RadioService {
     // Pad to 32 bytes
     if (pubKey.length < 32) payload.add(Uint8List(32 - pubKey.length));
     await _send(_buildFrame(cmdSendStatusReq, payload.toBytes()));
+  }
+
+  Future<void> sendTelemetryRequest(Uint8List pubKey) async {
+    await _send(CompanionEncoder.sendTelemetryReq(pubKey));
   }
 
   /// Build a raw companion frame without going through CompanionEncoder.
@@ -304,17 +348,36 @@ class RadioService {
         deviceInfo = info;
       case MsgWaitingPush():
         // Start draining the offline queue.
-        syncNextMessage();
+        _safeSyncNextMessage();
       case PrivateMessageResponse():
       case ChannelMessageResponse():
         // Continue draining — firmware sends one message per syncNext.
         // Keep calling until NoMoreMessagesResponse.
-        syncNextMessage();
+        _safeSyncNextMessage();
       case NoMoreMessagesResponse():
         // Queue drained — nothing to do.
         break;
       default:
         break;
+    }
+  }
+
+  /// Fire-and-forget syncNext for queue draining. Disconnect races are expected
+  /// here, so "Not connected" errors are swallowed to avoid unhandled async
+  /// exceptions in the VM error log.
+  void _safeSyncNextMessage() {
+    unawaited(_syncNextMessageGuarded());
+  }
+
+  Future<void> _syncNextMessageGuarded() async {
+    if (!isConnected) return;
+    try {
+      await syncNextMessage();
+    } catch (e) {
+      // During teardown, a late RX frame may still trigger queue draining
+      // after transport has disconnected. Treat as benign.
+      if (e is StateError && !isConnected) return;
+      rethrow;
     }
   }
 

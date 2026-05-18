@@ -6,6 +6,7 @@ import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
 import '../theme.dart';
+import '../widgets/path_sheet.dart';
 
 /// Replaces lone UTF-16 surrogate code units with U+FFFD.
 /// Lone surrogates crash the Flutter text engine ("string is not well-formed UTF-16").
@@ -173,6 +174,20 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
     _scrollToBottom();
   }
 
+  void _retryMessage(ChatMessage msg) {
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+    final updated = ref
+        .read(messagesProvider.notifier)
+        .markMessageRetrying(msg);
+    if (updated == null) return;
+    service.sendPrivateMessage(
+      _keyPrefix6,
+      updated.text,
+      attempt: updated.retryCount,
+    );
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollCtrl.hasClients) {
@@ -236,6 +251,7 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
                     scrollController: _scrollCtrl,
                     contact: contact,
                     onSetReply: (msg) => setState(() => _replyingTo = msg),
+                    onRetry: _retryMessage,
                   )
                   : _JoinBody(
                     contact: contact,
@@ -308,7 +324,7 @@ class _RoomHeader extends StatelessWidget {
                 ),
                 if (contact != null)
                   Text(
-                    'Sala  •  ID: ${contact!.shortId}  •  Saltos: ${contact!.pathLen}',
+                    'Sala  •  ID: ${contact!.shortId}  •  ${contactPathLabel(contact!.pathLen)}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withAlpha(120),
                     ),
@@ -440,12 +456,14 @@ class _ChatBody extends StatelessWidget {
     required this.scrollController,
     required this.contact,
     required this.onSetReply,
+    required this.onRetry,
   });
 
   final List<ChatMessage> messages;
   final ScrollController scrollController;
   final Contact? contact;
   final ValueChanged<ChatMessage> onSetReply;
+  final ValueChanged<ChatMessage> onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -487,6 +505,7 @@ class _ChatBody extends StatelessWidget {
         return _RoomMessageBubble(
           message: msg,
           onReply: msg.isOutgoing ? null : () => onSetReply(msg),
+          onRetry: msg.isOutgoing ? () => onRetry(msg) : null,
         );
       },
     );
@@ -498,10 +517,11 @@ class _ChatBody extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _RoomMessageBubble extends StatelessWidget {
-  const _RoomMessageBubble({required this.message, this.onReply});
+  const _RoomMessageBubble({required this.message, this.onReply, this.onRetry});
 
   final ChatMessage message;
   final VoidCallback? onReply;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -563,14 +583,24 @@ class _RoomMessageBubble extends StatelessWidget {
                 ],
                 if (isMe) ...[
                   const SizedBox(width: 6),
-                  Icon(
-                    message.confirmed ? Icons.done_all : Icons.done,
-                    size: 18,
-                    color:
-                        message.confirmed
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurface.withAlpha(140),
-                  ),
+                  if (message.failed)
+                    GestureDetector(
+                      onTap: onRetry,
+                      child: Icon(
+                        Icons.error_outline,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    )
+                  else
+                    Icon(
+                      message.confirmed ? Icons.done_all : Icons.done,
+                      size: 18,
+                      color:
+                          message.confirmed
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurface.withAlpha(140),
+                    ),
                 ],
               ],
             ),

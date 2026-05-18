@@ -65,7 +65,7 @@ if [ ! -d "$PROJECT_DIR/ios" ]; then
     exit 1
 fi
 
-log "lusoapp v$VERSION — iOS ${BUILD_MODE^} Build"
+log "lusoapp v$VERSION — iOS $BUILD_MODE build"
 log "===================================================="
 
 log "Getting dependencies..."

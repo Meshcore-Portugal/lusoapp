@@ -46,6 +46,9 @@ case "$TARGET" in
     ios)
         run_script "$SCRIPT_DIR/build.ios.sh" "$@"
         ;;
+    macincloud)
+        run_script "$SCRIPT_DIR/build.macincloud.sh" "$@"
+        ;;
     web)
         run_script "$SCRIPT_DIR/build.web.sh" "$@"
         ;;
@@ -75,7 +78,7 @@ case "$TARGET" in
         ;;
     *)
         err "Unknown target: $TARGET"
-        echo "Usage: $(basename "$0") [all|linux|android|ios|web|windows] [target args]"
+        echo "Usage: $(basename "$0") [all|linux|android|ios|macincloud|web|windows] [target args]"
         echo "Example: $(basename "$0") linux --release"
         exit 1
         ;;
