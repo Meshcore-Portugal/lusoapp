@@ -354,11 +354,50 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                     tooltip: context.l10n.contactsSendAdvert,
                     onSelected: (type) {
                       final svc = ref.read(radioServiceProvider);
+                      if (svc == null) return;
                       switch (type) {
                         case _AdvertType.zeroHop:
-                          svc?.sendAdvert(flood: false);
+                          svc.sendAdvert(flood: false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.wifi_tethering,
+                                    color: Colors.white,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      context.l10n.contactsAdvertSentZeroHop,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
                         case _AdvertType.flood:
-                          svc?.sendAdvert(flood: true);
+                          svc.sendAdvert(flood: true);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.broadcast_on_home,
+                                    color: Colors.white,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      context.l10n.contactsAdvertSentFlood,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
                       }
                     },
                     itemBuilder:
@@ -1064,187 +1103,198 @@ class _ContactTile extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
       builder: (ctx) {
+        final maxHeight = MediaQuery.of(ctx).size.height * 0.88;
         return SafeArea(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Header
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: _avatarColor(contact).withAlpha(40),
-                        child: Icon(
-                          _avatarIcon(contact),
-                          color: _avatarColor(contact),
-                          size: 20,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: _avatarColor(contact).withAlpha(40),
+                          child: Icon(
+                            _avatarIcon(contact),
+                            color: _avatarColor(contact),
+                            size: 20,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              contact.displayName,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              '${_typeLabel(contact.type)}  •  ${contact.shortId}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface.withAlpha(
-                                  130,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                contact.displayName,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            ),
-                          ],
+                              Text(
+                                '${_typeLabel(contact.type)}  •  ${contact.shortId}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurface.withAlpha(
+                                    130,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(),
-                // Save to radio — only shown for locally-cached (advert-only) contacts
-                if (!isOnRadio)
-                  ListTile(
-                    leading: const Icon(Icons.save_outlined),
-                    title: Text(context.l10n.contactsSaveToRadioTitle),
-                    subtitle: Text(context.l10n.contactsNotSavedHint),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      _saveToRadio(context, ref);
-                    },
-                  ),
-                // Favourite
-                ListTile(
-                  leading: Icon(
-                    isFavorite ? Icons.star : Icons.star_border,
-                    color: isFavorite ? Colors.amber : null,
-                  ),
-                  title: Text(
-                    isFavorite
-                        ? context.l10n.contactsRemoveFavorites
-                        : context.l10n.contactsAddFavorites,
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _toggleFavorite(ref);
-                  },
-                ),
-                ListTile(
-                  leading: Icon(
-                    contact.allowsPrivateLocationOnRequest
-                        ? Icons.location_searching
-                        : Icons.location_disabled,
-                  ),
-                  title: Text(
-                    contact.allowsPrivateLocationOnRequest
-                        ? 'Desactivar partilha GPS privada'
-                        : 'Activar partilha GPS privada',
-                  ),
-                  subtitle: const Text(
-                    'Permite a este contacto pedir a tua localização on-demand, sem beacon público.',
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    unawaited(_togglePrivateLocationOnRequest(context, ref));
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.my_location_outlined),
-                  title: const Text('Pedir localização'),
-                  subtitle: const Text(
-                    'Envia um pedido privado de localização/telemetria a este contacto.',
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    unawaited(_requestPrivateLocation(context, ref));
-                  },
-                ),
-                // QR
-                ListTile(
-                  leading: const Icon(Icons.qr_code),
-                  title: Text(context.l10n.contactsShareQR),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _showContactQrCode(context);
-                  },
-                ),
-                // Rename
-                ListTile(
-                  leading: const Icon(Icons.edit_outlined),
-                  title: Text(context.l10n.commonRename),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _showRenameDialog(context, ref);
-                  },
-                ),
-                // Type-specific action
-                if (contact.isChat)
-                  ListTile(
-                    leading: const Icon(Icons.chat),
-                    title: Text(context.l10n.contactsPrivateMessage),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      context.push('/chat/$keyHex');
-                    },
-                  ),
-                if (contact.isRoom)
-                  ListTile(
-                    leading: const Icon(Icons.meeting_room),
-                    title: Text(context.l10n.contactsJoinRoom),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      context.push('/room/$keyHex');
-                    },
-                  ),
-                if (contact.isRepeater)
-                  ListTile(
-                    leading: const Icon(Icons.cell_tower),
-                    title: Text(context.l10n.contactsRemoteAdmin),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      context.push('/repeater/$keyHex');
-                    },
-                  ),
-                // Path management — available for all node types
-                ListTile(
-                  leading: const Icon(Icons.route),
-                  title: Text(context.l10n.contactsManagePath),
-                  subtitle: Text(
-                    '${context.l10n.contactsCurrentPath} ${contactPathLabel(contact.pathLen)}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withAlpha(130),
+                        IconButton(
+                          tooltip: context.l10n.commonClose,
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.of(ctx).pop(),
+                        ),
+                      ],
                     ),
                   ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _showPathSheet(context);
-                  },
-                ),
-                const Divider(),
-                // Delete
-                ListTile(
-                  leading: Icon(
-                    Icons.delete_outline,
-                    color: theme.colorScheme.error,
+                  const Divider(),
+                  // Save to radio — only shown for locally-cached (advert-only) contacts
+                  if (!isOnRadio)
+                    ListTile(
+                      leading: const Icon(Icons.save_outlined),
+                      title: Text(context.l10n.contactsSaveToRadioTitle),
+                      subtitle: Text(context.l10n.contactsNotSavedHint),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _saveToRadio(context, ref);
+                      },
+                    ),
+                  // Favourite
+                  ListTile(
+                    leading: Icon(
+                      isFavorite ? Icons.star : Icons.star_border,
+                      color: isFavorite ? Colors.amber : null,
+                    ),
+                    title: Text(
+                      isFavorite
+                          ? context.l10n.contactsRemoveFavorites
+                          : context.l10n.contactsAddFavorites,
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _toggleFavorite(ref);
+                    },
                   ),
-                  title: Text(
-                    context.l10n.contactsRemoveContact,
-                    style: TextStyle(color: theme.colorScheme.error),
+                  ListTile(
+                    leading: Icon(
+                      contact.allowsPrivateLocationOnRequest
+                          ? Icons.location_searching
+                          : Icons.location_disabled,
+                    ),
+                    title: Text(
+                      contact.allowsPrivateLocationOnRequest
+                          ? 'Desactivar partilha GPS privada'
+                          : 'Activar partilha GPS privada',
+                    ),
+                    subtitle: const Text(
+                      'Permite a este contacto pedir a tua localização on-demand, sem beacon público.',
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      unawaited(_togglePrivateLocationOnRequest(context, ref));
+                    },
                   ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _confirmDelete(context, ref);
-                  },
-                ),
-                const SizedBox(height: 8),
-              ],
+                  ListTile(
+                    leading: const Icon(Icons.my_location_outlined),
+                    title: const Text('Pedir localização'),
+                    subtitle: const Text(
+                      'Envia um pedido privado de localização/telemetria a este contacto.',
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      unawaited(_requestPrivateLocation(context, ref));
+                    },
+                  ),
+                  // QR
+                  ListTile(
+                    leading: const Icon(Icons.qr_code),
+                    title: Text(context.l10n.contactsShareQR),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showContactQrCode(context);
+                    },
+                  ),
+                  // Rename
+                  ListTile(
+                    leading: const Icon(Icons.edit_outlined),
+                    title: Text(context.l10n.commonRename),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showRenameDialog(context, ref);
+                    },
+                  ),
+                  // Type-specific action
+                  if (contact.isChat)
+                    ListTile(
+                      leading: const Icon(Icons.chat),
+                      title: Text(context.l10n.contactsPrivateMessage),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        context.push('/chat/$keyHex');
+                      },
+                    ),
+                  if (contact.isRoom)
+                    ListTile(
+                      leading: const Icon(Icons.meeting_room),
+                      title: Text(context.l10n.contactsJoinRoom),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        context.push('/room/$keyHex');
+                      },
+                    ),
+                  if (contact.isRepeater)
+                    ListTile(
+                      leading: const Icon(Icons.cell_tower),
+                      title: Text(context.l10n.contactsRemoteAdmin),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        context.push('/repeater/$keyHex');
+                      },
+                    ),
+                  // Path management — available for all node types
+                  ListTile(
+                    leading: const Icon(Icons.route),
+                    title: Text(context.l10n.contactsManagePath),
+                    subtitle: Text(
+                      '${context.l10n.contactsCurrentPath} ${contactPathLabel(contact.pathLen)}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withAlpha(130),
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showPathSheet(context);
+                    },
+                  ),
+                  const Divider(),
+                  // Delete
+                  ListTile(
+                    leading: Icon(
+                      Icons.delete_outline,
+                      color: theme.colorScheme.error,
+                    ),
+                    title: Text(
+                      context.l10n.contactsRemoveContact,
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _confirmDelete(context, ref);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
             ),
           ),
         );

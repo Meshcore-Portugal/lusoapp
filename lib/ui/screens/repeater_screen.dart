@@ -381,6 +381,10 @@ class _RepeaterScreenState extends ConsumerState<RepeaterScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: Text(l10n.repeaterTitle),
         actions: [
           IconButton(
@@ -445,7 +449,13 @@ class _RepeaterScreenState extends ConsumerState<RepeaterScreen> {
     RepeaterStats? stats,
   ) {
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.repeaterTitle)),
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(l10n.repeaterTitle),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

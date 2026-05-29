@@ -282,6 +282,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ? LatLng(radio.latitude!, radio.longitude!)
             : _myLocation;
 
+    final orientedTraceHops =
+        traceResult != null ? _orderedTraceHops(traceResult, selfPos) : null;
+
     final allPoints = [
       ...visibleGpsContacts.map((c) => LatLng(c.latitude!, c.longitude!)),
       if (selfPos != null) selfPos,
@@ -341,7 +344,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     PolylineLayer(
                       polylines: [
                         Polyline(
-                          points: _tracePoints(traceResult, selfPos),
+                          points: _tracePoints(orientedTraceHops!, selfPos),
                           color: theme.colorScheme.primary,
                           strokeWidth: 3,
                           borderColor: theme.colorScheme.primaryContainer,
@@ -397,25 +400,37 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   if (traceResult != null)
                     MarkerLayer(
                       markers: [
-                        for (int hi = 0; hi < traceResult.hops.length; hi++)
-                          if (traceResult.hops[hi].hasGps)
+                        if (traceResult.targetHasGps)
+                          Marker(
+                            point: LatLng(
+                              traceResult.targetLatitude!,
+                              traceResult.targetLongitude!,
+                            ),
+                            width: 92,
+                            height: 76,
+                            child: _buildTraceTargetMarker(
+                              traceResult.targetName ?? 'Origem',
+                              theme,
+                            ),
+                          ),
+                        for (int hi = 0; hi < orientedTraceHops!.length; hi++)
+                          if (orientedTraceHops[hi].hasGps)
                             Marker(
                               point: LatLng(
-                                traceResult.hops[hi].latitude!,
-                                traceResult.hops[hi].longitude!,
+                                orientedTraceHops[hi].latitude!,
+                                orientedTraceHops[hi].longitude!,
                               ),
                               width: 126,
                               height: 118,
                               alignment: Alignment.center,
                               child: _buildHopMarker(
-                                traceResult.hops[hi],
+                                orientedTraceHops[hi],
                                 theme,
                                 distanceM: _distanceToHop(
-                                  traceResult.hops,
+                                  orientedTraceHops!,
                                   hi,
-                                  selfPos,
                                 ),
-                                showSnr: hi == traceResult.hops.length - 1,
+                                showSnr: hi == orientedTraceHops.length - 1,
                               ),
                             ),
                       ],
@@ -480,11 +495,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             right: 72,
             child: _TraceResultCard(
               result: traceResult,
-              selfPos: selfPos,
+              hops: orientedTraceHops!,
               onClear:
                   () => ref.read(traceResultProvider.notifier).state = null,
               onFit: () {
-                final pts = _tracePoints(traceResult, selfPos);
+                final pts = _tracePoints(orientedTraceHops!, selfPos);
                 if (pts.length > 1) _fitAll(pts);
               },
               theme: theme,
@@ -609,34 +624,58 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // Trace helpers
   // ---------------------------------------------------------------------------
 
+  /// Returns hops ordered so the endpoint nearest to [selfPos] is last.
+  /// This guarantees the local radio connects to the last repeater on map.
+  List<TraceHop> _orderedTraceHops(TraceResult result, LatLng? selfPos) {
+    final hops = List<TraceHop>.from(result.hops);
+    if (selfPos == null || hops.length < 2) return hops;
+    final first = hops.first;
+    final last = hops.last;
+    if (!first.hasGps || !last.hasGps) return hops;
+
+    final dist = const Distance();
+    final dFirst = dist.as(
+      LengthUnit.Meter,
+      selfPos,
+      LatLng(first.latitude!, first.longitude!),
+    );
+    final dLast = dist.as(
+      LengthUnit.Meter,
+      selfPos,
+      LatLng(last.latitude!, last.longitude!),
+    );
+
+    // Keep the nearest endpoint as the terminal hop (last), so the
+    // self marker links visually to the last hop, not the first.
+    if (dFirst < dLast) {
+      return hops.reversed.toList(growable: false);
+    }
+    return hops;
+  }
+
   /// Builds the ordered list of LatLng points for the trace polyline.
-  /// Includes selfPos as the starting point, then all hops with GPS, in order.
-  List<LatLng> _tracePoints(TraceResult result, LatLng? selfPos) {
+  /// Includes all GPS hops (ordered), then the local radio position at end.
+  List<LatLng> _tracePoints(List<TraceHop> hops, LatLng? selfPos) {
     final pts = <LatLng>[];
-    if (selfPos != null) pts.add(selfPos);
-    for (final hop in result.hops) {
+    for (final hop in hops) {
       if (hop.hasGps) pts.add(LatLng(hop.latitude!, hop.longitude!));
     }
+    if (selfPos != null) pts.add(selfPos);
     return pts;
   }
 
-  /// Distance from the previous GPS point to hop [index], in meters.
-  /// The previous point is either [selfPos] (for the first hop) or the
-  /// nearest previous hop that has GPS.
-  double? _distanceToHop(List<TraceHop> hops, int index, LatLng? selfPos) {
+  /// Distance from previous GPS hop to hop [index], in meters.
+  /// For the first visible hop there is no previous hop, so returns null.
+  double? _distanceToHop(List<TraceHop> hops, int index) {
     final hop = hops[index];
     if (!hop.hasGps) return null;
 
     LatLng? prevPt;
-    if (index == 0) {
-      prevPt = selfPos;
-    } else {
-      for (int k = index - 1; k >= 0; k--) {
-        final prev = hops[k];
-        if (!prev.hasGps) continue;
-        prevPt = LatLng(prev.latitude!, prev.longitude!);
-        break;
-      }
+    for (int k = index - 1; k >= 0; k--) {
+      final prev = hops[k];
+      if (!prev.hasGps) continue;
+      prevPt = LatLng(prev.latitude!, prev.longitude!);
+      break;
     }
 
     if (prevPt == null) return null;
@@ -800,6 +839,35 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 : context.l10n.mapLegendYou,
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildTraceTargetMarker(String name, ThemeData theme) {
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: Colors.indigo.shade600,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x50000000),
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: const Center(
+            child: Icon(Icons.person, color: Colors.white, size: 14),
+          ),
+        ),
+        Positioned(top: 42, child: _markerNameTag(name)),
       ],
     );
   }

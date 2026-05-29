@@ -21,6 +21,38 @@ cd "$PROJECT_DIR"
 log() { echo -e "\033[0;32m[MACINCLOUD-BUILD]\033[0m $*"; }
 err() { echo -e "\033[0;31m[MACINCLOUD-BUILD]\033[0m $*" >&2; }
 
+refresh_ios_pods_if_needed() {
+    local ios_dir="$PROJECT_DIR/ios"
+    local plugin_podspec="$ios_dir/.symlinks/plugins/objectbox_flutter_libs/ios/objectbox_flutter_libs.podspec"
+    local lockfile="$ios_dir/Podfile.lock"
+    local desired_version=""
+    local locked_version=""
+
+    if [[ "$RUN_CLEAN" == "true" ]]; then
+        log "Removing cached CocoaPods state for a clean iOS dependency install..."
+        rm -f "$ios_dir/Podfile.lock"
+        rm -rf "$ios_dir/Pods"
+        return
+    fi
+
+    if [[ -f "$plugin_podspec" ]]; then
+        desired_version=$(sed -nE "s/.*ObjectBox', '([^']+)'.*/\1/p" "$plugin_podspec" | head -1)
+    fi
+
+    if [[ -f "$lockfile" ]]; then
+        locked_version=$(sed -nE "s/.*ObjectBox \(= ([^)]+)\).*/\1/p" "$lockfile" | head -1)
+        if [[ -z "$locked_version" ]]; then
+            locked_version=$(sed -nE "s/.*- ObjectBox \(([^)]+)\).*/\1/p" "$lockfile" | head -1)
+        fi
+    fi
+
+    if [[ -n "$desired_version" ]] && [[ -n "$locked_version" ]] && [[ "$desired_version" != "$locked_version" ]]; then
+        log "ObjectBox pod mismatch detected ($locked_version -> $desired_version). Refreshing iOS pods..."
+        rm -f "$ios_dir/Podfile.lock"
+        rm -rf "$ios_dir/Pods"
+    fi
+}
+
 usage() {
     cat <<EOF
 Usage: $(basename "$0") [options]
@@ -133,6 +165,7 @@ fi
 
 log "Getting dependencies..."
 flutter pub get
+refresh_ios_pods_if_needed
 
 if [[ "$RUN_ICONS" == "true" ]]; then
     log "Generating launcher icons for Android + iOS..."

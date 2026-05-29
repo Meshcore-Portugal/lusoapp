@@ -607,10 +607,6 @@ class _ExperimentalCardState extends ConsumerState<_ExperimentalCard> {
                     value: 1,
                     label: Text(l10n.radioSettingsPathHashMode2),
                   ),
-                  ButtonSegment(
-                    value: 2,
-                    label: Text(l10n.radioSettingsPathHashMode3),
-                  ),
                 ],
                 selected: {mode},
                 onSelectionChanged:

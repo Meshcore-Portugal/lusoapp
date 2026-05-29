@@ -41,6 +41,28 @@ void main() {
       expect(resp, isA<SentResponse>());
     });
 
+    test('decode Sent response with ack and timeout metadata', () {
+      final payload = Uint8List.fromList([
+        respSent,
+        0x01,
+        0x78,
+        0x56,
+        0x34,
+        0x12,
+        0x10,
+        0x27,
+        0x00,
+        0x00,
+      ]);
+
+      final resp = CompanionDecoder.decode(payload) as SentResponse;
+
+      expect(resp.routeFlag, 1);
+      expect(resp.expectedAck, 0x12345678);
+      expect(resp.suggestedTimeoutMs, 10000);
+      expect(resp.expectsAck, isTrue);
+    });
+
     test('decode Error with no error code defaults to 0', () {
       final resp = CompanionDecoder.decode(Uint8List.fromList([respErr]));
       expect(resp, isA<ErrorResponse>());
@@ -950,19 +972,17 @@ void main() {
   group('PathDiscoveryPush (0x8D)', () {
     test('parses pub key prefix, out path, and in path', () {
       // Layout: code(0x8D), reserved(1), pub_key_prefix(6),
-      //         out_path_len, out_path(out_path_len*4 bytes),
-      //         in_path_len, in_path(in_path_len*4 bytes)
+      //         out_path_len_byte, out_path(hopCount * hashSize bytes),
+      //         in_path_len_byte, in_path(hopCount * hashSize bytes)
       final payload = Uint8List.fromList([
         pushPathDiscoveryResponse,
         0x00, // reserved
         0x01, 0x02, 0x03, 0x04, 0x05, 0x06, // pub_key_prefix (6 bytes)
-        0x02, // out_path_len = 2 (2*4 = 8 bytes)
-        // out_path: 2 uint32 LE values
-        0x0A, 0x00, 0x00, 0x00, // hop 1 = 10
-        0x14, 0x00, 0x00, 0x00, // hop 2 = 20
-        0x01, // in_path_len = 1 (1*4 = 4 bytes)
-        // in_path: 1 uint32 LE value
-        0x1E, 0x00, 0x00, 0x00, // hop 1 = 30
+        0x02, // out path: 2 hops, 1 byte hash each
+        0x0A, // hop 1 = 10
+        0x14, // hop 2 = 20
+        0x01, // in path: 1 hop, 1 byte hash
+        0x1E, // hop 1 = 30
       ]);
 
       final result = CompanionDecoder.decode(payload);
@@ -975,8 +995,10 @@ void main() {
       expect(resp.outPath.length, 2);
       expect(resp.outPath[0], 10);
       expect(resp.outPath[1], 20);
+      expect(resp.outHashSize, 1);
       expect(resp.inPath.length, 1);
       expect(resp.inPath[0], 30);
+      expect(resp.inHashSize, 1);
     });
 
     test('handles zero-length paths', () {

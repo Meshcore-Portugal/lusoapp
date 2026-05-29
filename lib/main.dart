@@ -10,7 +10,7 @@ import 'providers/gps_sharing_provider.dart';
 import 'providers/map_visibility_provider.dart';
 import 'providers/sos_settings_provider.dart';
 import 'services/gps_sharing_service.dart';
-import 'transport/radio_transport.dart' show TransportState;
+import 'transport/radio_transport.dart' show ConnectionMode, TransportState;
 import 'services/notification_service.dart';
 import 'services/plan333_service.dart';
 import 'services/sos_service.dart';
@@ -166,12 +166,16 @@ class _McAppPtState extends ConsumerState<McAppPt> {
       case WidgetAction.openMap:
         router.go('/map');
       case WidgetAction.openConnect:
-        router.go('/connect');
+        _handlePowerToggle();
+      case WidgetAction.openPlan333:
+        router.go('/apps/plan333');
+      case WidgetAction.openTelemetry:
+        router.go('/apps/telemetry');
       case WidgetAction.sendAdvert:
         final svc = ref.read(radioServiceProvider);
         final connected =
             ref.read(connectionProvider) == TransportState.connected;
-        final messenger = ScaffoldMessenger.maybeOf(context);
+        final messenger = _rootMessenger();
         if (svc != null && connected) {
           svc.sendAdvert(flood: false);
           messenger?.showSnackBar(
@@ -190,7 +194,7 @@ class _McAppPtState extends ConsumerState<McAppPt> {
           router.go('/connect');
         }
       case WidgetAction.sendEmergency:
-        final messenger = ScaffoldMessenger.maybeOf(context);
+        final messenger = _rootMessenger();
         final emergency = ref.read(cannedMessagesProvider.notifier).emergency;
         final base = emergency?.text;
         final result = ref
@@ -250,6 +254,122 @@ class _McAppPtState extends ConsumerState<McAppPt> {
           }
         });
     }
+  }
+
+  /// Resolve the app's `ScaffoldMessenger` from the root navigator context.
+  /// Widget click dispatch runs from `_McAppPtState`, whose `context` lives
+  /// *above* `MaterialApp` and therefore has neither `MaterialLocalizations`
+  /// nor a `ScaffoldMessenger` ancestor — so `ScaffoldMessenger.maybeOf(context)`
+  /// silently returns null and snackbars never appear.
+  ScaffoldMessengerState? _rootMessenger() {
+    final ctx = rootNavigatorKey.currentContext;
+    if (ctx == null) return null;
+    return ScaffoldMessenger.maybeOf(ctx);
+  }
+
+  /// Widget power button: toggle the radio connection with a confirmation
+  /// dialog in both directions. When disconnected and a previously used
+  /// device is known, reconnect to it directly; otherwise route to the
+  /// connect screen so the user can pick a device.
+  Future<void> _handlePowerToggle() async {
+    if (!mounted) return;
+    final router = ref.read(routerProvider);
+    final connection = ref.read(connectionProvider.notifier);
+    final state = ref.read(connectionProvider);
+    // Dialogs need a context with MaterialLocalizations — the McAppPt
+    // `context` sits above MaterialApp and would fail the assertion. The
+    // root navigator's context is inside the MaterialApp subtree.
+    final navContext = rootNavigatorKey.currentContext;
+    if (navContext == null) return;
+
+    if (state == TransportState.connected) {
+      final confirm = await showDialog<bool>(
+        context: navContext,
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Desligar rádio?'),
+              content: const Text('A ligação ao rádio será terminada.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Desligar'),
+                ),
+              ],
+            ),
+      );
+      if (confirm == true && mounted) {
+        await connection.disconnect();
+      }
+      return;
+    }
+
+    final last = ref.read(lastDeviceProvider);
+    if (last == null) {
+      router.go('/connect');
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: navContext,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Ligar ao rádio?'),
+            content: Text('Vai ligar ao último dispositivo: ${last.name}.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Ligar'),
+              ),
+            ],
+          ),
+    );
+    if (confirm != true || !mounted) return;
+
+    bool ok;
+    switch (last.type) {
+      case 'ble':
+        ok = await connection.connectBle(last.id, last.name);
+      case 'serialKiss':
+        ok = await connection.connectSerial(
+          last.id,
+          last.name,
+          mode: ConnectionMode.kiss,
+        );
+      case 'webSerial':
+        ok = await connection.connectWebSerial(
+          last.id,
+          last.name,
+          mode: ConnectionMode.companion,
+        );
+      case 'webSerialKiss':
+        ok = await connection.connectWebSerial(
+          last.id,
+          last.name,
+          mode: ConnectionMode.kiss,
+        );
+      default:
+        ok = await connection.connectSerial(
+          last.id,
+          last.name,
+          mode: ConnectionMode.companion,
+        );
+    }
+    if (!mounted || ok) return;
+    _rootMessenger()?.showSnackBar(
+      const SnackBar(
+        content: Text('Falha ao ligar ao dispositivo'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+    router.go('/connect');
   }
 
   @override

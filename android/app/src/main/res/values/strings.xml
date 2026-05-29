@@ -1,4 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="widget_description">MeshCore radio status widget</string>
+
+    <!-- Foreground Service Notification Strings -->
+    <string name="radio_notification_channel_name">MeshCore Radio Connection</string>
+    <string name="radio_notification_channel_description">Notification for active radio connection via Bluetooth</string>
+    <string name="radio_notification_title">Connected to %s</string>
+    <string name="radio_notification_text">Connected via Bluetooth</string>
+
+    <string name="widget_config_title">Personalizar widget</string>
+    <string name="widget_config_buttons_header">Botões (3 a 5)</string>
+    <string name="widget_config_buttons_help">Seleciona 3 a 5 e arrasta para reordenar.</string>
+    <string name="widget_config_accent_header">Cor de destaque</string>
+    <string name="widget_config_custom_color">Personalizada…</string>
+    <string name="widget_config_show_label">Etiqueta</string>
+    <string name="widget_config_save">Guardar</string>
+    <string name="widget_config_cancel">Cancelar</string>
+    <string name="widget_btn_sos">SOS</string>
+    <string name="widget_btn_advert">Anúncio</string>
+    <string name="widget_btn_connect">Ligar</string>
+    <string name="widget_btn_chats">Chats</string>
+    <string name="widget_btn_map">Mapa</string>
+    <string name="widget_btn_plan333">Plano 3-3-3</string>
+    <string name="widget_btn_telemetry">Telemetria</string>
 </resources>

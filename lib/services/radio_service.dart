@@ -213,6 +213,12 @@ class RadioService {
     await _send(CompanionEncoder.setAutoAddConfig(bitmask, maxHops));
   }
 
+  /// Re-send APP_START so the radio replies with a fresh [SelfInfoResponse].
+  /// Use this after operations that change the radio's identity (e.g. key import).
+  Future<void> requestSelfInfo({String appName = 'lusoapp'}) async {
+    await _send(CompanionEncoder.appStart(appName));
+  }
+
   Future<void> requestPrivateKeyExport() async {
     await _send(CompanionEncoder.exportPrivateKey());
   }

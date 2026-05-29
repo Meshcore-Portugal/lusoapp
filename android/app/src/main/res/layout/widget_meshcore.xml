@@ -5,9 +5,9 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_background"
-    android:padding="10dp">
+    android:padding="16dp">
 
-    <!-- Row 1: Radio name + connection status (tap = open app) -->
+    <!-- Header: radio name + status dot/label, GPS pin -->
     <LinearLayout
         android:id="@+id/widget_header"
         android:layout_width="match_parent"
@@ -20,191 +20,351 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:layout_marginEnd="10dp"
+            android:fontFamily="monospace"
             android:text="—"
-            android:textColor="#FFFFFFFF"
-            android:textSize="15sp"
+            android:textColor="@color/widget_on_surface"
+            android:textSize="22sp"
             android:textStyle="bold"
+            android:letterSpacing="-0.01"
             android:maxLines="1"
             android:ellipsize="end" />
 
-        <!-- GPS sharing badge — green pin appears only when user opted in -->
-        <TextView
+        <ImageView
             android:id="@+id/widget_gps_badge"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="6dp"
-            android:text="📍"
-            android:textSize="12sp"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/ic_widget_location"
+            android:tint="@color/widget_on_surface_variant"
+            android:contentDescription="GPS"
             android:visibility="gone" />
+
+        <FrameLayout
+            android:id="@+id/widget_status_dot"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/widget_status_dot_neutral" />
 
         <TextView
             android:id="@+id/widget_status"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="● OFFLINE"
-            android:textColor="#FFFF5252"
+            android:text="OFFLINE"
+            android:textColor="@color/widget_on_surface_variant"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.08" />
+
+        <LinearLayout
+            android:id="@+id/widget_signal_bars"
+            android:layout_width="wrap_content"
+            android:layout_height="14dp"
+            android:layout_marginStart="8dp"
+            android:orientation="horizontal"
+            android:gravity="bottom"
+            android:contentDescription="Sinal">
+
+            <FrameLayout
+                android:id="@+id/widget_signal_bar_0"
+                android:layout_width="3dp"
+                android:layout_height="4dp" />
+            <FrameLayout
+                android:id="@+id/widget_signal_bar_1"
+                android:layout_width="3dp"
+                android:layout_height="7dp"
+                android:layout_marginStart="1.5dp" />
+            <FrameLayout
+                android:id="@+id/widget_signal_bar_2"
+                android:layout_width="3dp"
+                android:layout_height="10dp"
+                android:layout_marginStart="1.5dp" />
+            <FrameLayout
+                android:id="@+id/widget_signal_bar_3"
+                android:layout_width="3dp"
+                android:layout_height="13dp"
+                android:layout_marginStart="1.5dp" />
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/widget_battery_icon"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="4dp"
+            android:src="@drawable/ic_widget_battery_alert"
+            android:tint="@color/widget_on_surface_variant"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/widget_battery"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0%"
+            android:textColor="@color/widget_on_surface"
             android:textSize="11sp"
             android:textStyle="bold" />
 
     </LinearLayout>
 
-    <!-- Divider -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginTop="5dp"
-        android:layout_marginBottom="5dp"
-        android:background="#2200E676"
-        android:orientation="horizontal" />
-
-    <!-- Row 2: Battery + last updated -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-
-        <TextView
-            android:id="@+id/widget_battery"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Bat: 0%"
-            android:textColor="#FFAAAAAA"
-            android:textSize="11sp" />
-
-        <TextView
-            android:id="@+id/widget_updated"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="--:--"
-            android:textColor="#FF888888"
-            android:textSize="10sp" />
-
-    </LinearLayout>
-
-    <!-- Row 3: Contacts + channels -->
+    <!-- Metric strip: battery / contacts / channels, last-updated on right -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginTop="2dp">
+        android:layout_marginTop="10dp">
+
+        <ImageView
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginEnd="4dp"
+            android:src="@drawable/ic_widget_people"
+            android:tint="@color/widget_on_surface_variant"
+            android:contentDescription="@null" />
 
         <TextView
             android:id="@+id/widget_contacts"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="0 contactos"
-            android:textColor="#FF00E676"
-            android:textSize="11sp" />
+            android:text="0"
+            android:textColor="@color/widget_on_surface"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="·"
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="10dp"
+            android:textColor="@color/widget_on_surface_outline"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginEnd="4dp"
+            android:src="@drawable/ic_widget_tag"
+            android:tint="@color/widget_on_surface_variant"
+            android:contentDescription="@null" />
 
         <TextView
             android:id="@+id/widget_channels"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="0"
+            android:textColor="@color/widget_on_surface"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_updated"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="0 canais"
-            android:textColor="#FF00E676"
+            android:fontFamily="monospace"
+            android:text="--:--"
+            android:textColor="@color/widget_on_surface_outline"
             android:textSize="11sp" />
 
     </LinearLayout>
 
-    <!-- Spacer pushes the button row to the bottom on tall widgets;
-         small min-height keeps the layout tight when the user resizes down -->
-    <LinearLayout
+    <!-- Spacer pushes the action row to the bottom on tall widgets -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:minHeight="6dp"
-        android:orientation="horizontal" />
+        android:minHeight="8dp" />
 
-    <!-- SOS row — broadcasts the configured emergency canned message to ch 0 -->
-    <TextView
-        android:id="@+id/widget_btn_sos"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:background="@drawable/widget_button_sos_bg"
-        android:gravity="center"
-        android:paddingTop="9dp"
-        android:paddingBottom="9dp"
-        android:text="🆘  SOS — Emergência"
-        android:textColor="#FFFF8888"
-        android:textSize="12sp"
-        android:textStyle="bold" />
-
-    <!-- Action button row -->
+    <!-- Action row: 5 generic slots, bound dynamically by provider.
+         gravity="top" keeps the action buttons (the first child in each
+         wrapper) aligned along the top of the row even when only some
+         slots have labels — otherwise label-less wrappers get vertically
+         centered and their buttons end up lower than label-bearing ones. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="6dp"
-        android:gravity="center">
+        android:layout_marginTop="14dp"
+        android:gravity="top"
+        android:weightSum="5">
 
-        <!-- Send Advert (highlighted in orange) -->
-        <TextView
-            android:id="@+id/widget_btn_advert"
+        <!-- Slot 0 -->
+        <LinearLayout
+            android:id="@+id/widget_btn_wrap_0"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginEnd="4dp"
-            android:background="@drawable/widget_button_advert_bg"
-            android:gravity="center"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp"
-            android:text="📡  Anúncio"
-            android:textColor="#FFFFCC88"
-            android:textSize="11sp"
-            android:textStyle="bold" />
+            android:orientation="vertical"
+            android:gravity="center">
+            <FrameLayout
+                android:id="@+id/widget_btn_slot_0"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/widget_action_btn_bg">
+                <ImageView
+                    android:id="@+id/widget_btn_icon_0"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_widget_power"
+                    android:tint="@color/widget_on_surface"
+                    android:contentDescription="@null" />
+            </FrameLayout>
+            <TextView
+                android:id="@+id/widget_btn_label_0"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textColor="@color/widget_on_surface_variant"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.06"
+                android:visibility="gone" />
+        </LinearLayout>
 
-        <!-- Open Chats -->
-        <TextView
-            android:id="@+id/widget_btn_chats"
+        <!-- Slot 1 -->
+        <LinearLayout
+            android:id="@+id/widget_btn_wrap_1"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="4dp"
-            android:layout_marginEnd="4dp"
-            android:background="@drawable/widget_button_bg"
-            android:gravity="center"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp"
-            android:text="💬  Chats"
-            android:textColor="#FFFFFFFF"
-            android:textSize="11sp" />
+            android:orientation="vertical"
+            android:gravity="center">
+            <FrameLayout
+                android:id="@+id/widget_btn_slot_1"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/widget_action_btn_bg">
+                <ImageView
+                    android:id="@+id/widget_btn_icon_1"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_widget_power"
+                    android:tint="@color/widget_on_surface"
+                    android:contentDescription="@null" />
+            </FrameLayout>
+            <TextView
+                android:id="@+id/widget_btn_label_1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textColor="@color/widget_on_surface_variant"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.06"
+                android:visibility="gone" />
+        </LinearLayout>
 
-        <!-- Open Map -->
-        <TextView
-            android:id="@+id/widget_btn_map"
+        <!-- Slot 2 -->
+        <LinearLayout
+            android:id="@+id/widget_btn_wrap_2"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="4dp"
-            android:layout_marginEnd="4dp"
-            android:background="@drawable/widget_button_bg"
-            android:gravity="center"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp"
-            android:text="🗺  Mapa"
-            android:textColor="#FFFFFFFF"
-            android:textSize="11sp" />
+            android:orientation="vertical"
+            android:gravity="center">
+            <FrameLayout
+                android:id="@+id/widget_btn_slot_2"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/widget_action_btn_bg">
+                <ImageView
+                    android:id="@+id/widget_btn_icon_2"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_widget_power"
+                    android:tint="@color/widget_on_surface"
+                    android:contentDescription="@null" />
+            </FrameLayout>
+            <TextView
+                android:id="@+id/widget_btn_label_2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textColor="@color/widget_on_surface_variant"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.06"
+                android:visibility="gone" />
+        </LinearLayout>
 
-        <!-- Connect / Devices — colour + label change based on connection state -->
-        <TextView
-            android:id="@+id/widget_btn_connect"
+        <!-- Slot 3 -->
+        <LinearLayout
+            android:id="@+id/widget_btn_wrap_3"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="4dp"
-            android:background="@drawable/widget_button_connect_off_bg"
-            android:gravity="center"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp"
-            android:text="🔌  Ligar"
-            android:textColor="#FFFF8888"
-            android:textSize="11sp"
-            android:textStyle="bold" />
+            android:orientation="vertical"
+            android:gravity="center">
+            <FrameLayout
+                android:id="@+id/widget_btn_slot_3"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/widget_action_btn_bg">
+                <ImageView
+                    android:id="@+id/widget_btn_icon_3"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_widget_power"
+                    android:tint="@color/widget_on_surface"
+                    android:contentDescription="@null" />
+            </FrameLayout>
+            <TextView
+                android:id="@+id/widget_btn_label_3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textColor="@color/widget_on_surface_variant"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.06"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- Slot 4 -->
+        <LinearLayout
+            android:id="@+id/widget_btn_wrap_4"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+            <FrameLayout
+                android:id="@+id/widget_btn_slot_4"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/widget_action_btn_bg">
+                <ImageView
+                    android:id="@+id/widget_btn_icon_4"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_widget_power"
+                    android:tint="@color/widget_on_surface"
+                    android:contentDescription="@null" />
+            </FrameLayout>
+            <TextView
+                android:id="@+id/widget_btn_label_4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textColor="@color/widget_on_surface_variant"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.06"
+                android:visibility="gone" />
+        </LinearLayout>
 
     </LinearLayout>
 

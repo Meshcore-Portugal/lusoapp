@@ -422,6 +422,7 @@ class StorageService {
   // ---------------------------------------------------------------------------
 
   static const _keyQslLog = 'plan333_qsl_log';
+  static const _keyQslLogSessionStart = 'plan333_qsl_log_session_start';
 
   Future<void> saveQslLog(String json) async {
     try {
@@ -434,6 +435,26 @@ class StorageService {
     try {
       final prefs = await SharedPreferences.getInstance();
       return prefs.getString(_keyQslLog);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveQslLogSessionStart(int? epochMillis) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (epochMillis == null) {
+        await prefs.remove(_keyQslLogSessionStart);
+      } else {
+        await prefs.setInt(_keyQslLogSessionStart, epochMillis);
+      }
+    } catch (_) {}
+  }
+
+  Future<int?> loadQslLogSessionStart() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(_keyQslLogSessionStart);
     } catch (_) {
       return null;
     }

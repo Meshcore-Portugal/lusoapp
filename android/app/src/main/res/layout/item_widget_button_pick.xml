@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="56dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp"
+    android:background="?attr/selectableItemBackground">
+
+    <com.google.android.material.checkbox.MaterialCheckBox
+        android:id="@+id/pick_check"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp" />
+
+    <ImageView
+        android:id="@+id/pick_icon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginEnd="12dp"
+        android:tint="?attr/colorOnSurface" />
+
+    <TextView
+        android:id="@+id/pick_label"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+    <com.google.android.material.materialswitch.MaterialSwitch
+        android:id="@+id/pick_label_toggle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:text="@string/widget_config_show_label"
+        android:textAppearance="?attr/textAppearanceLabelSmall"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/pick_drag"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:src="@drawable/ic_widget_drag_handle"
+        android:tint="?attr/colorOnSurfaceVariant"
+        android:contentDescription="@null"
+        android:visibility="gone" />
+
+</LinearLayout>

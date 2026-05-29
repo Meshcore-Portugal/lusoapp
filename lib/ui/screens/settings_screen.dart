@@ -27,6 +27,7 @@ part 'parts/settings_sos.dart';
 part 'parts/settings_gps_sharing.dart';
 part 'parts/settings_notifications.dart';
 part 'parts/settings_keybackup.dart';
+part 'parts/settings_prune_config.dart';
 
 /// App settings screen.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -238,6 +239,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           // GPS sharing
           const _GpsSharingCard(),
+          const SizedBox(height: 16),
+
+          // Prune configuration
+          const _PruneConfigCard(),
           const SizedBox(height: 16),
 
           // About

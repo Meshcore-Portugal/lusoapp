@@ -9,4 +9,6 @@
     android:widgetCategory="home_screen"
     android:previewLayout="@layout/widget_meshcore"
     android:resizeMode="horizontal|vertical"
+    android:configure="pt.meshcore.lusoapp.WidgetConfigActivity"
+    android:widgetFeatures="reconfigurable"
     android:description="@string/widget_description" />

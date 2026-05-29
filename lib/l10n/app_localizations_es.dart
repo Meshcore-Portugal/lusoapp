@@ -318,13 +318,25 @@ class AppLocalizationsEs extends AppLocalizations {
   String get commonMessageCopied => 'Mensaje copiado';
 
   @override
-  String get commonSent => 'Enviado';
+  String get commonSent => 'Transmitido';
 
   @override
   String get commonSentByMe => 'Yo';
 
   @override
   String get commonPropagating => 'Propagando...';
+
+  @override
+  String get chatBadgePropagatingTooltip => 'Esperando eco de repetidor...';
+
+  @override
+  String get chatBadgeTransmittedTooltip =>
+      'Transmitido — sin eco de repetidor recibido';
+
+  @override
+  String chatBadgeHeardTooltip(int count) {
+    return 'Escuchado por $count repetidor(es)';
+  }
 
   @override
   String get commonConnecting => 'Conectando...';
@@ -717,17 +729,62 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get settingsRestorePrivateKeyContent =>
-      'La radio se reiniciará automáticamente tras la restauración. ¿Continuar?';
+      'Esta operación reemplazará la clave privada actual de la radio. La nueva identidad se aplica inmediatamente — la clave pública en la app se actualizará.\n\n¿Estás seguro?';
 
   @override
   String get settingsDeleteBackupTitle => 'Eliminar copia de seguridad';
 
   @override
-  String get settingsKeySavedSuccess =>
-      'Copia de clave privada guardada con éxito';
+  String get settingsKeySavedSuccess => 'Clave privada guardada con éxito.';
 
   @override
-  String get settingsKeyImportedSuccess => 'Clave importada con éxito';
+  String get settingsKeyImportedSuccess =>
+      'Clave restaurada con éxito. Clave pública actualizada.';
+
+  @override
+  String get settingsKeyExportFailed =>
+      'Exportación fallida. El firmware puede no tener soporte activado.';
+
+  @override
+  String get settingsKeyRestoreFailed =>
+      'Restauración fallida. El firmware puede no tener soporte activado.';
+
+  @override
+  String get settingsDeleteBackupContent =>
+      'La copia de clave privada guardada en este dispositivo será eliminada. La radio no se ve afectada.';
+
+  @override
+  String get settingsKeyCopied => 'Clave privada copiada';
+
+  @override
+  String get settingsKeyCopySaved => 'Copia guardada en este dispositivo.';
+
+  @override
+  String get settingsCopyKeyTooltip => 'Copiar clave completa';
+
+  @override
+  String get settingsKeyConnectToBackup =>
+      'Conecta la radio para hacer una copia de seguridad de la clave.';
+
+  @override
+  String get settingsKeyShareSubject => 'MeshCore — copia de clave privada';
+
+  @override
+  String get settingsPasteKeyTitle => 'Pegar clave privada';
+
+  @override
+  String get settingsPasteKeyHint =>
+      'Pega aquí la clave privada de una copia anterior (128 caracteres hex).';
+
+  @override
+  String get settingsKeyHexLabel => 'Clave privada (hex)';
+
+  @override
+  String get settingsKeyInvalidHex =>
+      'Clave inválida — debe tener exactamente 128 caracteres hexadecimales.';
+
+  @override
+  String get commonContinue => 'Continuar';
 
   @override
   String get settingsAbout => 'Acerca de';
@@ -783,6 +840,12 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get contactsAdvertFlood => 'Anuncio · Flood';
+
+  @override
+  String get contactsAdvertSentZeroHop => 'Anuncio Zero Hop enviado';
+
+  @override
+  String get contactsAdvertSentFlood => 'Anuncio Flood enviado';
 
   @override
   String get contactsSort => 'Ordenar';
@@ -1454,6 +1517,9 @@ class AppLocalizationsEs extends AppLocalizations {
       'Error al conectar con el último dispositivo';
 
   @override
+  String get connectCancelledMessage => 'Conexión al radio cancelada';
+
+  @override
   String get discoverTitle => 'Descubrir';
 
   @override
@@ -1846,11 +1912,11 @@ class AppLocalizationsEs extends AppLocalizations {
       'Usar com cuidado — estas opções afectam a compatibilidade no ar com outros nós.';
 
   @override
-  String get radioSettingsPathHashMode => 'Tamanho do hash de caminho';
+  String get radioSettingsPathHashMode => 'Tamaño del hash de ruta';
 
   @override
   String get radioSettingsPathHashModeDesc =>
-      'Número de bytes usados por salto no caminho de encaminhamento. Valores maiores reduzem a probabilidade de colisão entre nós distantes. Requer firmware v10+. Predefinição: 1 byte.';
+      'Número de bytes utilizados por salto en la ruta de encaminamiento. Valores mayores reducen la probabilidad de colisión entre nodos distantes. Requiere firmware v1.14.0+. Predeterminado: 1 byte.';
 
   @override
   String get radioSettingsPathHashMode1 => '1 byte';
@@ -1859,26 +1925,24 @@ class AppLocalizationsEs extends AppLocalizations {
   String get radioSettingsPathHashMode2 => '2 bytes';
 
   @override
-  String get radioSettingsPathHashMode3 => '3 bytes';
-
-  @override
   String get radioSettingsPathHashModeCaptionDefault =>
-      '1 byte por salto — predefinição, compatível com todos os firmwares.';
+      '1 byte por salto — predeterminado, compatible con todos los firmwares.';
 
   @override
   String get radioSettingsPathHashModeCaptionExperimental =>
-      'Experimental — só nós com firmware v10+ encaminham este pacote correctamente.';
+      'Experimental — solo los nodos con firmware v10+ encaminarán este paquete correctamente.';
 
   @override
   String get radioSettingsPathHashModeUnsupported =>
-      'Não suportado por este firmware.';
+      'No compatible con este firmware.';
 
   @override
-  String get radioSettingsPathHashModeSaved => 'Tamanho do hash actualizado';
+  String get radioSettingsPathHashModeSaved =>
+      'Tamaño del hash de ruta actualizado';
 
   @override
   String get radioSettingsPathHashModeFailed =>
-      'Falha ao actualizar o tamanho do hash';
+      'Error al actualizar el tamaño del hash de ruta';
 
   @override
   String get radioSettingsAutoAddTitle => 'Adición automática de contactos';

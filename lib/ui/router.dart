@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -24,8 +25,14 @@ import 'apps/topology/topology_screen.dart';
 import 'apps/data_export/data_export_screen.dart';
 import 'screens/repeater_screen.dart';
 
+/// Root navigator key — exposed so non-widget call sites (e.g. the home-screen
+/// widget click dispatcher in `main.dart`) can show dialogs from a context
+/// that lives *below* `MaterialApp` and therefore has `MaterialLocalizations`.
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/connect',
     // Widget click intents arrive as `meshcore-widget://...` URIs and would
     // otherwise hit GoRouter's "no route" page. The actual action is handled
@@ -33,12 +40,13 @@ final routerProvider = Provider<GoRouter>((ref) {
     // `HomeWidget.widgetClicked` stream, so we only need to neutralise the
     // navigation side-effect here.
     redirect: (context, state) {
-      final loc = state.matchedLocation;
-      if (loc.startsWith('meshcore-widget') ||
+      // Defence-in-depth: MainActivity.onNewIntent already strips
+      // meshcore-widget:// URIs from Flutter's deep-link push, but if one
+      // ever leaks through (e.g. a cold start path we haven't covered),
+      // land on a stable shell route and let the WidgetService dispatcher
+      // re-route from there.
+      if (state.matchedLocation.startsWith('meshcore-widget') ||
           state.uri.scheme == 'meshcore-widget') {
-        // Land on the channels list — a stable, always-available shell
-        // route. The widget action handler in main.dart will then re-route
-        // to the right destination (chats / map / connect / etc.).
         return '/channels';
       }
       return null;

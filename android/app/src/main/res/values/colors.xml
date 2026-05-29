@@ -4,4 +4,10 @@
     <color name="app_background">#111111</color>
     <color name="app_surface">#1C1C1C</color>
     <color name="app_primary">#FF6B00</color>
+
+    <!-- Widget on-surface text tones (light theme defaults) -->
+    <color name="widget_on_surface">#1B1B1F</color>
+    <color name="widget_on_surface_variant">#46464F</color>
+    <color name="widget_on_surface_outline">#75767F</color>
+    <color name="widget_on_error">#410E0B</color>
 </resources>

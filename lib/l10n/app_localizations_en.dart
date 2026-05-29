@@ -314,13 +314,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonMessageCopied => 'Message copied';
 
   @override
-  String get commonSent => 'Sent';
+  String get commonSent => 'Transmitted';
 
   @override
   String get commonSentByMe => 'Me';
 
   @override
   String get commonPropagating => 'Propagating...';
+
+  @override
+  String get chatBadgePropagatingTooltip => 'Waiting for a repeater echo...';
+
+  @override
+  String get chatBadgeTransmittedTooltip =>
+      'Transmitted — no repeater echo received';
+
+  @override
+  String chatBadgeHeardTooltip(int count) {
+    return 'Heard by $count repeater(s)';
+  }
 
   @override
   String get commonConnecting => 'Connecting...';
@@ -710,16 +722,62 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsRestorePrivateKeyContent =>
-      'The radio will restart automatically after restoration. Proceed?';
+      'This will replace the radio\'s current private key. The new identity is applied immediately — the public key in the app will be updated.\n\nAre you sure?';
 
   @override
   String get settingsDeleteBackupTitle => 'Delete backup';
 
   @override
-  String get settingsKeySavedSuccess => 'Private key copy saved successfully';
+  String get settingsKeySavedSuccess => 'Private key saved successfully.';
 
   @override
-  String get settingsKeyImportedSuccess => 'Key imported successfully';
+  String get settingsKeyImportedSuccess =>
+      'Key restored successfully. Public key updated.';
+
+  @override
+  String get settingsKeyExportFailed =>
+      'Export failed. Firmware may not have support enabled.';
+
+  @override
+  String get settingsKeyRestoreFailed =>
+      'Restore failed. Firmware may not have support enabled.';
+
+  @override
+  String get settingsDeleteBackupContent =>
+      'The private key backup stored on this device will be deleted. The radio is not affected.';
+
+  @override
+  String get settingsKeyCopied => 'Private key copied';
+
+  @override
+  String get settingsKeyCopySaved => 'Copy saved on this device.';
+
+  @override
+  String get settingsCopyKeyTooltip => 'Copy full key';
+
+  @override
+  String get settingsKeyConnectToBackup =>
+      'Connect to the radio to back up the key.';
+
+  @override
+  String get settingsKeyShareSubject => 'MeshCore — private key backup';
+
+  @override
+  String get settingsPasteKeyTitle => 'Paste private key';
+
+  @override
+  String get settingsPasteKeyHint =>
+      'Paste the private key from a previous backup (128 hex characters).';
+
+  @override
+  String get settingsKeyHexLabel => 'Private key (hex)';
+
+  @override
+  String get settingsKeyInvalidHex =>
+      'Invalid key — must be exactly 128 hexadecimal characters.';
+
+  @override
+  String get commonContinue => 'Continue';
 
   @override
   String get settingsAbout => 'About';
@@ -775,6 +833,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get contactsAdvertFlood => 'Advert · Flood';
+
+  @override
+  String get contactsAdvertSentZeroHop => 'Zero Hop advert sent';
+
+  @override
+  String get contactsAdvertSentFlood => 'Flood advert sent';
 
   @override
   String get contactsSort => 'Sort';
@@ -1439,6 +1503,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectLastFailTitle => 'Failed to connect to last device';
 
   @override
+  String get connectCancelledMessage => 'Connection to radio cancelled';
+
+  @override
   String get discoverTitle => 'Discover';
 
   @override
@@ -1834,16 +1901,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get radioSettingsPathHashModeDesc =>
-      'Number of bytes used per hop in the routing path. Larger values lower the chance of two distant nodes colliding on the same hash. Requires firmware v10+. Default: 1 byte.';
+      'Number of bytes used per hop in the routing path. Larger values lower the chance of two distant nodes colliding on the same hash. Requires firmware v1.14.0+. Default: 1 byte.';
 
   @override
   String get radioSettingsPathHashMode1 => '1 byte';
 
   @override
   String get radioSettingsPathHashMode2 => '2 bytes';
-
-  @override
-  String get radioSettingsPathHashMode3 => '3 bytes';
 
   @override
   String get radioSettingsPathHashModeCaptionDefault =>

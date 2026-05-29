@@ -44,11 +44,7 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
       if (!mounted) return;
       if (hex == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Exportação falhou. O firmware pode não ter suporte activado.',
-            ),
-          ),
+          SnackBar(content: Text(context.l10n.settingsKeyExportFailed)),
         );
         return;
       }
@@ -59,9 +55,9 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
       if (mounted) {
         setState(() => _storedHex = hex);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Chave privada guardada com sucesso.'),
-            duration: Duration(seconds: 3),
+          SnackBar(
+            content: Text(context.l10n.settingsKeySavedSuccess),
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -82,7 +78,7 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
       await SharePlus.instance.share(
         ShareParams(
           files: [file],
-          subject: 'MeshCore — cópia da chave privada',
+          subject: context.l10n.settingsKeyShareSubject,
         ),
       );
     } finally {
@@ -98,13 +94,13 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Colar chave privada'),
+            title: Text(AppLocalizations.of(ctx).settingsPasteKeyTitle),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Cola aqui a chave privada de uma cópia anterior (128 caracteres hex).',
+                  AppLocalizations.of(ctx).settingsPasteKeyHint,
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
@@ -112,10 +108,10 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
                   controller: controller,
                   maxLines: 3,
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
-                  decoration: const InputDecoration(
-                    labelText: 'Chave privada (hex)',
+                  decoration: InputDecoration(
+                    labelText: AppLocalizations.of(ctx).settingsKeyHexLabel,
                     hintText: '0a1b2c3d…',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
                   ),
                 ),
               ],
@@ -123,11 +119,11 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancelar'),
+                child: Text(AppLocalizations.of(ctx).commonCancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-                child: const Text('Continuar'),
+                child: Text(AppLocalizations.of(ctx).commonContinue),
               ),
             ],
           ),
@@ -139,11 +135,9 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
     if (clean.length != 128 || !RegExp(r'^[0-9a-f]+$').hasMatch(clean)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Chave inválida — deve ter exactamente 128 caracteres hexadecimais.',
-            ),
-            duration: Duration(seconds: 4),
+          SnackBar(
+            content: Text(context.l10n.settingsKeyInvalidHex),
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -163,9 +157,9 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
     if (mounted) {
       setState(() => _storedHex = hex);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cópia guardada neste dispositivo.'),
-          duration: Duration(seconds: 3),
+        SnackBar(
+          content: Text(context.l10n.settingsKeyCopySaved),
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -185,10 +179,8 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
             title: Text(
               AppLocalizations.of(ctx).settingsRestorePrivateKeyTitle,
             ),
-            content: const Text(
-              'Esta operação vai substituir a chave privada actual do rádio. '
-              'O rádio vai reiniciar automaticamente após a importação.\n\n'
-              'Tens a certeza?',
+            content: Text(
+              AppLocalizations.of(ctx).settingsRestorePrivateKeyContent,
             ),
             actions: [
               TextButton(
@@ -215,8 +207,8 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
         SnackBar(
           content: Text(
             ok
-                ? 'Chave restaurada com sucesso. O rádio irá reiniciar.'
-                : 'Restauro falhou. Firmware pode não ter suporte activado.',
+                ? context.l10n.settingsKeyImportedSuccess
+                : context.l10n.settingsKeyRestoreFailed,
           ),
           duration: const Duration(seconds: 4),
         ),
@@ -232,10 +224,7 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
       builder:
           (ctx) => AlertDialog(
             title: Text(AppLocalizations.of(ctx).settingsDeleteBackupTitle),
-            content: const Text(
-              'A cópia da chave privada guardada neste dispositivo será eliminada. '
-              'O rádio não é afectado.',
-            ),
+            content: Text(AppLocalizations.of(ctx).settingsDeleteBackupContent),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
@@ -288,8 +277,7 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
-                'A chave privada identifica exclusivamente o teu rádio. '
-                'Faz uma cópia para conseguires restaurar a identidade após reset.',
+                context.l10n.settingsPrivateKeyDesc,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -320,13 +308,13 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.copy, size: 18),
-                      tooltip: 'Copiar chave completa',
+                      tooltip: context.l10n.settingsCopyKeyTooltip,
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: _storedHex!));
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Chave privada copiada'),
-                            duration: Duration(seconds: 2),
+                          SnackBar(
+                            content: Text(context.l10n.settingsKeyCopied),
+                            duration: const Duration(seconds: 2),
                           ),
                         );
                       },
@@ -338,7 +326,7 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
             ],
             if (selfInfo == null) ...[
               Text(
-                'Liga ao rádio para fazer cópia de segurança da chave.',
+                context.l10n.settingsKeyConnectToBackup,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -362,26 +350,26 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
                                 ),
                               )
                               : const Icon(Icons.download, size: 18),
-                      label: const Text('Guardar do rádio'),
+                      label: Text(context.l10n.settingsSaveFromRadio),
                     ),
                   OutlinedButton.icon(
                     onPressed: _loading ? null : _loadFromText,
                     icon: const Icon(Icons.paste, size: 18),
-                    label: const Text('Colar chave'),
+                    label: Text(context.l10n.settingsPasteKey),
                   ),
                   // ── Share/send ───────────────────────────────────────────
                   if (_storedHex != null)
                     OutlinedButton.icon(
                       onPressed: _loading ? null : _shareBackup,
                       icon: const Icon(Icons.share, size: 18),
-                      label: const Text('Partilhar cópia'),
+                      label: Text(context.l10n.settingsShareCopy),
                     ),
                   // ── Send to radio ────────────────────────────────────────
                   if (_storedHex != null && isConnected)
                     OutlinedButton.icon(
                       onPressed: _loading ? null : _restoreToRadio,
                       icon: const Icon(Icons.restore, size: 18),
-                      label: const Text('Restaurar no rádio'),
+                      label: Text(context.l10n.settingsRestoreToRadio),
                     ),
                   // ── Danger ───────────────────────────────────────────────
                   if (_storedHex != null)
@@ -391,7 +379,7 @@ class _KeyBackupCardState extends ConsumerState<_KeyBackupCard> {
                         foregroundColor: theme.colorScheme.error,
                       ),
                       icon: const Icon(Icons.delete_outline, size: 18),
-                      label: const Text('Apagar cópia local'),
+                      label: Text(context.l10n.settingsDeleteLocalCopy),
                     ),
                 ],
               ),

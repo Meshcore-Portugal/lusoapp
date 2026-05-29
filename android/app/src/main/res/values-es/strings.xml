@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Widget de estado de la radio MeshCore</string>
+    
+    <!-- Foreground Service Notification Strings -->
+    <string name="radio_notification_channel_name">Conexión de Radio MeshCore</string>
+    <string name="radio_notification_channel_description">Notificación para conexión de radio activa por Bluetooth</string>
+    <string name="radio_notification_title">Conectado a %s</string>
+    <string name="radio_notification_text">Conectado por Bluetooth</string>
+</resources>

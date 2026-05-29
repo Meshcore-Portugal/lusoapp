@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -99,21 +101,12 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     _scrollToBottom();
   }
 
-  void _retryMessage(ChatMessage msg) {
-    final service = ref.read(radioServiceProvider);
-    if (service == null) return;
-    final updated = ref
+  /// Retries a failed message, automatically switching to flood routing by
+  /// delegating delivery policy to the notifier.
+  Future<void> _retryMessageAsync(ChatMessage msg) async {
+    await ref
         .read(messagesProvider.notifier)
-        .markMessageRetrying(msg);
-    if (updated == null) return;
-    final keyPrefix =
-        _contactKey.length >= 6 ? _contactKey.sublist(0, 6) : _contactKey;
-    service.sendPrivateMessage(
-      keyPrefix,
-      updated.text,
-      attempt: updated.retryCount,
-      timestamp: updated.timestamp,
-    );
+        .retryPrivateMessage(msg, forceFlood: true);
     _scrollToBottom();
   }
 
@@ -202,6 +195,8 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
       contactsProvider.select((contacts) => _findContact(contacts)),
     );
     final theme = Theme.of(context);
+    final dismissKeyboardOnWallTap =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
     // O(1) partition lookup — no filter scan over all messages (#7 perf fix).
     final contactMessages = ref
@@ -321,69 +316,82 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
           ),
         ),
 
-        // Messages
+        // Messages — on iOS, tapping the background dismisses the keyboard
+        // without navigating away from the private chat.
         Expanded(
-          child: Stack(
-            children: [
-              contactMessages.isEmpty
-                  ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          size: 64,
-                          color: theme.colorScheme.onSurface.withAlpha(60),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          context.l10n.privateNoMessages,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: theme.colorScheme.onSurface.withAlpha(120),
+          child: GestureDetector(
+            onTap:
+                dismissKeyboardOnWallTap
+                    ? () => FocusScope.of(context).unfocus()
+                    : null,
+            behavior:
+                dismissKeyboardOnWallTap
+                    ? HitTestBehavior.translucent
+                    : HitTestBehavior.deferToChild,
+            child: Stack(
+              children: [
+                contactMessages.isEmpty
+                    ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.chat_bubble_outline,
+                            size: 64,
+                            color: theme.colorScheme.onSurface.withAlpha(60),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          context.l10n.privateSendFirstMessage,
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ],
+                          const SizedBox(height: 16),
+                          Text(
+                            context.l10n.privateNoMessages,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: theme.colorScheme.onSurface.withAlpha(120),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            context.l10n.privateSendFirstMessage,
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    )
+                    : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(8),
+                      itemCount: contactMessages.length,
+                      itemBuilder: (context, index) {
+                        final msg = contactMessages[index];
+                        return _PrivateMessageBubble(
+                          message: msg,
+                          selfName: selfName,
+                          selfMentionColor: selfMentionColor,
+                          otherMentionColor: otherMentionColor,
+                          contactDisplayName:
+                              msg.isOutgoing ? null : contact?.displayName,
+                          contactPathLen: contact?.pathLen,
+                          onReply:
+                              msg.isOutgoing
+                                  ? null
+                                  : () => setState(() => _replyingTo = msg),
+                          onRetry:
+                              msg.isOutgoing
+                                  ? () => _retryMessageAsync(msg)
+                                  : null,
+                        );
+                      },
                     ),
-                  )
-                  : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(8),
-                    itemCount: contactMessages.length,
-                    itemBuilder: (context, index) {
-                      final msg = contactMessages[index];
-                      return _PrivateMessageBubble(
-                        message: msg,
-                        selfName: selfName,
-                        selfMentionColor: selfMentionColor,
-                        otherMentionColor: otherMentionColor,
-                        contactDisplayName:
-                            msg.isOutgoing ? null : contact?.displayName,
-                        contactPathLen: contact?.pathLen,
-                        onReply:
-                            msg.isOutgoing
-                                ? null
-                                : () => setState(() => _replyingTo = msg),
-                        onRetry:
-                            msg.isOutgoing ? () => _retryMessage(msg) : null,
-                      );
-                    },
+                if (!_atBottom)
+                  Positioned(
+                    bottom: 8,
+                    right: 12,
+                    child: FloatingActionButton.small(
+                      heroTag: 'scroll_bottom_priv${widget.contactKeyHex}',
+                      onPressed: _scrollToBottom,
+                      child: const Icon(Icons.keyboard_double_arrow_down),
+                    ),
                   ),
-              if (!_atBottom)
-                Positioned(
-                  bottom: 8,
-                  right: 12,
-                  child: FloatingActionButton.small(
-                    heroTag: 'scroll_bottom_priv${widget.contactKeyHex}',
-                    onPressed: _scrollToBottom,
-                    child: const Icon(Icons.keyboard_double_arrow_down),
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
 
@@ -450,8 +458,8 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     Uint8List? pathBytes;
 
     final cached = ref.read(pathCacheProvider)[_prefix6Hex];
-    if (cached != null && cached.isNotEmpty) {
-      pathBytes = _outPathToBytes(cached);
+    if (cached != null && cached.hops.isNotEmpty) {
+      pathBytes = _outPathToBytes(cached.hops);
     } else {
       // Discover the path first — firmware needs hop-hash bytes, not the public key.
       final pubKeyPrefix = contact.publicKey.sublist(0, 6);
@@ -472,7 +480,9 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
           .whenComplete(sub.cancel);
 
       if (outPath != null && outPath.isNotEmpty) {
-        pathBytes = _outPathToBytes(outPath);
+        pathBytes = _outPathToBytes(
+          outPath,
+        ); // NOTE: re-encoding fixed in Commit 3
       }
     }
 
@@ -490,7 +500,18 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     }
 
     // Send trace with correct hop-hash path bytes.
-    await service.tracePath(Random().nextInt(0x7FFFFFFF), path: pathBytes);
+    final traceTag = Random().nextInt(0x7FFFFFFF);
+    final traceCtx = Map<int, TraceRequestContext>.from(
+      ref.read(traceRequestContextProvider),
+    );
+    traceCtx[traceTag] = TraceRequestContext(
+      contactName: contact.displayName,
+      latitude: contact.latitude,
+      longitude: contact.longitude,
+    );
+    ref.read(traceRequestContextProvider.notifier).state = traceCtx;
+
+    await service.tracePath(traceTag, path: pathBytes);
 
     // Arm timeout for the trace-data response (PUSH_CODE_TRACE_DATA 0x89).
     _traceTimeout = Timer(const Duration(seconds: 15), () {

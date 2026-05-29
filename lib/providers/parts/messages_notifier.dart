@@ -5,6 +5,11 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   MessagesNotifier(this._ref) : super([]);
   final Ref _ref;
 
+  static const _sendTimeout = Duration(seconds: 45);
+  static const _minAckTimeoutMs = 1500;
+  static const _maxPrivateAttempts = 4;
+  static const _floodAfterAttempt = 2;
+
   final Set<String> _loadedKeys = {};
 
   /// Per-key save lock: ensures saves for the same key are serialised so a
@@ -51,7 +56,16 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   /// One timer per outgoing private message (keyed by timestamp).
   final Map<int, Timer> _sendTimers = {};
 
-  static const _sendTimeout = Duration(seconds: 45);
+  /// One timer per outgoing private message waiting for delivery confirmation.
+  final Map<int, Timer> _ackTimers = {};
+
+  /// FIFO of pending outgoing private message timestamps.
+  /// SentResponse has no timestamp, so we must match by send order.
+  final List<int> _pendingPrivateRouteQueue = [];
+
+  /// FIFO of outgoing private messages accepted by the radio and still
+  /// waiting for SendConfirmedPush.
+  final List<int> _pendingPrivateAckQueue = [];
 
   void _armSendTimer(int timestamp) {
     _sendTimers[timestamp]?.cancel();
@@ -62,13 +76,13 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   }
 
   void _markPrivateMessageFailed(int timestamp) {
+    _pendingPrivateRouteQueue.remove(timestamp);
+    _pendingPrivateAckQueue.remove(timestamp);
+    _ackTimers[timestamp]?.cancel();
+    _ackTimers.remove(timestamp);
     final idx = state.indexWhere(
       (m) =>
-          m.isOutgoing &&
-          m.isPrivate &&
-          m.timestamp == timestamp &&
-          m.sentRouteFlag == null &&
-          !m.failed,
+          m.isOutgoing && m.isPrivate && m.timestamp == timestamp && !m.failed,
     );
     if (idx < 0) return;
     final updated = state[idx].copyWith(failed: true);
@@ -78,6 +92,96 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     _rebuildPartitioned(state);
     _bumpVersion(_partitionKey(updated));
     _saveForMessage(updated);
+  }
+
+  Duration _ackTimeoutFor(int suggestedTimeoutMs) {
+    final baseMs =
+        suggestedTimeoutMs > 0
+            ? suggestedTimeoutMs
+            : _sendTimeout.inMilliseconds;
+    final paddedMs = (baseMs * 1.2).round();
+    return Duration(
+      milliseconds: paddedMs < _minAckTimeoutMs ? _minAckTimeoutMs : paddedMs,
+    );
+  }
+
+  ChatMessage? _findPendingPrivateMessage(int timestamp) {
+    final idx = state.indexWhere(
+      (m) =>
+          m.isOutgoing && m.isPrivate && m.timestamp == timestamp && !m.failed,
+    );
+    return idx >= 0 ? state[idx] : null;
+  }
+
+  void _armAckTimer(int timestamp, int suggestedTimeoutMs) {
+    _ackTimers[timestamp]?.cancel();
+    _ackTimers[timestamp] = Timer(_ackTimeoutFor(suggestedTimeoutMs), () {
+      _ackTimers.remove(timestamp);
+      unawaited(_handleAckTimeout(timestamp));
+    });
+  }
+
+  Future<void> _handleAckTimeout(int timestamp) async {
+    _pendingPrivateAckQueue.remove(timestamp);
+    final msg = _findPendingPrivateMessage(timestamp);
+    if (msg == null || msg.confirmed) return;
+
+    if (msg.retryCount + 1 >= _maxPrivateAttempts) {
+      _markPrivateMessageFailed(timestamp);
+      return;
+    }
+
+    await _retryPrivateMessage(
+      msg,
+      useFlood: msg.retryCount + 1 >= _floodAfterAttempt,
+    );
+  }
+
+  Future<bool> retryPrivateMessage(
+    ChatMessage msg, {
+    bool forceFlood = false,
+  }) async {
+    if (!msg.isOutgoing || !msg.isPrivate) return false;
+    return _retryPrivateMessage(
+      msg,
+      useFlood: forceFlood || msg.retryCount + 1 >= _floodAfterAttempt,
+    );
+  }
+
+  Future<bool> _retryPrivateMessage(
+    ChatMessage msg, {
+    required bool useFlood,
+  }) async {
+    final service = _ref.read(radioServiceProvider);
+    if (service == null || msg.senderKey == null || msg.senderKey!.isEmpty) {
+      _markPrivateMessageFailed(msg.timestamp);
+      return false;
+    }
+
+    final updated = markMessageRetrying(msg);
+    if (updated == null) return false;
+
+    final fullKey = updated.senderKey!;
+    final keyPrefix = fullKey.length >= 6 ? fullKey.sublist(0, 6) : fullKey;
+
+    if (useFlood) {
+      await service.resetPath(fullKey);
+      final prefixHex =
+          keyPrefix.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      final cache = Map<String, PathCacheEntry>.from(
+        _ref.read(pathCacheProvider),
+      );
+      cache.remove(prefixHex);
+      _ref.read(pathCacheProvider.notifier).state = cache;
+    }
+
+    await service.sendPrivateMessage(
+      keyPrefix,
+      updated.text,
+      attempt: updated.retryCount,
+      timestamp: updated.timestamp,
+    );
+    return true;
   }
 
   /// Reset [msg] to pending state and re-arm the send timer. Returns the
@@ -107,6 +211,8 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
           pathLen: null,
           heardCount: 0,
           sentRouteFlag: null,
+          expectedAck: null,
+          suggestedTimeoutMs: null,
           packetHashHex: null,
           isCliResponse: m.isCliResponse,
           failed: false,
@@ -122,6 +228,7 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
         _bumpVersion(_partitionKey(updated));
         _saveForMessage(updated);
         _armSendTimer(newTs);
+        _pendingPrivateRouteQueue.add(newTs);
         return updated;
       }
     }
@@ -134,6 +241,10 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
       t.cancel();
     }
     _sendTimers.clear();
+    for (final t in _ackTimers.values) {
+      t.cancel();
+    }
+    _ackTimers.clear();
     super.dispose();
   }
 
@@ -169,6 +280,7 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     // they don't use SentResponse and are best-effort).
     if (message.isPrivate) {
       _armSendTimer(message.timestamp);
+      _pendingPrivateRouteQueue.add(message.timestamp);
     }
   }
 
@@ -267,6 +379,29 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   /// Mark the most recent unconfirmed outgoing message as confirmed.
   /// Called when a [SendConfirmedPush] arrives from the radio.
   void confirmLastOutgoing() {
+    while (_pendingPrivateAckQueue.isNotEmpty) {
+      final ts = _pendingPrivateAckQueue.removeAt(0);
+      final idx = state.indexWhere(
+        (m) =>
+            m.isOutgoing &&
+            m.isPrivate &&
+            m.timestamp == ts &&
+            !m.confirmed &&
+            !m.failed,
+      );
+      if (idx < 0) continue;
+      _ackTimers[ts]?.cancel();
+      _ackTimers.remove(ts);
+      final updated = state[idx].copyWith(confirmed: true);
+      final newList = List<ChatMessage>.from(state);
+      newList[idx] = updated;
+      state = newList;
+      _rebuildPartitioned(state);
+      _bumpVersion(_partitionKey(updated));
+      _saveForMessage(updated);
+      return;
+    }
+
     // Walk backwards and only touch the most-recently-added unconfirmed
     // outgoing message (private or channel — whichever came last).
     for (var i = state.length - 1; i >= 0; i--) {
@@ -287,7 +422,53 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   /// Store the route flag on the most recent outgoing *private* message that
   /// does not yet have a sentRouteFlag.  Channel messages don't use this flag.
   /// Called when [SentResponse] arrives: 0 = direct, 1 = flood.
-  void markLastOutgoingRoute(int routeFlag) {
+  void markLastOutgoingRoute(
+    int routeFlag, {
+    int expectedAck = 0,
+    int suggestedTimeoutMs = 0,
+  }) {
+    // Preferred path: match in FIFO send order.
+    while (_pendingPrivateRouteQueue.isNotEmpty) {
+      final ts = _pendingPrivateRouteQueue.removeAt(0);
+      final idx = state.indexWhere(
+        (m) =>
+            m.isOutgoing &&
+            m.isPrivate &&
+            m.timestamp == ts &&
+            m.sentRouteFlag == null &&
+            !m.failed,
+      );
+      if (idx < 0) continue;
+      final msg = state[idx];
+      _sendTimers[msg.timestamp]?.cancel();
+      _sendTimers.remove(msg.timestamp);
+      final updated = msg.copyWith(
+        sentRouteFlag: routeFlag,
+        expectedAck: expectedAck,
+        suggestedTimeoutMs: suggestedTimeoutMs,
+        failed: false,
+      );
+      final newList = List<ChatMessage>.from(state);
+      if (expectedAck != 0) {
+        newList[idx] = updated;
+        state = newList;
+        _rebuildPartitioned(state);
+        _bumpVersion(_partitionKey(updated));
+        _saveForMessage(updated);
+        _pendingPrivateAckQueue.add(updated.timestamp);
+        _armAckTimer(updated.timestamp, suggestedTimeoutMs);
+      } else {
+        final confirmed = updated.copyWith(confirmed: true);
+        newList[idx] = confirmed;
+        state = newList;
+        _rebuildPartitioned(state);
+        _bumpVersion(_partitionKey(confirmed));
+        _saveForMessage(confirmed);
+      }
+      return;
+    }
+
+    // Fallback for legacy in-memory states where queue was not populated.
     for (var i = state.length - 1; i >= 0; i--) {
       final msg = state[i];
       if (msg.isOutgoing &&
@@ -297,13 +478,29 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
         // Cancel the failure timer — radio confirmed it sent the packet.
         _sendTimers[msg.timestamp]?.cancel();
         _sendTimers.remove(msg.timestamp);
-        final updated = msg.copyWith(sentRouteFlag: routeFlag);
+        final updated = msg.copyWith(
+          sentRouteFlag: routeFlag,
+          expectedAck: expectedAck,
+          suggestedTimeoutMs: suggestedTimeoutMs,
+          failed: false,
+        );
         final newList = List<ChatMessage>.from(state);
-        newList[i] = updated;
-        state = newList;
-        _rebuildPartitioned(state);
-        _bumpVersion(_partitionKey(updated));
-        _saveForMessage(updated);
+        if (expectedAck != 0) {
+          newList[i] = updated;
+          state = newList;
+          _rebuildPartitioned(state);
+          _bumpVersion(_partitionKey(updated));
+          _saveForMessage(updated);
+          _pendingPrivateAckQueue.add(updated.timestamp);
+          _armAckTimer(updated.timestamp, suggestedTimeoutMs);
+        } else {
+          final confirmed = updated.copyWith(confirmed: true);
+          newList[i] = confirmed;
+          state = newList;
+          _rebuildPartitioned(state);
+          _bumpVersion(_partitionKey(confirmed));
+          _saveForMessage(confirmed);
+        }
         return;
       }
     }
@@ -321,22 +518,36 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   }
 
   /// Returns the device-scoped storage key for a channel message conversation.
-  /// Falls back to the unscoped key when no radio is connected (e.g. on cold
-  /// startup before a connection is established).
+  /// Uses the currently connected radio's ID when available; falls back to the
+  /// most-recently-used device so that cold-start loads find the correct key.
+  /// Returns the legacy unscoped key only when no device is known at all.
   String _channelKey(int index) {
     final deviceId = _ref.read(currentRadioIdProvider);
     if (deviceId != null) {
       return 'ch_${StorageService.sanitizeId(deviceId)}_$index';
+    }
+    // Not connected yet — use the last known device so offline cache loads
+    // from the same key that was used to save messages in the previous session.
+    final recent = _ref.read(recentDevicesProvider);
+    if (recent.isNotEmpty) {
+      return 'ch_${StorageService.sanitizeId(recent.first.id)}_$index';
     }
     return 'ch_$index';
   }
 
   /// Lazily load persisted messages for a channel index.
   Future<void> ensureLoadedForChannel(int index) async {
-    final key = _channelKey(index);
-    if (_loadedKeys.contains(key)) return;
-    _loadedKeys.add(key);
-    final stored = await StorageService.instance.loadMessages(key);
+    final scopedKey = _channelKey(index);
+    if (_loadedKeys.contains(scopedKey)) return;
+    _loadedKeys.add(scopedKey);
+    var stored = await StorageService.instance.loadMessages(scopedKey);
+    // Migration fallback: if nothing found at the scoped key, check the
+    // legacy unscoped key so users who upgraded keep their message history.
+    final legacyKey = 'ch_$index';
+    if (stored.isEmpty && scopedKey != legacyKey) {
+      stored = await StorageService.instance.loadMessages(legacyKey);
+      _loadedKeys.add(legacyKey); // prevent a redundant load later
+    }
     if (stored.isEmpty) return;
     _mergeStored(stored);
   }

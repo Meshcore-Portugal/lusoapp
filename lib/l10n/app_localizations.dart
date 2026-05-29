@@ -667,7 +667,7 @@ abstract class AppLocalizations {
   /// No description provided for @commonSent.
   ///
   /// In pt, this message translates to:
-  /// **'Enviada'**
+  /// **'Transmitida'**
   String get commonSent;
 
   /// No description provided for @commonSentByMe.
@@ -681,6 +681,24 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'A propagar...'**
   String get commonPropagating;
+
+  /// No description provided for @chatBadgePropagatingTooltip.
+  ///
+  /// In pt, this message translates to:
+  /// **'A aguardar eco de repetidor...'**
+  String get chatBadgePropagatingTooltip;
+
+  /// No description provided for @chatBadgeTransmittedTooltip.
+  ///
+  /// In pt, this message translates to:
+  /// **'Transmitida — sem eco de repetidor recebido'**
+  String get chatBadgeTransmittedTooltip;
+
+  /// No description provided for @chatBadgeHeardTooltip.
+  ///
+  /// In pt, this message translates to:
+  /// **'Ouvida por {count} repetidor(es)'**
+  String chatBadgeHeardTooltip(int count);
 
   /// No description provided for @commonConnecting.
   ///
@@ -1423,7 +1441,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsRestorePrivateKeyContent.
   ///
   /// In pt, this message translates to:
-  /// **'O rádio vai reiniciar automaticamente após a restauração. Prosseguir?'**
+  /// **'Esta operação vai substituir a chave privada actual do rádio. A nova identidade é aplicada imediatamente — a chave pública na app será actualizada.\n\nTens a certeza?'**
   String get settingsRestorePrivateKeyContent;
 
   /// No description provided for @settingsDeleteBackupTitle.
@@ -1435,14 +1453,92 @@ abstract class AppLocalizations {
   /// No description provided for @settingsKeySavedSuccess.
   ///
   /// In pt, this message translates to:
-  /// **'Cópia da chave privada guardada com sucesso'**
+  /// **'Chave privada guardada com sucesso.'**
   String get settingsKeySavedSuccess;
 
   /// No description provided for @settingsKeyImportedSuccess.
   ///
   /// In pt, this message translates to:
-  /// **'Chave importada com sucesso'**
+  /// **'Chave restaurada com sucesso. Chave pública actualizada.'**
   String get settingsKeyImportedSuccess;
+
+  /// No description provided for @settingsKeyExportFailed.
+  ///
+  /// In pt, this message translates to:
+  /// **'Exportação falhou. O firmware pode não ter suporte activado.'**
+  String get settingsKeyExportFailed;
+
+  /// No description provided for @settingsKeyRestoreFailed.
+  ///
+  /// In pt, this message translates to:
+  /// **'Restauro falhou. O firmware pode não ter suporte activado.'**
+  String get settingsKeyRestoreFailed;
+
+  /// No description provided for @settingsDeleteBackupContent.
+  ///
+  /// In pt, this message translates to:
+  /// **'A cópia da chave privada guardada neste dispositivo será eliminada. O rádio não é afectado.'**
+  String get settingsDeleteBackupContent;
+
+  /// No description provided for @settingsKeyCopied.
+  ///
+  /// In pt, this message translates to:
+  /// **'Chave privada copiada'**
+  String get settingsKeyCopied;
+
+  /// No description provided for @settingsKeyCopySaved.
+  ///
+  /// In pt, this message translates to:
+  /// **'Cópia guardada neste dispositivo.'**
+  String get settingsKeyCopySaved;
+
+  /// No description provided for @settingsCopyKeyTooltip.
+  ///
+  /// In pt, this message translates to:
+  /// **'Copiar chave completa'**
+  String get settingsCopyKeyTooltip;
+
+  /// No description provided for @settingsKeyConnectToBackup.
+  ///
+  /// In pt, this message translates to:
+  /// **'Liga ao rádio para fazer cópia de segurança da chave.'**
+  String get settingsKeyConnectToBackup;
+
+  /// No description provided for @settingsKeyShareSubject.
+  ///
+  /// In pt, this message translates to:
+  /// **'MeshCore — cópia da chave privada'**
+  String get settingsKeyShareSubject;
+
+  /// No description provided for @settingsPasteKeyTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Colar chave privada'**
+  String get settingsPasteKeyTitle;
+
+  /// No description provided for @settingsPasteKeyHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Cola aqui a chave privada de uma cópia anterior (128 caracteres hex).'**
+  String get settingsPasteKeyHint;
+
+  /// No description provided for @settingsKeyHexLabel.
+  ///
+  /// In pt, this message translates to:
+  /// **'Chave privada (hex)'**
+  String get settingsKeyHexLabel;
+
+  /// No description provided for @settingsKeyInvalidHex.
+  ///
+  /// In pt, this message translates to:
+  /// **'Chave inválida — deve ter exactamente 128 caracteres hexadecimais.'**
+  String get settingsKeyInvalidHex;
+
+  /// No description provided for @commonContinue.
+  ///
+  /// In pt, this message translates to:
+  /// **'Continuar'**
+  String get commonContinue;
 
   /// No description provided for @settingsAbout.
   ///
@@ -1551,6 +1647,18 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Anúncio · Flood'**
   String get contactsAdvertFlood;
+
+  /// No description provided for @contactsAdvertSentZeroHop.
+  ///
+  /// In pt, this message translates to:
+  /// **'Anúncio Zero Hop enviado'**
+  String get contactsAdvertSentZeroHop;
+
+  /// No description provided for @contactsAdvertSentFlood.
+  ///
+  /// In pt, this message translates to:
+  /// **'Anúncio Flood enviado'**
+  String get contactsAdvertSentFlood;
 
   /// No description provided for @contactsSort.
   ///
@@ -2824,6 +2932,12 @@ abstract class AppLocalizations {
   /// **'Falha ao ligar ao último dispositivo'**
   String get connectLastFailTitle;
 
+  /// No description provided for @connectCancelledMessage.
+  ///
+  /// In pt, this message translates to:
+  /// **'Ligação ao rádio cancelada'**
+  String get connectCancelledMessage;
+
   /// No description provided for @discoverTitle.
   ///
   /// In pt, this message translates to:
@@ -3547,7 +3661,7 @@ abstract class AppLocalizations {
   /// No description provided for @radioSettingsPathHashModeDesc.
   ///
   /// In pt, this message translates to:
-  /// **'Número de bytes usados por salto no caminho de encaminhamento. Valores maiores reduzem a probabilidade de colisão entre nós distantes. Requer firmware v10+. Predefinição: 1 byte.'**
+  /// **'Número de bytes usados por salto no caminho de encaminhamento. Valores maiores reduzem a probabilidade de colisão entre nós distantes. Requer firmware v1.14.0+. Predefinição: 1 byte.'**
   String get radioSettingsPathHashModeDesc;
 
   /// No description provided for @radioSettingsPathHashMode1.
@@ -3561,12 +3675,6 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'2 bytes'**
   String get radioSettingsPathHashMode2;
-
-  /// No description provided for @radioSettingsPathHashMode3.
-  ///
-  /// In pt, this message translates to:
-  /// **'3 bytes'**
-  String get radioSettingsPathHashMode3;
 
   /// No description provided for @radioSettingsPathHashModeCaptionDefault.
   ///

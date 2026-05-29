@@ -46,6 +46,12 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    // Register as the active channel so incoming messages on this channel
+    // do not produce badge increments or OS notifications while we are here.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(activeChannelIndexProvider.notifier).state = widget.channelIndex;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       // Capture unread count BEFORE clearing it.
@@ -86,6 +92,9 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
     _textController.clear();
     _atBottom = true;
     _firstUnreadIndex = -1;
+
+    // Re-register as the new active channel.
+    ref.read(activeChannelIndexProvider.notifier).state = widget.channelIndex;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
@@ -131,6 +140,9 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
   void dispose() {
     _textController.dispose();
     _scrollController.dispose();
+    // Clear active-channel registration so notifications resume for this
+    // channel once the user navigates away.
+    ref.read(activeChannelIndexProvider.notifier).state = -1;
     super.dispose();
   }
 
@@ -166,6 +178,30 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
 
     _textController.clear();
     if (_replyingTo != null) setState(() => _replyingTo = null);
+    _scrollToBottom();
+  }
+
+  void _sendPingMessage() {
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+
+    final typed = _textController.text.trim();
+    final payload = typed.isEmpty ? '!ping' : typed;
+    final ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    ref
+        .read(messagesProvider.notifier)
+        .addOutgoing(
+          ChatMessage(
+            text: payload,
+            timestamp: ts,
+            isOutgoing: true,
+            channelIndex: widget.channelIndex,
+          ),
+        );
+
+    service.sendChannelMessage(widget.channelIndex, payload, timestamp: ts);
+    _textController.clear();
     _scrollToBottom();
   }
 
@@ -291,6 +327,7 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
         .read(messagesProvider.notifier)
         .forChannel(widget.channelIndex);
     final theme = Theme.of(context);
+    final service = ref.watch(radioServiceProvider);
     final isMuted = ref.watch(
       mutedChannelsProvider.select((s) => s.contains(widget.channelIndex)),
     );
@@ -414,110 +451,161 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
           ),
         ),
 
-        // Messages
+        // Messages — tapping the background dismisses the keyboard without
+        // navigating away (iOS back-button behaviour workaround).
         Expanded(
-          child: Stack(
-            children: [
-              channelMessages.isEmpty
-                  ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.forum_outlined,
-                          size: 64,
-                          color: theme.colorScheme.onSurface.withAlpha(60),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          context.l10n.chatNoMessages,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: theme.colorScheme.onSurface.withAlpha(120),
+          child: GestureDetector(
+            onTap: () => FocusScope.of(context).unfocus(),
+            behavior: HitTestBehavior.translucent,
+            child: Stack(
+              children: [
+                channelMessages.isEmpty
+                    ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.forum_outlined,
+                            size: 64,
+                            color: theme.colorScheme.onSurface.withAlpha(60),
                           ),
-                        ),
-                      ],
-                    ),
-                  )
-                  : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(8),
-                    // Extra item slot for the unread divider when active.
-                    itemCount:
-                        channelMessages.length +
-                        (_firstUnreadIndex >= 0 ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      // If the divider is active and we hit its slot, render it.
-                      if (_firstUnreadIndex >= 0 &&
-                          index == _firstUnreadIndex) {
-                        return _UnreadDivider(
-                          key: _unreadDividerKey,
-                          onDismiss:
-                              () => setState(() => _firstUnreadIndex = -1),
+                          const SizedBox(height: 16),
+                          Text(
+                            context.l10n.chatNoMessages,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: theme.colorScheme.onSurface.withAlpha(120),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                    : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(8),
+                      // Extra item slot for the unread divider when active.
+                      itemCount:
+                          channelMessages.length +
+                          (_firstUnreadIndex >= 0 ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        // If the divider is active and we hit its slot, render it.
+                        if (_firstUnreadIndex >= 0 &&
+                            index == _firstUnreadIndex) {
+                          return _UnreadDivider(
+                            key: _unreadDividerKey,
+                            onDismiss:
+                                () => setState(() => _firstUnreadIndex = -1),
+                          );
+                        }
+                        // Shift real message index down by 1 after the divider.
+                        final msgIndex =
+                            (_firstUnreadIndex >= 0 &&
+                                    index > _firstUnreadIndex)
+                                ? index - 1
+                                : index;
+                        final msg = channelMessages[msgIndex];
+                        return _MessageBubble(
+                          message: msg,
+                          selfName: selfName,
+                          selfMentionColor: selfMentionColor,
+                          otherMentionColor: otherMentionColor,
+                          onReply:
+                              msg.isOutgoing
+                                  ? null
+                                  : () => setState(() => _replyingTo = msg),
                         );
-                      }
-                      // Shift real message index down by 1 after the divider.
-                      final msgIndex =
-                          (_firstUnreadIndex >= 0 && index > _firstUnreadIndex)
-                              ? index - 1
-                              : index;
-                      final msg = channelMessages[msgIndex];
-                      return _MessageBubble(
-                        message: msg,
-                        selfName: selfName,
-                        selfMentionColor: selfMentionColor,
-                        otherMentionColor: otherMentionColor,
-                        onReply:
-                            msg.isOutgoing
-                                ? null
-                                : () => setState(() => _replyingTo = msg),
-                      );
-                    },
+                      },
+                    ),
+                if (!_atBottom)
+                  Positioned(
+                    bottom: 8,
+                    right: 12,
+                    child: FloatingActionButton.small(
+                      heroTag: 'scroll_bottom_ch${widget.channelIndex}',
+                      onPressed:
+                          () => _scrollToBottom(animate: true, attempts: 5),
+                      child: const Icon(Icons.keyboard_double_arrow_down),
+                    ),
                   ),
-              if (!_atBottom)
-                Positioned(
-                  bottom: 8,
-                  right: 12,
-                  child: FloatingActionButton.small(
-                    heroTag: 'scroll_bottom_ch${widget.channelIndex}',
-                    onPressed:
-                        () => _scrollToBottom(animate: true, attempts: 5),
-                    child: const Icon(Icons.keyboard_double_arrow_down),
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
 
         // Input bar
         if (channelName?.toLowerCase() == '#ping')
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () {
-                  final service = ref.read(radioServiceProvider);
-                  if (service == null) return;
-                  final ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-                  ref
-                      .read(messagesProvider.notifier)
-                      .addOutgoing(
-                        ChatMessage(
-                          text: '!ping',
-                          timestamp: ts,
-                          isOutgoing: true,
-                          channelIndex: widget.channelIndex,
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _textController,
+                      decoration: InputDecoration(
+                        hintText: '!ping ou mensagem...',
+                        prefixIcon: const Icon(Icons.wifi_tethering_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ),
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _sendPingMessage(),
+                      onTapOutside:
+                          (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                      minLines: 1,
+                      maxLines: 3,
+                      maxLength: 140,
+                      buildCounter:
+                          (
+                            _, {
+                            required int currentLength,
+                            required bool isFocused,
+                            required int? maxLength,
+                          }) => null,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _textController,
+                    builder: (context, value, _) {
+                      final hasText = value.text.trim().isNotEmpty;
+                      return Tooltip(
+                        message:
+                            hasText
+                                ? context.l10n.commonSendMessage
+                                : context.l10n.chatPingButton,
+                        child: SizedBox(
+                          width: 144,
+                          height: 52,
+                          child: FilledButton.icon(
+                            onPressed:
+                                service == null ? null : _sendPingMessage,
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            icon: Icon(
+                              hasText ? Icons.send : Icons.wifi_tethering,
+                              size: 20,
+                            ),
+                            label: Text(
+                              hasText
+                                  ? context.l10n.commonSendMessage
+                                  : 'Enviar ping',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ),
                       );
-                  service.sendChannelMessage(
-                    widget.channelIndex,
-                    '!ping',
-                    timestamp: ts,
-                  );
-                  _scrollToBottom();
-                },
-                icon: const Icon(Icons.wifi_tethering),
-                label: Text(context.l10n.chatPingButton),
+                    },
+                  ),
+                ],
               ),
             ),
           )
@@ -548,8 +636,8 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
 /// Small pill badge shown below outgoing channel message bubbles indicating
 /// how many repeaters have echoed the message back to the radio.
 ///
-/// - count == 0, within 10 s of first render: amber pill "A propagar..."
-/// - count == 0, 10 s elapsed with no repeater heard: blue pill "Enviada"
+/// - count == 0, within 20 s of first render: amber pill "A propagar..."
+/// - count == 0, 20 s elapsed with no repeater heard: grey pill "Transmitida"
 /// - count  > 0: green pill with a broadcast icon + count
 class _HeardBadge extends StatefulWidget {
   const _HeardBadge({
@@ -577,16 +665,17 @@ class _HeardBadgeState extends State<_HeardBadge> {
   @override
   void initState() {
     super.initState();
-    // Start the timer — if no repeater is heard within 10 s we show "Enviada".
+    // Start the timer — if no repeater is heard within 20 s we show
+    // "Transmitida" (transmitted, no echo confirmed).
     // Use the message timestamp to calculate how much time has already elapsed
     // so that re-opening the channel doesn't replay the animation for old
     // messages that already timed out.
     if (widget.count == 0) {
-      const kTimeout = Duration(seconds: 10);
+      const kTimeout = Duration(seconds: 20);
       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       final elapsedMs = (now - widget.timestamp) * 1000;
       if (elapsedMs >= kTimeout.inMilliseconds) {
-        // Already past the threshold — show "Enviada" immediately.
+        // Already past the threshold — show "Transmitida" immediately.
         _timedOut = true;
       } else {
         final remaining = kTimeout - Duration(milliseconds: elapsedMs);
@@ -616,47 +705,59 @@ class _HeardBadgeState extends State<_HeardBadge> {
   @override
   Widget build(BuildContext context) {
     final heard = widget.count > 0;
-    final showSent = !heard && _timedOut;
+    final showTransmitted = !heard && _timedOut;
     final bgColor =
         heard
             ? Colors.green.shade700.withAlpha(200)
-            : showSent
-            ? Colors.blue.shade700.withAlpha(200)
+            : showTransmitted
+            ? Colors.grey.shade600.withAlpha(180)
             : Colors.amber.shade800.withAlpha(180);
     const fgColor = Colors.white;
     final icon =
         heard
             ? Icons.cell_tower
-            : showSent
-            ? Icons.check_circle_outline
+            : showTransmitted
+            ? Icons.send
             : Icons.hourglass_empty;
     final label =
         heard
             ? '${widget.count} Repetidor${widget.count > 1 ? 'es' : ''}'
-            : showSent
+            : showTransmitted
             ? context.l10n.commonSent
             : context.l10n.commonPropagating;
+
+    final tooltipMsg =
+        heard
+            ? context.l10n.chatBadgeHeardTooltip(widget.count)
+            : showTransmitted
+            ? context.l10n.chatBadgeTransmittedTooltip
+            : context.l10n.chatBadgePropagatingTooltip;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 11, color: fgColor),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: (widget.theme.textTheme.labelSmall ?? const TextStyle())
-                    .copyWith(color: fgColor, fontSize: 10),
-              ),
-            ],
+        Tooltip(
+          message: tooltipMsg,
+          preferBelow: false,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 11, color: fgColor),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: (widget.theme.textTheme.labelSmall ??
+                          const TextStyle())
+                      .copyWith(color: fgColor, fontSize: 10),
+                ),
+              ],
+            ),
           ),
         ),
       ],

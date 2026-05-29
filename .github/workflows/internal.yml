@@ -95,6 +95,10 @@ jobs:
           tracks: beta,alpha,internal
           status: completed
 
+      - name: Cleanup
+        if: ${{ always() }}
+        run: rm -f android/key.properties android/app/keystore.jks
+
   build_web:
     runs-on: ubuntu-latest
 

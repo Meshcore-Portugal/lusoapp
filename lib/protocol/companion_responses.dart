@@ -38,11 +38,23 @@ class SelfInfoResponse extends CompanionResponse {
 }
 
 class SentResponse extends CompanionResponse {
-  const SentResponse({this.routeFlag = 0});
+  const SentResponse({
+    this.routeFlag = 0,
+    this.expectedAck = 0,
+    this.suggestedTimeoutMs = 0,
+  });
 
   /// 0 = direct, 1 = flood (via repeaters)
   final int routeFlag;
+
+  /// Expected ACK CRC for this send, or 0 when no ACK is expected.
+  final int expectedAck;
+
+  /// Firmware-estimated ACK timeout in milliseconds.
+  final int suggestedTimeoutMs;
+
   bool get isFlood => routeFlag == 1;
+  bool get expectsAck => expectedAck != 0;
 }
 
 class PrivateMessageResponse extends CompanionResponse {
@@ -161,10 +173,27 @@ class BinaryResponsePush extends CompanionResponse {
 }
 
 class PathDiscoveryPush extends CompanionResponse {
-  const PathDiscoveryPush(this.pubKeyPrefix, this.outPath, this.inPath);
+  const PathDiscoveryPush(
+    this.pubKeyPrefix,
+    this.outPath,
+    this.outHashSize,
+    this.inPath,
+    this.inHashSize,
+  );
+
   final Uint8List pubKeyPrefix;
+
+  /// One element per hop; each value is the raw hash (1–3 bytes wide).
   final List<int> outPath;
+
+  /// Bytes per hop hash for the outbound path (1, 2, or 3).
+  final int outHashSize;
+
+  /// One element per hop; each value is the raw hash (1–3 bytes wide).
   final List<int> inPath;
+
+  /// Bytes per hop hash for the inbound path (1, 2, or 3).
+  final int inHashSize;
 }
 
 class ControlDataPush extends CompanionResponse {

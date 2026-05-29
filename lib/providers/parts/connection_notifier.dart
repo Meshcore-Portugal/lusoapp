@@ -17,6 +17,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   StreamSubscription<AppLifecycleState>? _lifecycleSub;
   Timer? _batteryPollTimer;
   Timer? _keepaliveTimer;
+  Timer? _contactsRefreshDebounce;
 
   /// Set to true in [disconnect] to abort any in-progress reconnect loop.
   bool _reconnectCancelled = false;
@@ -25,6 +26,17 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
 
   static const _keepaliveFgInterval = Duration(seconds: 15);
   static const _keepaliveBgInterval = Duration(seconds: 7);
+
+  void _scheduleContactsRefresh(
+    RadioService service, {
+    Duration delay = const Duration(seconds: 2),
+  }) {
+    _contactsRefreshDebounce?.cancel();
+    _contactsRefreshDebounce = Timer(delay, () {
+      if (state != TransportState.connected) return;
+      service.requestContacts().catchError((_) {});
+    });
+  }
 
   void _setStep(int step, String label) {
     _ref.read(connectionProgressProvider.notifier).state = step;
@@ -63,17 +75,20 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
             .read(channelsProvider.notifier)
             .loadFromStorageForRadio(deviceId);
         await _ref.read(mutedChannelsProvider.notifier).loadForRadio(deviceId);
+        await _ref.read(blockedSendersProvider.notifier).loadForRadio(deviceId);
         await _ref.read(advertAutoAddProvider.notifier).loadForRadio(deviceId);
 
         await _fetchInitialData(service);
         state = TransportState.connected;
-        // Prefer the radio's configured node name; fall back to the BLE
-        // advertisement name so the reconnect button always shows something.
+        // Start foreground service to prevent Doze mode from killing the connection
         final radioNodeName = _ref.read(selfInfoProvider)?.name;
         final displayName =
             (radioNodeName != null && radioNodeName.isNotEmpty)
                 ? radioNodeName
                 : deviceName;
+        await NotificationService.instance.startRadioForeground(displayName);
+        // Prefer the radio's configured node name; fall back to the BLE
+        // advertisement name so the reconnect button always shows something.
         final recentList = await StorageService.instance.upsertRecentDevice(
           id: deviceId,
           type: 'ble',
@@ -145,19 +160,20 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
             .read(channelsProvider.notifier)
             .loadFromStorageForRadio(deviceId);
         await _ref.read(mutedChannelsProvider.notifier).loadForRadio(deviceId);
+        await _ref.read(blockedSendersProvider.notifier).loadForRadio(deviceId);
         await _ref.read(advertAutoAddProvider.notifier).loadForRadio(deviceId);
 
         await _fetchInitialData(service);
         state = TransportState.connected;
-        final typeStr =
-            mode == ConnectionMode.kiss ? 'serialKiss' : 'serialCompanion';
-        // Prefer the radio's configured node name; fall back to the USB
-        // device name so the reconnect button always shows something.
+        // Start foreground service to prevent Doze mode from killing the connection
         final radioNodeName = _ref.read(selfInfoProvider)?.name;
         final displayName =
             (radioNodeName != null && radioNodeName.isNotEmpty)
                 ? radioNodeName
                 : deviceName;
+        await NotificationService.instance.startRadioForeground(displayName);
+        final typeStr =
+            mode == ConnectionMode.kiss ? 'serialKiss' : 'serialCompanion';
         final recentList = await StorageService.instance.upsertRecentDevice(
           id: deviceId,
           type: typeStr,
@@ -266,23 +282,24 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
             .read(channelsProvider.notifier)
             .loadFromStorageForRadio(deviceId);
         await _ref.read(mutedChannelsProvider.notifier).loadForRadio(deviceId);
+        await _ref.read(blockedSendersProvider.notifier).loadForRadio(deviceId);
         await _ref.read(advertAutoAddProvider.notifier).loadForRadio(deviceId);
 
         await _fetchInitialData(service);
         state = TransportState.connected;
 
-        // Type strings distinguish Web Serial from native serial in the recent
-        // devices list so the reconnect button calls the correct entry point.
-        final typeStr =
-            mode == ConnectionMode.kiss ? 'webSerialKiss' : 'webSerial';
-
-        // Prefer the radio's configured node name; fall back to the port label
-        // so the reconnect button always shows a meaningful name.
+        // Start foreground service to prevent Doze mode from killing the connection
         final radioNodeName = _ref.read(selfInfoProvider)?.name;
         final displayName =
             (radioNodeName != null && radioNodeName.isNotEmpty)
                 ? radioNodeName
                 : deviceName;
+        await NotificationService.instance.startRadioForeground(displayName);
+
+        // Type strings distinguish Web Serial from native serial in the recent
+        // devices list so the reconnect button calls the correct entry point.
+        final typeStr =
+            mode == ConnectionMode.kiss ? 'webSerialKiss' : 'webSerial';
 
         final recentList = await StorageService.instance.upsertRecentDevice(
           id: deviceId,
@@ -340,10 +357,14 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
   Future<void> disconnect() async {
     _manualDisconnect = true;
     _reconnectCancelled = true;
+    // Stop the foreground service immediately
+    await NotificationService.instance.stopRadioForeground();
     _batteryPollTimer?.cancel();
     _batteryPollTimer = null;
     _keepaliveTimer?.cancel();
     _keepaliveTimer = null;
+    _contactsRefreshDebounce?.cancel();
+    _contactsRefreshDebounce = null;
     await _connectionLostSub?.cancel();
     _connectionLostSub = null;
     await _responseSub?.cancel();
@@ -361,6 +382,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     _ref.read(radioChannelsSnapshotProvider.notifier).state = {};
     _ref.read(contactsSyncedProvider.notifier).state = false;
     _ref.read(traceHistoryProvider.notifier).clear();
+    _ref.read(traceRequestContextProvider.notifier).state = {};
     // Clear the current radio ID so channel storage is not accidentally
     // written to the disconnected radio's scope.
     _ref.read(currentRadioIdProvider.notifier).state = null;
@@ -376,18 +398,29 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     final contacts = _ref.read(contactsProvider);
     final channels = _ref.read(channelsProvider);
 
-    // Same LiPo curve used by the home screen: 4200 mV = 100%, 3200 mV = 0%
-    final batteryPct =
-        batteryMv == 0
-            ? 0
-            : (((batteryMv.clamp(3200, 4200) - 3200) / 1000) * 100).round();
+    final batteryPct = batteryPercentFromMv(batteryMv);
+
+    // Compute best SNR locally — `bestSignalSnrProvider` watches
+    // `connectionProvider`, which is *us*, so reading it from here would
+    // raise CircularDependencyError. Mirror its logic on the rx log.
+    final isConnected = state == TransportState.connected;
+    double? bestSnr;
+    if (isConnected) {
+      final log = _ref.read(rxLogProvider);
+      final cutoff = DateTime.now().subtract(const Duration(minutes: 5));
+      for (final e in log) {
+        if (!e.receivedAt.isAfter(cutoff)) continue;
+        if (bestSnr == null || e.snr > bestSnr) bestSnr = e.snr;
+      }
+    }
 
     WidgetService.update(
       radioName: selfInfo?.name ?? '—',
-      connected: state == TransportState.connected,
+      connected: isConnected,
       batteryPct: batteryPct,
       contactCount: contacts.length,
       channelCount: channels.where((c) => !c.isEmpty).length,
+      signalBars: WidgetService.signalBarsForSnr(bestSnr),
     );
   }
 
@@ -452,6 +485,12 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
       if (service != null && state == TransportState.connected) {
         _startKeepalive(service, interval: _keepaliveFgInterval);
         service.requestBattAndStorage().catchError((_) {});
+        // Pull an updated contact snapshot after resume so contacts heard
+        // while backgrounded appear without app restart.
+        _scheduleContactsRefresh(
+          service,
+          delay: const Duration(milliseconds: 800),
+        );
         return;
       }
       if (!_manualDisconnect) {
@@ -494,6 +533,9 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     _connectionLostSub?.cancel();
     _connectionLostSub = service.connectionLost.listen((_) async {
       if (state != TransportState.connected) return;
+
+      // Stop the foreground service immediately when connection is lost
+      await NotificationService.instance.stopRadioForeground();
 
       _batteryPollTimer?.cancel();
       _batteryPollTimer = null;
@@ -554,6 +596,7 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     _lifecycleSub?.cancel();
     _keepaliveTimer?.cancel();
     _batteryPollTimer?.cancel();
+    _contactsRefreshDebounce?.cancel();
     _connectionLostSub?.cancel();
     _responseSub?.cancel();
     super.dispose();
@@ -669,6 +712,16 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
               finalMessage = message.copyWith(packetHashHex: pendingHash);
             }
           }
+          // Discard messages from blocked senders before touching state or
+          // unread counts (parity with MeshCoreOne SyncCoordinator gate).
+          if (!finalMessage.isOutgoing) {
+            final senderName = finalMessage.senderName;
+            if (senderName != null && senderName.isNotEmpty) {
+              if (_ref.read(blockedSendersProvider).contains(senderName)) {
+                break;
+              }
+            }
+          }
           _ref.read(messagesProvider.notifier).addMessage(finalMessage);
           // Auto-log incoming CQ Plano 333 messages on the #plano333 channel
           // as stations heard.
@@ -690,15 +743,9 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
                     _ref.read(plan333ConfigProvider).stationName.trim();
                 if (myStation.isEmpty ||
                     cq.stationName.toLowerCase() != myStation.toLowerCase()) {
-                  // Deduplicate — same station sends up to 3 CQs per event.
-                  final log = _ref.read(qslLogProvider);
-                  if (!log.any(
-                    (r) =>
-                        r.stationName.toLowerCase() ==
-                        cq.stationName.toLowerCase(),
-                  )) {
-                    _ref.read(qslLogProvider.notifier).add(cq);
-                  }
+                  _ref
+                      .read(qslLogProvider.notifier)
+                      .add(cq, incrementCount: true);
                 }
               }
             }
@@ -710,14 +757,20 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
                 _ref
                     .read(mutedChannelsProvider)
                     .contains(message.channelIndex!);
-            if (message.channelIndex != null) {
+            // Do not increment unread or fire an OS notification when the
+            // user is currently viewing this channel (parity with MeshCoreOne
+            // activeChannelIndex / activeChannelDeviceID guard).
+            final isViewingChannel =
+                message.channelIndex != null &&
+                _ref.read(activeChannelIndexProvider) == message.channelIndex;
+            if (message.channelIndex != null && !isViewingChannel) {
               _ref
                   .read(unreadCountsProvider.notifier)
                   .incrementChannel(message.channelIndex!);
             }
             // Notifications (OS alert + app-icon badge) are suppressed for
             // muted channels; the in-app unread badge is still shown above.
-            if (!isMuted) {
+            if (!isMuted && !isViewingChannel) {
               final channels = _ref.read(channelsProvider);
               final idx = message.channelIndex ?? 0;
               final channel = channels.where((c) => c.index == idx).firstOrNull;
@@ -808,8 +861,18 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _ref.read(deviceInfoProvider.notifier).state = info;
         case SendConfirmedPush():
           _ref.read(messagesProvider.notifier).confirmLastOutgoing();
-        case SentResponse(:final routeFlag):
-          _ref.read(messagesProvider.notifier).markLastOutgoingRoute(routeFlag);
+        case SentResponse(
+          :final routeFlag,
+          :final expectedAck,
+          :final suggestedTimeoutMs,
+        ):
+          _ref
+              .read(messagesProvider.notifier)
+              .markLastOutgoingRoute(
+                routeFlag,
+                expectedAck: expectedAck,
+                suggestedTimeoutMs: suggestedTimeoutMs,
+              );
         case ErrorResponse():
           _ref.read(networkStatsProvider.notifier).incrementError();
         case AdvertPush(
@@ -822,6 +885,14 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _ref
               .read(contactsProvider.notifier)
               .upsertFromAdvert(publicKey, type, name);
+          if (isNew && name.trim().isNotEmpty) {
+            final service = _ref.read(radioServiceProvider);
+            if (service != null) {
+              // Keep the radio-contacts snapshot in sync after new advert
+              // events so the Contacts screen updates without relaunch.
+              _scheduleContactsRefresh(service);
+            }
+          }
           // When pushNewAdvert (isNew=true) the radio may NOT have added the
           // contact to its own table (manual-contact mode). Write it back
           // explicitly — but only if the user's auto-add setting allows this
@@ -886,22 +957,45 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
             }
             _ref.read(telemetryProvider.notifier).add(readings);
           }
-        case PathDiscoveryPush(:final pubKeyPrefix, :final outPath):
+        case PathDiscoveryPush(
+          :final pubKeyPrefix,
+          :final outPath,
+          :final outHashSize,
+        ):
           if (pubKeyPrefix.length >= 6 && outPath.isNotEmpty) {
             final prefixHex =
                 pubKeyPrefix
                     .sublist(0, 6)
                     .map((b) => b.toRadixString(16).padLeft(2, '0'))
                     .join();
-            final current = Map<String, List<int>>.from(
+            final current = Map<String, PathCacheEntry>.from(
               _ref.read(pathCacheProvider),
             );
-            current[prefixHex] = outPath;
+            current[prefixHex] = (hops: outPath, hashSize: outHashSize);
             _ref.read(pathCacheProvider.notifier).state = current;
           }
         case TraceDataPush(:final data):
           final contacts = _ref.read(contactsProvider);
-          final result = parseTraceDataPush(data, contacts);
+          final parsed = parseTraceDataPush(data, contacts);
+          TraceResult? result = parsed;
+          if (parsed != null) {
+            final pending = Map<int, TraceRequestContext>.from(
+              _ref.read(traceRequestContextProvider),
+            );
+            final ctx = pending.remove(parsed.tag);
+            if (ctx != null) {
+              _ref.read(traceRequestContextProvider.notifier).state = pending;
+              result = TraceResult(
+                tag: parsed.tag,
+                hops: parsed.hops,
+                finalSnrDb: parsed.finalSnrDb,
+                timestamp: parsed.timestamp,
+                targetName: ctx.contactName,
+                targetLatitude: ctx.latitude,
+                targetLongitude: ctx.longitude,
+              );
+            }
+          }
           if (result != null) {
             _ref.read(traceResultProvider.notifier).state = result;
             _ref.read(traceHistoryProvider.notifier).add(result);
@@ -1253,7 +1347,25 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
       (r) => r is OkResponse || r is ErrorResponse,
       timeout: const Duration(seconds: 5),
     );
-    return resp is OkResponse;
+    if (resp is! OkResponse) return false;
+
+    // The firmware applied the new identity in-memory immediately (no reboot).
+    // Re-send APP_START so the radio replies with a fresh SelfInfoResponse
+    // carrying the new public key, then re-sync contacts (the firmware called
+    // resetContacts() + loadContacts() internally after the key swap).
+    final selfResp = await _sendAndWait(
+      service,
+      () => service.requestSelfInfo(),
+      (r) => r is SelfInfoResponse,
+      timeout: const Duration(seconds: 5),
+    );
+    if (selfResp is SelfInfoResponse) {
+      _ref.read(selfInfoProvider.notifier).state = selfResp.info;
+      _ref.read(radioConfigProvider.notifier).state = selfResp.info.radioConfig;
+    }
+    // Re-sync contacts because the firmware invalidated its ECDH cache.
+    unawaited(service.requestContacts().catchError((_) {}));
+    return true;
   }
 }
 
