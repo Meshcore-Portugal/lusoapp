@@ -29,8 +29,8 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
-          java-version: '17'
-          distribution: 'adopt'
+          java-version: "17"
+          distribution: "temurin"
           cache: gradle
           cache-dependency-path: |
             android/**/*.gradle*
@@ -191,4 +191,5 @@ jobs:
             release-assets/*.apk
             release-assets/*.aab
             release-assets/*-web.zip
+
 # release-assets/*-ios.ipa
