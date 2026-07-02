@@ -46,6 +46,7 @@ final _lifecycleObserver = AppLifecycleObserver();
 
 class _McAppPtState extends ConsumerState<McAppPt> {
   ProviderSubscription<DeviceInfo?>? _deviceInfoSub;
+  ProviderSubscription<TransportState>? _connectionSub;
   bool _didShowPathHashMigrationModal = false;
   bool _didApplyPathHashMigration = false;
   bool _isStorageReady = false;
@@ -61,6 +62,7 @@ class _McAppPtState extends ConsumerState<McAppPt> {
   @override
   void dispose() {
     _deviceInfoSub?.close();
+    _connectionSub?.close();
     WidgetsBinding.instance.removeObserver(_lifecycleObserver);
     super.dispose();
   }
@@ -71,7 +73,21 @@ class _McAppPtState extends ConsumerState<McAppPt> {
       next,
     ) {
       _maybeShowPathHashMigrationNotice(next);
-      _maybeApplyPathHashMigration(next);
+      // Note: apply is NOT triggered here because deviceInfoProvider is
+      // populated during _fetchInitialData, before connectionProvider
+      // transitions to connected. The _connectionSub below handles that.
+    });
+
+    // Fires AFTER _fetchInitialData completes, when the radio service is
+    // fully ready to receive commands. This is the correct moment to apply
+    // the path-hash migration command.
+    _connectionSub = ref.listenManual<TransportState>(connectionProvider, (
+      previous,
+      next,
+    ) {
+      if (next == TransportState.connected) {
+        _maybeApplyPathHashMigration(ref.read(deviceInfoProvider));
+      }
     });
 
     // If the provider already has a value when the listener is attached,
@@ -95,67 +111,12 @@ class _McAppPtState extends ConsumerState<McAppPt> {
 
     _didShowPathHashMigrationModal = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Use the GoRouter navigator key — this context is always inside the
-      // Localizations / Navigator tree and is safe for showDialog.
-      final navContext = rootNavigatorKey.currentContext;
-      if (navContext == null) return;
-      final l10n = AppLocalizations.of(navContext);
-      final theme = Theme.of(navContext);
-      final colorScheme = theme.colorScheme;
-      showDialog<void>(
-        context: navContext,
-        barrierDismissible: true,
-        builder:
-            (ctx) => Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: colorScheme.primaryContainer,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.cell_tower_rounded,
-                        size: 34,
-                        color: colorScheme.onPrimaryContainer,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      l10n.pathHashMigrationNoticeTitle,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      l10n.pathHashMigrationNoticeBody,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        child: Text(l10n.commonOk),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+      _showMigrationOverlay(
+        icon: Icons.cell_tower_rounded,
+        iconBgFn: (cs) => cs.primaryContainer,
+        iconFgFn: (cs) => cs.onPrimaryContainer,
+        titleFn: (l10n) => l10n.pathHashMigrationNoticeTitle,
+        bodyFn: (l10n) => l10n.pathHashMigrationNoticeBody,
       );
     });
   }
@@ -276,77 +237,84 @@ class _McAppPtState extends ConsumerState<McAppPt> {
     // Only apply on or after July 2, 2026.
     if (DateTime.now().isBefore(DateTime(2026, 7, 2))) return;
 
-    _didApplyPathHashMigration = true;
-
-    // Send the command only when the radio is connected.
+    // Only send when the radio is actually connected. If not ready yet,
+    // return WITHOUT setting the flag so the next device-info update retries.
     final svc = ref.read(radioServiceProvider);
     final connected = ref.read(connectionProvider) == TransportState.connected;
-    if (svc != null && connected) {
-      svc.setPathHashMode(1).catchError((_) {});
+    if (svc == null || !connected) return;
+
+    // Mark done only after we are certain the command will be dispatched.
+    _didApplyPathHashMigration = true;
+    svc.setPathHashMode(1).catchError((_) {});
+
+    // Optimistically update deviceInfoProvider so all UI (e.g. the
+    // Experimental card in Radio Settings) reflects the new mode immediately.
+    final current = ref.read(deviceInfoProvider);
+    if (current != null) {
+      ref.read(deviceInfoProvider.notifier).state = DeviceInfo(
+        firmwareVersion: current.firmwareVersion,
+        deviceName: current.deviceName,
+        batteryMillivolts: current.batteryMillivolts,
+        storageUsed: current.storageUsed,
+        storageTotal: current.storageTotal,
+        maxContacts: current.maxContacts,
+        maxChannels: current.maxChannels,
+        blePin: current.blePin,
+        firmwareBuild: current.firmwareBuild,
+        model: current.model,
+        versionString: current.versionString,
+        clientRepeat: current.clientRepeat,
+        pathHashMode: 1,
+      );
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final navContext = rootNavigatorKey.currentContext;
-      if (navContext == null) return;
-      final l10n = AppLocalizations.of(navContext);
-      final theme = Theme.of(navContext);
-      final colorScheme = theme.colorScheme;
-      showDialog<void>(
-        context: navContext,
-        barrierDismissible: true,
-        builder:
-            (ctx) => Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: colorScheme.secondaryContainer,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.check_circle_rounded,
-                        size: 34,
-                        color: colorScheme.onSecondaryContainer,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      l10n.pathHashMigrationAppliedTitle,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      l10n.pathHashMigrationAppliedBody,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        child: Text(l10n.commonOk),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+      _showMigrationOverlay(
+        icon: Icons.check_circle_rounded,
+        iconBgFn: (cs) => cs.secondaryContainer,
+        iconFgFn: (cs) => cs.onSecondaryContainer,
+        titleFn: (l10n) => l10n.pathHashMigrationAppliedTitle,
+        bodyFn: (l10n) => l10n.pathHashMigrationAppliedBody,
       );
     });
+  }
+
+  /// Shows a modal dialog using GoRouter’s overlay directly via an
+  /// [OverlayEntry]. Dismissal calls [entry.remove()] — no Navigator.pop(),
+  /// no GoRouter route-delegate involvement, no ‘last page’ assertions.
+  void _showMigrationOverlay({
+    required IconData icon,
+    required Color Function(ColorScheme) iconBgFn,
+    required Color Function(ColorScheme) iconFgFn,
+    required String Function(AppLocalizations) titleFn,
+    required String Function(AppLocalizations) bodyFn,
+  }) {
+    final overlay = rootNavigatorKey.currentState?.overlay;
+    if (overlay == null || !overlay.mounted) return;
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (ctx) {
+        final l10n = AppLocalizations.of(ctx);
+        final colorScheme = Theme.of(ctx).colorScheme;
+        final textTheme = Theme.of(ctx).textTheme;
+        return _MigrationDialog(
+          icon: icon,
+          iconBg: iconBgFn(colorScheme),
+          iconFg: iconFgFn(colorScheme),
+          title: titleFn(l10n),
+          body: bodyFn(l10n),
+          okLabel: l10n.commonOk,
+          titleStyle: textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+          bodyStyle: textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+          onDismiss: () => entry.remove(),
+        );
+      },
+    );
+    overlay.insert(entry);
   }
 
   void _handleWidgetAction(WidgetAction action) {
@@ -472,6 +440,97 @@ class _McAppPtState extends ConsumerState<McAppPt> {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: router,
+    );
+  }
+}
+
+/// Overlay-based migration dialog. Shown via [OverlayEntry] so dismissal
+/// calls [onDismiss] (entry.remove()) and never touches Navigator.pop() or
+/// GoRouter\u2019s route delegate.
+class _MigrationDialog extends StatelessWidget {
+  const _MigrationDialog({
+    required this.icon,
+    required this.iconBg,
+    required this.iconFg,
+    required this.title,
+    required this.body,
+    required this.okLabel,
+    required this.onDismiss,
+    this.titleStyle,
+    this.bodyStyle,
+  });
+
+  final IconData icon;
+  final Color iconBg;
+  final Color iconFg;
+  final String title;
+  final String body;
+  final String okLabel;
+  final VoidCallback onDismiss;
+  final TextStyle? titleStyle;
+  final TextStyle? bodyStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (_, __) => onDismiss(),
+      child: Material(
+        color: Colors.transparent,
+        child: GestureDetector(
+          onTap: onDismiss,
+          child: Container(
+            color: Colors.black54,
+            alignment: Alignment.center,
+            child: GestureDetector(
+              onTap: () {}, // absorb taps on the card itself
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+                  decoration: BoxDecoration(
+                    color:
+                        Theme.of(context).dialogTheme.backgroundColor ??
+                        Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: iconBg,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(icon, size: 34, color: iconFg),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        title,
+                        style: titleStyle,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(body, style: bodyStyle, textAlign: TextAlign.center),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: onDismiss,
+                          child: Text(okLabel),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

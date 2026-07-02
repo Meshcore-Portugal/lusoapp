@@ -25,8 +25,6 @@ import 'apps/topology/topology_screen.dart';
 import 'apps/data_export/data_export_screen.dart';
 import 'screens/repeater_screen.dart';
 
-/// A key wired into GoRouter so other parts of the app (e.g. modal notices
-/// in main.dart) can obtain a valid in-tree Navigator context for showDialog.
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final routerProvider = Provider<GoRouter>((ref) {
