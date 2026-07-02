@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:equatable/equatable.dart';
@@ -61,6 +62,7 @@ class CannedMessage extends Equatable {
 }
 
 const _kStorageKey = 'canned_messages_v1';
+const _kLegacyStorageKey = 'canned_messages';
 
 /// Default seed library shipped on first launch — covers common ham/mesh use.
 List<CannedMessage> _defaultLibrary() => [
@@ -96,29 +98,52 @@ List<CannedMessage> _defaultLibrary() => [
 ];
 
 class CannedMessagesNotifier extends StateNotifier<List<CannedMessage>> {
-  CannedMessagesNotifier() : super(const []);
+  CannedMessagesNotifier() : super(const []) {
+    // Self-load so canned messages do not depend on the broader app startup
+    // sequence reaching the explicit load call.
+    unawaited(loadFromStorage());
+  }
+
+  bool _didLoadFromStorage = false;
 
   /// Load from storage; if nothing stored, seed with [_defaultLibrary].
   Future<void> loadFromStorage() async {
+    if (_didLoadFromStorage) return;
+    _didLoadFromStorage = true;
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_kStorageKey);
-      if (raw == null) {
+      final legacyRaw = prefs.getString(_kLegacyStorageKey);
+
+      // Prefer the current key but transparently migrate older installs.
+      final selectedRaw = raw ?? legacyRaw;
+
+      if (selectedRaw == null) {
         state = _defaultLibrary();
         await _persist();
         return;
       }
-      final decoded = jsonDecode(raw) as List;
+
+      final decoded = jsonDecode(selectedRaw) as List;
       final loaded =
           decoded
               .map((e) => CannedMessage.fromJson(e as Map<String, dynamic>))
               .toList();
+
       if (loaded.isEmpty) {
         state = _defaultLibrary();
         await _persist();
-        return;
+      } else {
+        state = loaded;
+        // Ensure migrated data always ends up in the current storage key.
+        if (raw == null) {
+          await _persist();
+        }
       }
-      state = loaded;
+
+      if (legacyRaw != null) {
+        await prefs.remove(_kLegacyStorageKey);
+      }
     } catch (_) {
       // Decoding failed (corrupt / incompatible data) — recover by seeding
       // defaults AND persisting them so the bad data is overwritten and future

@@ -132,6 +132,10 @@ class _McAppPtState extends ConsumerState<McAppPt> {
     // Restore persisted message paths so path details are available after reboot.
     await ref.read(packetHeardProvider.notifier).loadFromStorage();
 
+    // Restore canned quick-reply messages early so they are available even
+    // if a later startup step fails.
+    await ref.read(cannedMessagesProvider.notifier).loadFromStorage();
+
     // Restore the recent-devices list (most-recent first) for the
     // multi-radio quick-connect section.  loadRecentDevices() handles
     // one-time migration from the legacy single-device keys.
@@ -184,7 +188,6 @@ class _McAppPtState extends ConsumerState<McAppPt> {
       await ref.read(plan333EnabledProvider.notifier).loadFromStorage();
       await ref.read(plan333ConfigProvider.notifier).loadFromStorage();
       await ref.read(qslLogProvider.notifier).loadFromStorage();
-      await ref.read(cannedMessagesProvider.notifier).loadFromStorage();
       await ref.read(gpsSharingProvider.notifier).loadFromStorage();
 
       // Restore SOS destination/template settings.
