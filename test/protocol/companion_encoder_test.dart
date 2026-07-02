@@ -213,6 +213,30 @@ void main() {
       expect(text, 'Ola mundo');
     });
 
+    test(
+      'sendMessage length matches UTF-8 bytes for 1-byte and 2-byte chars',
+      () {
+        final prefix = Uint8List.fromList([1, 2, 3, 4, 5, 6]);
+        const msg = 'Ação útil';
+        final msgBytes = utf8.encode(msg);
+
+        final frame = CompanionEncoder.sendMessage(
+          prefix,
+          msg,
+          attempt: 1,
+          timestamp: 1700000000,
+        );
+
+        final wireLen = frame[1] | (frame[2] << 8);
+        expect(wireLen, frame.length - 3);
+        expect(frame[3], cmdSendMsg);
+        expect(frame[4], txtPlain);
+        // Payload layout: txt_type(1) + attempt(1) + ts(4) + recipient(6) + msg(N)
+        expect(wireLen, 1 + 1 + 1 + 4 + 6 + msgBytes.length);
+        expect(frame.sublist(16), msgBytes);
+      },
+    );
+
     test('sendChannelMessage encodes timestamp and text', () {
       final frame = CompanionEncoder.sendChannelMessage(
         5,

@@ -8,6 +8,8 @@
 /// These tests exercise [isMeshCoreAdvertisement] directly (using plain
 /// [Guid]/[String] values) so no platform channel or real BLE hardware is
 /// needed.
+library;
+
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lusoapp/transport/ble_transport.dart';
@@ -29,35 +31,32 @@ void main() {
 
     test('accepts device with NUS UUID among other service UUIDs', () {
       expect(
-        BleTransport.isMeshCoreAdvertisement(
-          [gapGuid, nusGuid],
-          'MultiServiceDevice',
-        ),
+        BleTransport.isMeshCoreAdvertisement([
+          gapGuid,
+          nusGuid,
+        ], 'MultiServiceDevice'),
         isTrue,
       );
     });
 
-    test('rejects device with only unrelated service UUIDs and generic name', () {
-      expect(
-        BleTransport.isMeshCoreAdvertisement([gapGuid], 'MyHeadphones'),
-        isFalse,
-      );
-    });
+    test(
+      'rejects device with only unrelated service UUIDs and generic name',
+      () {
+        expect(
+          BleTransport.isMeshCoreAdvertisement([gapGuid], 'MyHeadphones'),
+          isFalse,
+        );
+      },
+    );
   });
 
   group('BleTransport.isMeshCoreAdvertisement — name fallback', () {
     test('accepts device named "MeshCore-1A2B" even without service UUID', () {
-      expect(
-        BleTransport.isMeshCoreAdvertisement([], 'MeshCore-1A2B'),
-        isTrue,
-      );
+      expect(BleTransport.isMeshCoreAdvertisement([], 'MeshCore-1A2B'), isTrue);
     });
 
     test('accepts device with lowercase "meshcore" in name', () {
-      expect(
-        BleTransport.isMeshCoreAdvertisement([], 'meshcore-node'),
-        isTrue,
-      );
+      expect(BleTransport.isMeshCoreAdvertisement([], 'meshcore-node'), isTrue);
     });
 
     test('accepts device with mixed-case "MeshCore" substring', () {
@@ -72,10 +71,7 @@ void main() {
     });
 
     test('rejects device with unrelated name and no service UUIDs', () {
-      expect(
-        BleTransport.isMeshCoreAdvertisement([], 'JBL Headset'),
-        isFalse,
-      );
+      expect(BleTransport.isMeshCoreAdvertisement([], 'JBL Headset'), isFalse);
     });
   });
 }

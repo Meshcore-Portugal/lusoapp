@@ -131,9 +131,7 @@ class _BatteryCard extends StatelessWidget {
   }
 
   int _batteryPercent(int mv) {
-    // Approximate LiPo discharge curve: 4200mV=100%  3200mV=0%
-    final clamped = mv.clamp(3200, 4200);
-    return (((clamped - 3200) / 1000) * 100).round();
+    return batteryPercentFromMv(mv);
   }
 }
 

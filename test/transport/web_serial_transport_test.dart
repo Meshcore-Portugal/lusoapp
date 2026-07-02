@@ -16,6 +16,7 @@
 ///
 /// The tests below focus on the public API contract that is shared across all
 /// three implementations, plus the native-specific stubs for web-only methods.
+library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lusoapp/transport/serial_transport.dart';
@@ -59,7 +60,9 @@ void main() {
       /// Native serial transport wraps the port name string and defers
       /// existence checks until connect() is called. An invalid name is
       /// allowed here — connect() will fail, not fromDeviceId().
-      final transport = await SerialTransport.fromDeviceId('COM_DOES_NOT_EXIST');
+      final transport = await SerialTransport.fromDeviceId(
+        'COM_DOES_NOT_EXIST',
+      );
       expect(transport, isNotNull);
       // Clean up without connecting.
       await transport!.dispose();
@@ -95,13 +98,16 @@ void main() {
   // ---------------------------------------------------------------------------
 
   group('SerialTransport.listDevices', () {
-    test('returns a List (may be empty depending on test environment)', () async {
-      /// Does not assert a specific count — the number of serial ports on the
-      /// CI machine is unknown. We just verify the return type and that no
-      /// exception is thrown.
-      final devices = await SerialTransport.listDevices();
-      expect(devices, isA<List>());
-    });
+    test(
+      'returns a List (may be empty depending on test environment)',
+      () async {
+        /// Does not assert a specific count — the number of serial ports on the
+        /// CI machine is unknown. We just verify the return type and that no
+        /// exception is thrown.
+        final devices = await SerialTransport.listDevices();
+        expect(devices, isA<List>());
+      },
+    );
 
     test('every returned device has a non-empty id and name', () async {
       final devices = await SerialTransport.listDevices();

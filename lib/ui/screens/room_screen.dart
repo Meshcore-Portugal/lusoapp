@@ -174,18 +174,10 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
     _scrollToBottom();
   }
 
-  void _retryMessage(ChatMessage msg) {
-    final service = ref.read(radioServiceProvider);
-    if (service == null) return;
-    final updated = ref
+  Future<void> _retryMessage(ChatMessage msg) async {
+    await ref
         .read(messagesProvider.notifier)
-        .markMessageRetrying(msg);
-    if (updated == null) return;
-    service.sendPrivateMessage(
-      _keyPrefix6,
-      updated.text,
-      attempt: updated.retryCount,
-    );
+        .retryPrivateMessage(msg, forceFlood: true);
   }
 
   void _scrollToBottom() {

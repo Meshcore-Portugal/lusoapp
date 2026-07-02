@@ -78,6 +78,17 @@ class Plan333Config {
 // ---------------------------------------------------------------------------
 
 class Plan333AutoSendState {
+  factory Plan333AutoSendState.fromJson(Map<String, dynamic> json) {
+    final rawCount = (json['cq_sent_count'] as int?) ?? 0;
+    final epoch = json['last_cq_epoch_ms'] as int?;
+    return Plan333AutoSendState(
+      cqSentCount: rawCount.clamp(0, 3),
+      lastCqTime:
+          epoch == null ? null : DateTime.fromMillisecondsSinceEpoch(epoch),
+      aborted: (json['aborted'] as bool?) ?? false,
+    );
+  }
+
   const Plan333AutoSendState({
     this.cqSentCount = 0,
     this.lastCqTime,
@@ -103,6 +114,12 @@ class Plan333AutoSendState {
     lastCqTime: lastCqTime ?? this.lastCqTime,
     aborted: aborted ?? this.aborted,
   );
+
+  Map<String, dynamic> toJson() => {
+    'cq_sent_count': cqSentCount,
+    'last_cq_epoch_ms': lastCqTime?.millisecondsSinceEpoch,
+    'aborted': aborted,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -192,6 +209,22 @@ class Plan333Service {
     return d;
   }
 
+  /// Start time for the event cycle that should own [now].
+  ///
+  /// Returns the Saturday 21:00 that is currently active, or the next
+  /// upcoming Saturday 21:00 if [now] is before the weekly event starts.
+  static DateTime meshEventSessionStart(DateTime now) {
+    final daysUntilSaturday =
+        (DateTime.saturday - now.weekday + DateTime.daysPerWeek) %
+        DateTime.daysPerWeek;
+    final saturday = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).add(Duration(days: daysUntilSaturday));
+    return DateTime(saturday.year, saturday.month, saturday.day, _meshHour, 0);
+  }
+
   /// Minute within the 21:xx hour at which CQ [index] (0-based) is sent.
   /// Slots: 21:02, 21:22, 21:42 — 20 min apart, starting 2 min in.
   static int cqTargetMinute(int index) => 2 + index * 20;
@@ -257,6 +290,7 @@ class QslRecord {
     required this.hops,
     required this.location,
     required this.timestamp,
+    this.cqCount = 1,
     this.notes = '',
   });
 
@@ -265,6 +299,12 @@ class QslRecord {
     hops: normalizeHops((j['hops'] as int?) ?? 0),
     location: (j['location'] as String?) ?? '',
     timestamp: DateTime.fromMillisecondsSinceEpoch((j['ts'] as int?) ?? 0),
+    cqCount:
+        (() {
+          final rawCount = (j['cq_count'] as int?) ?? (j['cqCount'] as int?);
+          if (rawCount == null || rawCount < 1) return 1;
+          return rawCount > 3 ? 3 : rawCount;
+        })(),
     notes: (j['notes'] as String?) ?? '',
   );
 
@@ -287,8 +327,30 @@ class QslRecord {
   /// When the station was logged (local device time).
   final DateTime timestamp;
 
+  /// How many CQ messages were heard from this station during the event.
+  /// The MeshCore event expects up to 3 CQ messages.
+  final int cqCount;
+
   /// Optional free-form notes.
   final String notes;
+
+  QslRecord copyWith({
+    String? stationName,
+    int? hops,
+    String? location,
+    DateTime? timestamp,
+    int? cqCount,
+    String? notes,
+  }) => QslRecord(
+    stationName: stationName ?? this.stationName,
+    hops: hops ?? this.hops,
+    location: location ?? this.location,
+    timestamp: timestamp ?? this.timestamp,
+    cqCount: cqCount ?? this.cqCount,
+    notes: notes ?? this.notes,
+  );
+
+  bool get isComplete => cqCount >= 3;
 
   String get hopsLabel {
     final normalized = normalizeHops(hops);
@@ -300,6 +362,7 @@ class QslRecord {
     'hops': normalizeHops(hops),
     'location': location,
     'ts': timestamp.millisecondsSinceEpoch,
+    'cq_count': cqCount,
     'notes': notes,
   };
 }
@@ -315,8 +378,12 @@ final qslLogProvider = StateNotifierProvider<QslLogNotifier, List<QslRecord>>(
 class QslLogNotifier extends StateNotifier<List<QslRecord>> {
   QslLogNotifier() : super([]);
 
+  DateTime? _sessionStart;
+
   Future<void> loadFromStorage() async {
     final raw = await StorageService.instance.loadQslLog();
+    final storedSessionStart =
+        await StorageService.instance.loadQslLogSessionStart();
     if (raw == null) return;
     try {
       final list = jsonDecode(raw) as List<dynamic>;
@@ -325,10 +392,109 @@ class QslLogNotifier extends StateNotifier<List<QslRecord>> {
               .map((e) => QslRecord.fromJson(e as Map<String, dynamic>))
               .toList();
     } catch (_) {}
+
+    if (state.isEmpty) {
+      _sessionStart = null;
+      await StorageService.instance.saveQslLogSessionStart(null);
+      return;
+    }
+
+    _sessionStart =
+        storedSessionStart != null
+            ? DateTime.fromMillisecondsSinceEpoch(storedSessionStart)
+            : Plan333Service.meshEventSessionStart(state.first.timestamp);
+
+    await ensureCurrentSession(DateTime.now());
   }
 
-  Future<void> add(QslRecord record) async {
-    state = [record, ...state];
+  Future<void> ensureCurrentSession(DateTime now) async {
+    if (state.isEmpty) {
+      if (_sessionStart != null) {
+        _sessionStart = null;
+        await StorageService.instance.saveQslLogSessionStart(null);
+      }
+      return;
+    }
+
+    if (!Plan333Service.isMeshEventActive(now)) {
+      if (_sessionStart == null) {
+        _sessionStart = Plan333Service.meshEventSessionStart(
+          state.first.timestamp,
+        );
+        await StorageService.instance.saveQslLogSessionStart(
+          _sessionStart!.millisecondsSinceEpoch,
+        );
+      }
+      return;
+    }
+
+    final expectedSessionStart = Plan333Service.meshEventSessionStart(now);
+    final actualSessionStart =
+        _sessionStart ??
+        Plan333Service.meshEventSessionStart(state.first.timestamp);
+
+    if (actualSessionStart != expectedSessionStart) {
+      await clearAll();
+      return;
+    }
+
+    if (_sessionStart == null) {
+      _sessionStart = actualSessionStart;
+      await StorageService.instance.saveQslLogSessionStart(
+        actualSessionStart.millisecondsSinceEpoch,
+      );
+    }
+  }
+
+  Future<void> add(QslRecord record, {bool incrementCount = false}) async {
+    final stationName = record.stationName.trim();
+    if (stationName.isEmpty) return;
+
+    final index = state.indexWhere(
+      (r) => r.stationName.trim().toLowerCase() == stationName.toLowerCase(),
+    );
+
+    final nextCount =
+        incrementCount
+            ? (index >= 0
+                ? (state[index].cqCount < 3 ? state[index].cqCount + 1 : 3)
+                : 1)
+            : (record.cqCount < 1
+                ? 1
+                : (record.cqCount > 3 ? 3 : record.cqCount));
+
+    final updatedRecord = record.copyWith(cqCount: nextCount);
+
+    if (_sessionStart == null) {
+      _sessionStart = Plan333Service.meshEventSessionStart(
+        updatedRecord.timestamp,
+      );
+      await StorageService.instance.saveQslLogSessionStart(
+        _sessionStart!.millisecondsSinceEpoch,
+      );
+    }
+
+    if (index >= 0) {
+      final existing = state[index];
+      final next = [...state];
+      next[index] = existing.copyWith(
+        hops: updatedRecord.hops,
+        location:
+            updatedRecord.location.isNotEmpty
+                ? updatedRecord.location
+                : existing.location,
+        timestamp: updatedRecord.timestamp,
+        cqCount: nextCount,
+        notes:
+            updatedRecord.notes.isNotEmpty
+                ? updatedRecord.notes
+                : existing.notes,
+      );
+      state = [next[index], ...next..removeAt(index)];
+    } else {
+      state = [updatedRecord, ...state];
+    }
+
     await _persist();
   }
 
@@ -336,11 +502,17 @@ class QslLogNotifier extends StateNotifier<List<QslRecord>> {
     final next = [...state];
     next.removeAt(index);
     state = next;
+    if (next.isEmpty) {
+      _sessionStart = null;
+      await StorageService.instance.saveQslLogSessionStart(null);
+    }
     await _persist();
   }
 
   Future<void> clearAll() async {
     state = [];
+    _sessionStart = null;
+    await StorageService.instance.saveQslLogSessionStart(null);
     await _persist();
   }
 
@@ -427,14 +599,52 @@ final plan333AutoSendProvider =
 
 class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
   Plan333AutoSendNotifier(this._ref) : super(const Plan333AutoSendState()) {
-    // Poll every 30 s — lightweight, auto-send fires only once per slot.
-    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) => _tick());
+    unawaited(_init());
   }
 
   final Ref _ref;
   Timer? _pollTimer;
 
+  Future<void> _init() async {
+    await _restoreFromStorage();
+    _tick();
+    // Poll every 30 s — lightweight, auto-send fires only once per slot.
+    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) => _tick());
+  }
+
+  Future<void> _restoreFromStorage() async {
+    final raw = await StorageService.instance.loadPlan333AutoSendState();
+    if (raw == null) return;
+    try {
+      final restored = Plan333AutoSendState.fromJson(
+        jsonDecode(raw) as Map<String, dynamic>,
+      );
+
+      final now = DateTime.now();
+      if (Plan333Service.isMeshEventActive(now)) {
+        state = restored;
+      } else {
+        // Drop stale state from older event sessions.
+        await _persistState(const Plan333AutoSendState());
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _persistState(Plan333AutoSendState next) async {
+    await StorageService.instance.savePlan333AutoSendState(
+      jsonEncode(next.toJson()),
+    );
+  }
+
+  void _setState(Plan333AutoSendState next) {
+    state = next;
+    unawaited(_persistState(next));
+  }
+
   void _tick() {
+    unawaited(
+      _ref.read(qslLogProvider.notifier).ensureCurrentSession(DateTime.now()),
+    );
     _runAutomation(DateTime.now());
   }
 
@@ -448,8 +658,8 @@ class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
     // Reset session state when the Mesh event window closes.
     if (!allowOutsideEvent &&
         !Plan333Service.isMeshEventActive(now) &&
-        state.cqSentCount > 0) {
-      state = const Plan333AutoSendState();
+        (state.cqSentCount > 0 || state.aborted || state.lastCqTime != null)) {
+      _setState(const Plan333AutoSendState());
       return;
     }
 
@@ -485,12 +695,12 @@ class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
   /// The aborted flag is cleared automatically when the event window closes
   /// (next [_tick] after 22:00 on Saturday) or via [debugResetAutomationState].
   void abortSession() {
-    state = state.copyWith(aborted: true);
+    _setState(state.copyWith(aborted: true));
   }
 
   /// Debug helper: clear CQ session counters immediately.
   void debugResetAutomationState() {
-    state = const Plan333AutoSendState();
+    _setState(const Plan333AutoSendState());
   }
 
   /// Manually send one CQ (ignores auto-send flag, respects 3-message limit).
@@ -538,9 +748,11 @@ class Plan333AutoSendNotifier extends StateNotifier<Plan333AutoSendState> {
         );
     service.sendChannelMessage(channelIndex, msg, timestamp: ts);
 
-    state = state.copyWith(
-      cqSentCount: state.cqSentCount + 1,
-      lastCqTime: DateTime.now(),
+    _setState(
+      state.copyWith(
+        cqSentCount: state.cqSentCount + 1,
+        lastCqTime: DateTime.now(),
+      ),
     );
   }
 

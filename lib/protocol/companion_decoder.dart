@@ -284,7 +284,13 @@ class CompanionDecoder {
   /// Parse RESP_CODE_SENT (0x06): route_flag, expected_ack, est_timeout
   static SentResponse _parseSentResponse(Uint8List data) {
     final routeFlag = data.isNotEmpty ? data[0] : 0;
-    return SentResponse(routeFlag: routeFlag);
+    final expectedAck = data.length >= 5 ? _readUint32LE(data, 1) : 0;
+    final suggestedTimeoutMs = data.length >= 9 ? _readUint32LE(data, 5) : 0;
+    return SentResponse(
+      routeFlag: routeFlag,
+      expectedAck: expectedAck,
+      suggestedTimeoutMs: suggestedTimeoutMs,
+    );
   }
 
   static PrivateMessageResponse _parsePrivateMessageV3(Uint8List data) {
@@ -571,28 +577,58 @@ class CompanionDecoder {
   }
 
   static PathDiscoveryPush? _parsePathDiscovery(Uint8List data) {
-    // data layout: reserved(1), pub_key_prefix(6), out_path_len(1),
-    //              out_path(out_path_len*4), in_path_len(1), in_path(in_path_len*4)
+    // Firmware layout (MyMesh.cpp onContactPathRecv):
+    //   reserved(1), pub_key_prefix(6), out_path_len_byte(1),
+    //   out_path(hopCount * hashSize), in_path_len_byte(1),
+    //   in_path(hopCount * hashSize)
+    //
+    // path_len_byte encoding (Packet.h / Packet.cpp):
+    //   bits 0-5 = hop count
+    //   bits 6-7 = hash_size - 1  →  hash_size = (byte >> 6) + 1  (1, 2 or 3)
     if (data.length < 8) return null; // 1+6+1 minimum
     final pubKeyPrefix = Uint8List.fromList(data.sublist(1, 7));
-    final outPathLen = data[7];
-    var offset = 8;
-    final outPath = <int>[];
-    for (var i = 0; i < outPathLen && offset + 4 <= data.length; i++) {
-      outPath.add(_readUint32LE(data, offset));
-      offset += 4;
+
+    var offset = 7;
+
+    bool isReservedMode(int pathLenByte) => (pathLenByte >> 6) >= 3;
+
+    List<int> readHops(int pathLenByte) {
+      final hopCount = pathLenByte & 0x3F;
+      final hashSize = (pathLenByte >> 6) + 1; // 1, 2, or 3
+      final hops = <int>[];
+      for (var i = 0; i < hopCount && offset + hashSize <= data.length; i++) {
+        var val = 0;
+        for (var b = 0; b < hashSize; b++) {
+          val |= data[offset++] << (b * 8); // little-endian
+        }
+        hops.add(val);
+      }
+      return hops;
     }
+
+    int hashSizeOf(int pathLenByte) => (pathLenByte >> 6) + 1;
+
+    final outPathLenByte = data[offset++];
+    if (isReservedMode(outPathLenByte)) return null;
+    final outPath = readHops(outPathLenByte);
+    final outHashSize = hashSizeOf(outPathLenByte);
+
     if (offset >= data.length) {
-      return PathDiscoveryPush(pubKeyPrefix, outPath, const []);
+      return PathDiscoveryPush(pubKeyPrefix, outPath, outHashSize, const [], 1);
     }
-    final inPathLen = data[offset];
-    offset++;
-    final inPath = <int>[];
-    for (var i = 0; i < inPathLen && offset + 4 <= data.length; i++) {
-      inPath.add(_readUint32LE(data, offset));
-      offset += 4;
-    }
-    return PathDiscoveryPush(pubKeyPrefix, outPath, inPath);
+
+    final inPathLenByte = data[offset++];
+    if (isReservedMode(inPathLenByte)) return null;
+    final inPath = readHops(inPathLenByte);
+    final inHashSize = hashSizeOf(inPathLenByte);
+
+    return PathDiscoveryPush(
+      pubKeyPrefix,
+      outPath,
+      outHashSize,
+      inPath,
+      inHashSize,
+    );
   }
 
   static ControlDataPush? _parseControlData(Uint8List data) {

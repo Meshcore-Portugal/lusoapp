@@ -7,6 +7,7 @@ import '../../../protocol/cayenne_lpp.dart';
 import '../../../protocol/companion_decoder.dart';
 import '../../../l10n/l10n.dart';
 import '../../../providers/radio_providers.dart';
+import '../../../utils/battery_utils.dart';
 
 part 'parts/telemetry_battery_card.dart';
 part 'parts/telemetry_network_card.dart';
@@ -149,4 +150,3 @@ class _TelemetryScreenState extends ConsumerState<TelemetryScreen> {
     );
   }
 }
-

@@ -27,6 +27,42 @@ part 'parts/settings_sos.dart';
 part 'parts/settings_gps_sharing.dart';
 part 'parts/settings_notifications.dart';
 part 'parts/settings_keybackup.dart';
+part 'parts/settings_prune_config.dart';
+
+String _sanitizeUtf16Ui(String s) {
+  for (var i = 0; i < s.length; i++) {
+    final c = s.codeUnitAt(i);
+    if (c >= 0xD800 && c <= 0xDFFF) {
+      final buf = StringBuffer();
+      for (var j = 0; j < s.length; j++) {
+        final u = s.codeUnitAt(j);
+        if (u >= 0xD800 && u <= 0xDBFF) {
+          if (j + 1 < s.length) {
+            final u2 = s.codeUnitAt(j + 1);
+            if (u2 >= 0xDC00 && u2 <= 0xDFFF) {
+              buf.write(s[j]);
+              buf.write(s[j + 1]);
+              j++;
+              continue;
+            }
+          }
+          buf.writeCharCode(0xFFFD);
+        } else if (u >= 0xDC00 && u <= 0xDFFF) {
+          buf.writeCharCode(0xFFFD);
+        } else {
+          buf.write(s[j]);
+        }
+      }
+      return buf.toString();
+    }
+  }
+  return s;
+}
+
+String _safeUiText(String? value, {required String fallback}) {
+  final sanitized = _sanitizeUtf16Ui(value ?? '').trim();
+  return sanitized.isEmpty ? fallback : sanitized;
+}
 
 /// App settings screen.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -81,7 +117,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: 12),
                   ListTile(
                     title: Text(context.l10n.commonName),
-                    subtitle: Text(selfInfo?.name ?? 'Não conectado'),
+                    subtitle: Text(
+                      _safeUiText(selfInfo?.name, fallback: 'Não conectado'),
+                    ),
                     trailing: const Icon(Icons.edit),
                     onTap: () => _editName(context, ref),
                   ),
@@ -109,9 +147,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   .join();
                           Clipboard.setData(ClipboardData(text: hex));
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Chave pública copiada'),
-                              duration: Duration(seconds: 2),
+                            SnackBar(
+                              content: Text(
+                                context.l10n.settingsPublicKeyCopied,
+                              ),
+                              duration: const Duration(seconds: 2),
                             ),
                           );
                         },
@@ -200,9 +240,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           child: OutlinedButton.icon(
                             onPressed: () {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
+                                SnackBar(
                                   content: Text(
-                                    'Shutdown não disponível neste firmware',
+                                    context.l10n.settingsShutdownUnavailable,
                                   ),
                                 ),
                               );
@@ -240,6 +280,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const _GpsSharingCard(),
           const SizedBox(height: 16),
 
+          // Prune configuration
+          const _PruneConfigCard(),
+          const SizedBox(height: 16),
+
           // About
           Card(
             child: Padding(
@@ -260,10 +304,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  const ListTile(
-                    title: Text('LusoAPP'),
+                  ListTile(
+                    title: Text(context.l10n.settingsAppName),
                     subtitle: Text(
-                      'MeshCore Portugal\nCódigo fonte inicial criado por\nPaulo Pereira aka GZ7d0',
+                      '${context.l10n.settingsAppSubtitle}\n${context.l10n.settingsCredit}',
                     ),
                   ),
                   ListTile(
@@ -300,9 +344,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _confirmAndReboot(BuildContext context) async {
     final service = ref.read(radioServiceProvider);
     if (service == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Rádio não ligado')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.commonRadioDisconnected)),
+      );
       return;
     }
 
@@ -351,7 +395,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('O meu QR Code'),
+            title: Text(context.l10n.settingsOwnQrCodeTitle),
             content: SizedBox(
               width: 260,
               child: Column(
@@ -369,7 +413,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Tipo: Companheiro',
+                    context.l10n.contactsTypeCompanion,
                     style: Theme.of(ctx).textTheme.bodySmall,
                   ),
                 ],
@@ -394,12 +438,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Alterar Nome'),
+            title: Text(context.l10n.settingsEditNameTitle),
             content: TextField(
               controller: controller,
-              decoration: const InputDecoration(
-                labelText: 'Nome do no',
-                hintText: 'Ex: CT1XXX-MC',
+              decoration: InputDecoration(
+                labelText: context.l10n.settingsNodeNameLabel,
+                hintText: context.l10n.settingsNodeNameHint,
               ),
               maxLength: 32,
             ),

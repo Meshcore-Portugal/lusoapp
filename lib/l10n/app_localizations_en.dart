@@ -278,6 +278,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonOk => 'Ok';
 
   @override
+  String get pathHashMigrationNoticeTitle => 'Network notice';
+
+  @override
+  String get pathHashMigrationNoticeBody =>
+      'The network will change to 2-byte path hash mode after 2/7/2026 (July 2nd). The app will automatically configure your radio on that date.';
+
+  @override
+  String get pathHashMigrationAppliedTitle => 'Network updated';
+
+  @override
+  String get pathHashMigrationAppliedBody =>
+      'Your radio has been automatically switched to 2-byte path hash mode as of 2/7/2026.';
+
+  @override
   String get commonLoading => 'Loading...';
 
   @override
@@ -314,13 +328,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonMessageCopied => 'Message copied';
 
   @override
-  String get commonSent => 'Sent';
+  String get commonSent => 'Transmitted';
 
   @override
   String get commonSentByMe => 'Me';
 
   @override
   String get commonPropagating => 'Propagating...';
+
+  @override
+  String get chatBadgePropagatingTooltip => 'Waiting for a repeater echo...';
+
+  @override
+  String get chatBadgeTransmittedTooltip =>
+      'Transmitted — no repeater echo received';
+
+  @override
+  String chatBadgeHeardTooltip(int count) {
+    return 'Heard by $count repeater(s)';
+  }
 
   @override
   String get commonConnecting => 'Connecting...';
@@ -684,6 +710,86 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSosUnnamedChannel => '(unnamed)';
 
   @override
+  String get settingsSosHoldDuration => 'Hold to send (seconds)';
+
+  @override
+  String get settingsSosHoldDurationDesc =>
+      'Hold the SOS button for this long before sending. Prevents accidental sends.';
+
+  @override
+  String get settingsSosHoldToSend => 'Hold to send SOS';
+
+  @override
+  String get cannedMessagesSosHint =>
+      'Hold the SOS chip to send via configured settings';
+
+  @override
+  String get settingsPruneTitle => 'Contact Cleanup';
+
+  @override
+  String get settingsPruneDesc =>
+      'Remove inactive contacts from the radio memory';
+
+  @override
+  String get settingsPruneDaysLabel => 'Inactivity Days';
+
+  @override
+  String get settingsPruneDaysDesc =>
+      'Contacts with no contact for more than X days will be removed';
+
+  @override
+  String get settingsPruneDaysUnit => 'days';
+
+  @override
+  String get settingsPruneTypesTitle => 'Contact Types to Remove';
+
+  @override
+  String get settingsPruneChatsTitle => 'Chats / Personal';
+
+  @override
+  String get settingsPruneChatsDesc => 'Remove chat contacts (0x01)';
+
+  @override
+  String get settingsPruneRepeatersTitle => 'Repeaters';
+
+  @override
+  String get settingsPruneRepeatersDesc => 'Remove repeater contacts (0x02)';
+
+  @override
+  String get settingsPruneRoomsTitle => 'Rooms';
+
+  @override
+  String get settingsPruneRoomsDesc => 'Remove room contacts (0x03)';
+
+  @override
+  String get settingsPruneSensorsTitle => 'Sensors';
+
+  @override
+  String get settingsPruneSensorsDesc => 'Remove sensor contacts (0x04)';
+
+  @override
+  String get settingsPruneRestoreDefaults => 'Restore Defaults';
+
+  @override
+  String get settingsPublicKeyCopied => 'Public key copied';
+
+  @override
+  String get settingsShutdownUnavailable =>
+      'Shutdown is not available on this firmware';
+
+  @override
+  String get settingsOwnQrCodeTitle => 'My QR Code';
+
+  @override
+  String get settingsEditNameTitle => 'Edit Name';
+
+  @override
+  String get settingsNodeNameLabel => 'Node name';
+
+  @override
+  String get settingsNodeNameHint => 'Ex: CT1XXX-MC';
+
+  @override
   String get settingsPrivateKeyCopy => 'Private Key Backup';
 
   @override
@@ -710,16 +816,62 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsRestorePrivateKeyContent =>
-      'The radio will restart automatically after restoration. Proceed?';
+      'This will replace the radio\'s current private key. The new identity is applied immediately — the public key in the app will be updated.\n\nAre you sure?';
 
   @override
   String get settingsDeleteBackupTitle => 'Delete backup';
 
   @override
-  String get settingsKeySavedSuccess => 'Private key copy saved successfully';
+  String get settingsKeySavedSuccess => 'Private key saved successfully.';
 
   @override
-  String get settingsKeyImportedSuccess => 'Key imported successfully';
+  String get settingsKeyImportedSuccess =>
+      'Key restored successfully. Public key updated.';
+
+  @override
+  String get settingsKeyExportFailed =>
+      'Export failed. Firmware may not have support enabled.';
+
+  @override
+  String get settingsKeyRestoreFailed =>
+      'Restore failed. Firmware may not have support enabled.';
+
+  @override
+  String get settingsDeleteBackupContent =>
+      'The private key backup stored on this device will be deleted. The radio is not affected.';
+
+  @override
+  String get settingsKeyCopied => 'Private key copied';
+
+  @override
+  String get settingsKeyCopySaved => 'Copy saved on this device.';
+
+  @override
+  String get settingsCopyKeyTooltip => 'Copy full key';
+
+  @override
+  String get settingsKeyConnectToBackup =>
+      'Connect to the radio to back up the key.';
+
+  @override
+  String get settingsKeyShareSubject => 'MeshCore — private key backup';
+
+  @override
+  String get settingsPasteKeyTitle => 'Paste private key';
+
+  @override
+  String get settingsPasteKeyHint =>
+      'Paste the private key from a previous backup (128 hex characters).';
+
+  @override
+  String get settingsKeyHexLabel => 'Private key (hex)';
+
+  @override
+  String get settingsKeyInvalidHex =>
+      'Invalid key — must be exactly 128 hexadecimal characters.';
+
+  @override
+  String get commonContinue => 'Continue';
 
   @override
   String get settingsAbout => 'About';
@@ -775,6 +927,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get contactsAdvertFlood => 'Advert · Flood';
+
+  @override
+  String get contactsAdvertSentZeroHop => 'Zero Hop advert sent';
+
+  @override
+  String get contactsAdvertSentFlood => 'Flood advert sent';
 
   @override
   String get contactsSort => 'Sort';
@@ -1284,13 +1442,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatYourRadio => 'Your radio';
 
   @override
+  String get chatLastRepeater => 'Last repeater';
+
+  @override
   String get chatYouSent => 'You sent the message';
+
+  @override
+  String get chatSentMessage => 'Sent the message';
 
   @override
   String get chatReceived => 'Received the message';
 
   @override
   String get chatHopLabel => 'Hop';
+
+  @override
+  String get chatHopOrderFarthest => 'farthest';
 
   @override
   String get chatRepeated => 'Repeated';
@@ -1437,6 +1604,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get connectLastFailTitle => 'Failed to connect to last device';
+
+  @override
+  String get connectCancelledMessage => 'Connection to radio cancelled';
 
   @override
   String get discoverTitle => 'Discover';

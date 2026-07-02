@@ -11,6 +11,43 @@ import 'win_ble_bridge.dart';
 
 final _log = Logger(printer: SimplePrinter(printTime: false));
 
+String _sanitizeUtf16(String s) {
+  for (var i = 0; i < s.length; i++) {
+    final c = s.codeUnitAt(i);
+    if (c >= 0xD800 && c <= 0xDFFF) {
+      final buf = StringBuffer();
+      for (var j = 0; j < s.length; j++) {
+        final u = s.codeUnitAt(j);
+        if (u >= 0xD800 && u <= 0xDBFF) {
+          if (j + 1 < s.length) {
+            final u2 = s.codeUnitAt(j + 1);
+            if (u2 >= 0xDC00 && u2 <= 0xDFFF) {
+              buf.write(s[j]);
+              buf.write(s[j + 1]);
+              j++;
+              continue;
+            }
+          }
+          buf.writeCharCode(0xFFFD);
+        } else if (u >= 0xDC00 && u <= 0xDFFF) {
+          buf.writeCharCode(0xFFFD);
+        } else {
+          buf.write(s[j]);
+        }
+      }
+      return buf.toString();
+    }
+  }
+  return s;
+}
+
+String _safeLowerTrim(String s) => _sanitizeUtf16(s).toLowerCase().trim();
+
+String _safeDeviceName(String? name, {required String fallback}) {
+  final sanitized = _sanitizeUtf16(name ?? '').trim();
+  return sanitized.isEmpty ? fallback : sanitized;
+}
+
 /// Nordic UART Service UUIDs used by MeshCore BLE radios.
 class BleUuids {
   static final service = Guid('6E400001-B5A3-F393-E0A9-E50E24DCCA9E');
@@ -36,7 +73,8 @@ class BleTransport implements RadioTransport {
   bool _userDisconnected = false;
 
   @override
-  String get displayName => 'BLE: ${_device.platformName}';
+  String get displayName =>
+      'BLE: ${_safeDeviceName(_device.platformName, fallback: _device.remoteId.str)}';
 
   @override
   bool get isConnected => _connected;
@@ -54,7 +92,9 @@ class BleTransport implements RadioTransport {
   Future<bool> connect() async {
     _userDisconnected = false;
     try {
-      _log.i('BLE connecting to ${_device.platformName} (web=$kIsWeb)');
+      _log.i(
+        'BLE connecting to ${_safeDeviceName(_device.platformName, fallback: _device.remoteId.str)} (web=$kIsWeb)',
+      );
 
       // flutter_blue_plus_windows (WinBle.connect) ignores the timeout
       // parameter entirely — the underlying WinRT call has no timeout guard.
@@ -118,7 +158,9 @@ class BleTransport implements RadioTransport {
       await _enableNotifications(_txChar!);
 
       _connected = true;
-      _log.i('BLE connected: ${_device.platformName}');
+      _log.i(
+        'BLE connected: ${_safeDeviceName(_device.platformName, fallback: _device.remoteId.str)}',
+      );
 
       // Monitor for unexpected disconnects (not triggered by dispose/disconnect).
       _connStateSub = _device.connectionState.listen((s) {
@@ -248,25 +290,27 @@ class BleTransport implements RadioTransport {
     String deviceName,
   ) {
     if (serviceUuids.contains(BleUuids.service)) return true;
-    return deviceName.toLowerCase().contains('meshcore');
+    return _safeLowerTrim(deviceName).contains('meshcore');
   }
 
   /// Platform scan inclusion rule used by the native listener.
   /// We keep the same MeshCore filter on Android and iOS to avoid flooding
   /// the list with unrelated BLE devices.
   static bool _shouldIncludeScanResult(ScanResult r) {
-    final advName = r.advertisementData.advName.toLowerCase().trim();
-    final platformName = r.device.platformName.toLowerCase().trim();
+    final advName = _safeLowerTrim(r.advertisementData.advName);
+    final platformName = _safeLowerTrim(r.device.platformName);
     return advName.startsWith('meshcore') ||
         platformName.startsWith('meshcore');
   }
 
   static String _displayNameForScanResult(ScanResult r) {
-    if (r.advertisementData.advName.isNotEmpty) {
-      return r.advertisementData.advName;
+    final advName = _safeDeviceName(r.advertisementData.advName, fallback: '');
+    if (advName.isNotEmpty) {
+      return advName;
     }
-    if (r.device.platformName.isNotEmpty) {
-      return r.device.platformName;
+    final platformName = _safeDeviceName(r.device.platformName, fallback: '');
+    if (platformName.isNotEmpty) {
+      return platformName;
     }
     return 'BLE (${r.device.remoteId.str.substring(0, 8)})';
   }
@@ -298,12 +342,12 @@ class BleTransport implements RadioTransport {
       if (!kIsWeb && Platform.isAndroid) {
         void addKnownAndroidDevice(BluetoothDevice d) {
           final id = d.remoteId.str;
-          final name = d.platformName;
+          final name = _safeDeviceName(d.platformName, fallback: id);
           if (seen.contains(id) || controller.isClosed) return;
 
           // Only include known devices whose platform name starts with
           // "meshcore" as requested by the app UX requirement.
-          if (name.toLowerCase().trim().startsWith('meshcore')) {
+          if (_safeLowerTrim(name).startsWith('meshcore')) {
             seen.add(id);
             controller.add(
               RadioDevice(id: id, name: name, type: RadioDeviceType.ble),

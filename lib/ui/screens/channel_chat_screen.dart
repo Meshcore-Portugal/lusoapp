@@ -46,6 +46,12 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    // Register as the active channel so incoming messages on this channel
+    // do not produce badge increments or OS notifications while we are here.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(activeChannelIndexProvider.notifier).state = widget.channelIndex;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       // Capture unread count BEFORE clearing it.
@@ -87,6 +93,14 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
     _atBottom = true;
     _firstUnreadIndex = -1;
 
+    // Re-register as the new active channel after this frame to avoid
+    // provider writes inside lifecycle methods.
+    final container = ProviderScope.containerOf(context, listen: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      container.read(activeChannelIndexProvider.notifier).state =
+          widget.channelIndex;
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       _unreadOnOpen = ref
@@ -125,6 +139,17 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
     if (atBottom && _firstUnreadIndex != -1) {
       setState(() => _firstUnreadIndex = -1);
     }
+  }
+
+  @override
+  void deactivate() {
+    // Clear active-channel registration after this frame to avoid provider
+    // writes while the widget tree is still building/deactivating.
+    final container = ProviderScope.containerOf(context, listen: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      container.read(activeChannelIndexProvider.notifier).state = -1;
+    });
+    super.deactivate();
   }
 
   @override
@@ -439,77 +464,83 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
           ),
         ),
 
-        // Messages
+        // Messages — tapping the background dismisses the keyboard without
+        // navigating away (iOS back-button behaviour workaround).
         Expanded(
-          child: Stack(
-            children: [
-              channelMessages.isEmpty
-                  ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.forum_outlined,
-                          size: 64,
-                          color: theme.colorScheme.onSurface.withAlpha(60),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          context.l10n.chatNoMessages,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: theme.colorScheme.onSurface.withAlpha(120),
+          child: GestureDetector(
+            onTap: () => FocusScope.of(context).unfocus(),
+            behavior: HitTestBehavior.translucent,
+            child: Stack(
+              children: [
+                channelMessages.isEmpty
+                    ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.forum_outlined,
+                            size: 64,
+                            color: theme.colorScheme.onSurface.withAlpha(60),
                           ),
-                        ),
-                      ],
-                    ),
-                  )
-                  : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(8),
-                    // Extra item slot for the unread divider when active.
-                    itemCount:
-                        channelMessages.length +
-                        (_firstUnreadIndex >= 0 ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      // If the divider is active and we hit its slot, render it.
-                      if (_firstUnreadIndex >= 0 &&
-                          index == _firstUnreadIndex) {
-                        return _UnreadDivider(
-                          key: _unreadDividerKey,
-                          onDismiss:
-                              () => setState(() => _firstUnreadIndex = -1),
+                          const SizedBox(height: 16),
+                          Text(
+                            context.l10n.chatNoMessages,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: theme.colorScheme.onSurface.withAlpha(120),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                    : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(8),
+                      // Extra item slot for the unread divider when active.
+                      itemCount:
+                          channelMessages.length +
+                          (_firstUnreadIndex >= 0 ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        // If the divider is active and we hit its slot, render it.
+                        if (_firstUnreadIndex >= 0 &&
+                            index == _firstUnreadIndex) {
+                          return _UnreadDivider(
+                            key: _unreadDividerKey,
+                            onDismiss:
+                                () => setState(() => _firstUnreadIndex = -1),
+                          );
+                        }
+                        // Shift real message index down by 1 after the divider.
+                        final msgIndex =
+                            (_firstUnreadIndex >= 0 &&
+                                    index > _firstUnreadIndex)
+                                ? index - 1
+                                : index;
+                        final msg = channelMessages[msgIndex];
+                        return _MessageBubble(
+                          message: msg,
+                          selfName: selfName,
+                          selfMentionColor: selfMentionColor,
+                          otherMentionColor: otherMentionColor,
+                          onReply:
+                              msg.isOutgoing
+                                  ? null
+                                  : () => setState(() => _replyingTo = msg),
                         );
-                      }
-                      // Shift real message index down by 1 after the divider.
-                      final msgIndex =
-                          (_firstUnreadIndex >= 0 && index > _firstUnreadIndex)
-                              ? index - 1
-                              : index;
-                      final msg = channelMessages[msgIndex];
-                      return _MessageBubble(
-                        message: msg,
-                        selfName: selfName,
-                        selfMentionColor: selfMentionColor,
-                        otherMentionColor: otherMentionColor,
-                        onReply:
-                            msg.isOutgoing
-                                ? null
-                                : () => setState(() => _replyingTo = msg),
-                      );
-                    },
+                      },
+                    ),
+                if (!_atBottom)
+                  Positioned(
+                    bottom: 8,
+                    right: 12,
+                    child: FloatingActionButton.small(
+                      heroTag: 'scroll_bottom_ch${widget.channelIndex}',
+                      onPressed:
+                          () => _scrollToBottom(animate: true, attempts: 5),
+                      child: const Icon(Icons.keyboard_double_arrow_down),
+                    ),
                   ),
-              if (!_atBottom)
-                Positioned(
-                  bottom: 8,
-                  right: 12,
-                  child: FloatingActionButton.small(
-                    heroTag: 'scroll_bottom_ch${widget.channelIndex}',
-                    onPressed:
-                        () => _scrollToBottom(animate: true, attempts: 5),
-                    child: const Icon(Icons.keyboard_double_arrow_down),
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
 
@@ -529,10 +560,6 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
                         prefixIcon: const Icon(Icons.wifi_tethering_outlined),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(18),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
                         ),
                       ),
                       textInputAction: TextInputAction.send,
@@ -622,8 +649,8 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
 /// Small pill badge shown below outgoing channel message bubbles indicating
 /// how many repeaters have echoed the message back to the radio.
 ///
-/// - count == 0, within 10 s of first render: amber pill "A propagar..."
-/// - count == 0, 10 s elapsed with no repeater heard: blue pill "Enviada"
+/// - count == 0, within 20 s of first render: amber pill "A propagar..."
+/// - count == 0, 20 s elapsed with no repeater heard: grey pill "Transmitida"
 /// - count  > 0: green pill with a broadcast icon + count
 class _HeardBadge extends StatefulWidget {
   const _HeardBadge({
@@ -651,16 +678,17 @@ class _HeardBadgeState extends State<_HeardBadge> {
   @override
   void initState() {
     super.initState();
-    // Start the timer — if no repeater is heard within 10 s we show "Enviada".
+    // Start the timer — if no repeater is heard within 20 s we show
+    // "Transmitida" (transmitted, no echo confirmed).
     // Use the message timestamp to calculate how much time has already elapsed
     // so that re-opening the channel doesn't replay the animation for old
     // messages that already timed out.
     if (widget.count == 0) {
-      const kTimeout = Duration(seconds: 10);
+      const kTimeout = Duration(seconds: 20);
       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       final elapsedMs = (now - widget.timestamp) * 1000;
       if (elapsedMs >= kTimeout.inMilliseconds) {
-        // Already past the threshold — show "Enviada" immediately.
+        // Already past the threshold — show "Transmitida" immediately.
         _timedOut = true;
       } else {
         final remaining = kTimeout - Duration(milliseconds: elapsedMs);
@@ -690,47 +718,59 @@ class _HeardBadgeState extends State<_HeardBadge> {
   @override
   Widget build(BuildContext context) {
     final heard = widget.count > 0;
-    final showSent = !heard && _timedOut;
+    final showTransmitted = !heard && _timedOut;
     final bgColor =
         heard
             ? Colors.green.shade700.withAlpha(200)
-            : showSent
-            ? Colors.blue.shade700.withAlpha(200)
+            : showTransmitted
+            ? Colors.grey.shade600.withAlpha(180)
             : Colors.amber.shade800.withAlpha(180);
     const fgColor = Colors.white;
     final icon =
         heard
             ? Icons.cell_tower
-            : showSent
-            ? Icons.check_circle_outline
+            : showTransmitted
+            ? Icons.send
             : Icons.hourglass_empty;
     final label =
         heard
             ? '${widget.count} Repetidor${widget.count > 1 ? 'es' : ''}'
-            : showSent
+            : showTransmitted
             ? context.l10n.commonSent
             : context.l10n.commonPropagating;
+
+    final tooltipMsg =
+        heard
+            ? context.l10n.chatBadgeHeardTooltip(widget.count)
+            : showTransmitted
+            ? context.l10n.chatBadgeTransmittedTooltip
+            : context.l10n.chatBadgePropagatingTooltip;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 11, color: fgColor),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: (widget.theme.textTheme.labelSmall ?? const TextStyle())
-                    .copyWith(color: fgColor, fontSize: 10),
-              ),
-            ],
+        Tooltip(
+          message: tooltipMsg,
+          preferBelow: false,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 11, color: fgColor),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: (widget.theme.textTheme.labelSmall ??
+                          const TextStyle())
+                      .copyWith(color: fgColor, fontSize: 10),
+                ),
+              ],
+            ),
           ),
         ),
       ],

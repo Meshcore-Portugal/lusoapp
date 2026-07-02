@@ -17,8 +17,15 @@ class CompanionEncoder {
     }
     final buf = BytesBuilder();
     buf.addByte(dirAppToRadio);
-    buf.addByte(totalLen & 0xFF);
-    buf.addByte((totalLen >> 8) & 0xFF);
+    final lenLsb = totalLen & 0xFF;
+    final lenMsb = (totalLen >> 8) & 0xFF;
+    // Guard against accidental framing regressions when splitting
+    // the length into 1-byte LSB/MSB wire fields.
+    if ((lenLsb | (lenMsb << 8)) != totalLen) {
+      throw StateError('Invalid frame length encoding for $totalLen bytes');
+    }
+    buf.addByte(lenLsb);
+    buf.addByte(lenMsb);
     buf.addByte(command);
     buf.add(payloadData);
     return buf.toBytes();

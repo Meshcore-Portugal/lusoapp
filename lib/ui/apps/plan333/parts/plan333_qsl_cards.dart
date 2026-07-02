@@ -86,7 +86,9 @@ class _QslCard extends ConsumerWidget {
                           pathLen: 3,
                         );
                         if (r != null) {
-                          ref.read(qslLogProvider.notifier).add(r);
+                          ref
+                              .read(qslLogProvider.notifier)
+                              .add(r, incrementCount: true);
                         }
                       },
                     ),
@@ -184,7 +186,9 @@ class _QslCard extends ConsumerWidget {
       final r = log[i];
       final loc = r.location.isNotEmpty ? ' | ${r.location}' : '';
       final notes = r.notes.isNotEmpty ? ' (${r.notes})' : '';
-      lines.writeln('${i + 1}. ${r.stationName} | ${r.hopsLabel}$loc$notes');
+      lines.writeln(
+        '${i + 1}. ${r.stationName} | ${r.hopsLabel} | CQ ${r.cqCount}/3$loc$notes',
+      );
     }
     lines.writeln('73! de $station');
     lines.write('#MeshCore #Plano333');
@@ -210,6 +214,7 @@ class _QslRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = this.theme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -229,15 +234,23 @@ class _QslRow extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              const SizedBox(height: 2),
               Text(
                 [
                   record.hopsLabel,
                   if (record.location.isNotEmpty) record.location,
                   if (record.notes.isNotEmpty) record.notes,
                 ].join('  ·  '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
+              ),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: _CqProgressBadge(count: record.cqCount),
               ),
             ],
           ),
@@ -251,6 +264,64 @@ class _QslRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _CqProgressBadge extends StatelessWidget {
+  const _CqProgressBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final activeColor = count >= 3 ? const Color(0xFF00E676) : AppTheme.primary;
+    final inactiveColor = theme.colorScheme.onSurfaceVariant.withAlpha(120);
+
+    return Semantics(
+      label: 'CQ ${count.clamp(0, 3)}/3',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: activeColor.withAlpha(18),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: activeColor.withAlpha(90)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'CQ',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: activeColor,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.4,
+              ),
+            ),
+            const SizedBox(width: 6),
+            ...List.generate(3, (index) {
+              final active = index < count;
+              return Padding(
+                padding: const EdgeInsets.only(right: 3),
+                child: Icon(
+                  Icons.circle,
+                  size: 8,
+                  color: active ? activeColor : inactiveColor,
+                ),
+              );
+            }),
+            const SizedBox(width: 4),
+            Text(
+              '${count.clamp(0, 3)}/3',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: activeColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

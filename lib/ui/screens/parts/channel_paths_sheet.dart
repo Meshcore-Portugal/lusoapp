@@ -203,6 +203,7 @@ class _MessagePathsSheet extends ConsumerWidget {
     final selfPoint = _gpsPoint(selfInfo?.latitude, selfInfo?.longitude);
 
     final heardTimes = paths.length;
+    final l10n = context.l10n;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.55,
@@ -220,7 +221,7 @@ class _MessagePathsSheet extends ConsumerWidget {
                     Icon(Icons.call_merge, color: theme.colorScheme.primary),
                     const SizedBox(width: 8),
                     Text(
-                      'Ouvido $heardTimes ${heardTimes == 1 ? 'vez' : 'vezes'}',
+                      '${l10n.chatHeard} $heardTimes ${heardTimes == 1 ? l10n.chatOnce : l10n.chatTimesCount}',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -232,8 +233,8 @@ class _MessagePathsSheet extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: Text(
                   msg.isOutgoing
-                      ? 'Cada caminho representa uma vez que o teu rádio ouviu a mensagem de volta.'
-                      : 'Toca num caminho para ver a rota completa.',
+                      ? l10n.chatPathExplanation
+                      : l10n.chatPathInstruction,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -245,7 +246,7 @@ class _MessagePathsSheet extends ConsumerWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                        'Os dados de caminho não estão disponíveis.\nReconecta o rádio para registar novos caminhos.',
+                        l10n.chatNoPathData,
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
@@ -281,19 +282,26 @@ class _MessagePathsSheet extends ConsumerWidget {
                               )
                               : null;
                       final String lastHopHex =
-                          lastOff >= 0 && lastOff < path.pathBytes.length
-                              ? path.pathBytes[lastOff]
-                                  .toRadixString(16)
-                                  .padLeft(2, '0')
+                          lastOff >= 0 &&
+                                  lastOff + path.pathHashSize <=
+                                      path.pathBytes.length
+                              ? path.pathBytes
+                                  .sublist(lastOff, lastOff + path.pathHashSize)
+                                  .map(
+                                    (b) => b.toRadixString(16).padLeft(2, '0'),
+                                  )
+                                  .join()
                                   .toUpperCase()
                               : '';
                       final String summaryTitle =
-                          isDirect ? 'Direto' : (lastHopName ?? lastHopHex);
+                          isDirect
+                              ? l10n.commonDirect
+                              : (lastHopName ?? lastHopHex);
                       final String snrStr = path.snr.toStringAsFixed(1);
                       final String subtitleStr =
                           isDirect
-                              ? 'SNR $snrStr dB · direto'
-                              : 'SNR $snrStr dB · $hops salto${hops == 1 ? '' : 's'}';
+                              ? 'SNR $snrStr dB · ${l10n.commonDirect.toLowerCase()}'
+                              : 'SNR $snrStr dB · $hops ${hops == 1 ? l10n.commonSingularHop : l10n.commonPluralHops}';
 
                       // ── Sender node ──────────────────────────────────────
                       final Widget senderLeading;
@@ -307,7 +315,7 @@ class _MessagePathsSheet extends ConsumerWidget {
                             size: 20,
                           ),
                         );
-                        senderTitle = 'O teu rádio';
+                        senderTitle = l10n.chatYourRadio;
                       } else {
                         senderLeading = CircleAvatar(
                           backgroundColor: _avatarColor(senderName),
@@ -329,10 +337,14 @@ class _MessagePathsSheet extends ConsumerWidget {
                       for (var h = 0; h < hops; h++) {
                         final offset = h * path.pathHashSize;
                         final hexId =
-                            offset < path.pathBytes.length
-                                ? path.pathBytes[offset]
-                                    .toRadixString(16)
-                                    .padLeft(2, '0')
+                            offset + path.pathHashSize <= path.pathBytes.length
+                                ? path.pathBytes
+                                    .sublist(offset, offset + path.pathHashSize)
+                                    .map(
+                                      (b) =>
+                                          b.toRadixString(16).padLeft(2, '0'),
+                                    )
+                                    .join()
                                 : '?';
                         final Contact? hopContact;
                         if (offset + path.pathHashSize <=
@@ -364,10 +376,17 @@ class _MessagePathsSheet extends ConsumerWidget {
                                 : null;
                         if (hopPoint != null) previousPoint = hopPoint;
 
+                        final hopOrderLabel =
+                            h == 0
+                                ? l10n.chatHopOrderFarthest
+                                : (h == hops - 1
+                                    ? l10n.discoverPathNear
+                                    : null);
+
                         final hopSubtitle =
                             distanceLabel != null
-                                ? 'Salto ${h + 1} · $distanceLabel · Repetiu'
-                                : 'Salto ${h + 1} · Repetiu';
+                                ? '${l10n.chatHopLabel} ${h + 1}${hopOrderLabel != null ? ' ($hopOrderLabel)' : ''} · $distanceLabel · ${l10n.chatRepeated}'
+                                : '${l10n.chatHopLabel} ${h + 1}${hopOrderLabel != null ? ' ($hopOrderLabel)' : ''} · ${l10n.chatRepeated}';
 
                         hopWidgets.add(_buildConnector(theme));
                         hopWidgets.add(
@@ -385,7 +404,7 @@ class _MessagePathsSheet extends ConsumerWidget {
                                 ),
                               ),
                             ),
-                            title: hopName ?? 'Nó desconhecido',
+                            title: hopName ?? l10n.discoverTypeUnknown,
                             subtitle: hopSubtitle,
                             subtitleColor:
                                 hopName != null
@@ -410,10 +429,10 @@ class _MessagePathsSheet extends ConsumerWidget {
 
                       final receiverSubtitle =
                           isDirect
-                              ? 'Ouvido diretamente'
+                              ? l10n.privateDirectRoute
                               : receiverDistanceLabel != null
-                              ? 'Recebeu a mensagem · $receiverDistanceLabel'
-                              : 'Recebeu a mensagem';
+                              ? '${l10n.chatReceived} · $receiverDistanceLabel'
+                              : l10n.chatReceived;
 
                       // ── Full chain (shown when expanded) ──────────────────
                       final fullChain = Padding(
@@ -428,8 +447,8 @@ class _MessagePathsSheet extends ConsumerWidget {
                               title: senderTitle,
                               subtitle:
                                   msg.isOutgoing
-                                      ? 'Enviaste a mensagem'
-                                      : 'Enviou a mensagem',
+                                      ? l10n.chatYouSent
+                                      : l10n.chatSentMessage,
                               subtitleColor: theme.colorScheme.onSurfaceVariant,
                             ),
                             ...hopWidgets,
@@ -444,7 +463,7 @@ class _MessagePathsSheet extends ConsumerWidget {
                                   size: 20,
                                 ),
                               ),
-                              title: 'O teu rádio',
+                              title: l10n.chatYourRadio,
                               subtitle: receiverSubtitle,
                               subtitleColor:
                                   isDirect
@@ -497,7 +516,9 @@ class _MessagePathsSheet extends ConsumerWidget {
                                   ),
                                 ),
                         title: Text(
-                          summaryTitle,
+                          isDirect
+                              ? summaryTitle
+                              : '${l10n.chatLastRepeater}: $summaryTitle',
                           style: const TextStyle(fontWeight: FontWeight.w600),
                           overflow: TextOverflow.ellipsis,
                         ),

@@ -216,7 +216,10 @@ class _ChannelTile extends ConsumerWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            channel.name,
+                            _safeUiText(
+                              channel.name,
+                              fallback: 'Canal ${channel.index}',
+                            ),
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight:
                                   hasUnread && !isMuted
@@ -309,11 +312,13 @@ class _ChannelTile extends ConsumerWidget {
   String _previewText(BuildContext context, ChatMessage? msg) {
     if (msg == null) return context.l10n.commonNoMessages;
     final l10n = context.l10n;
-    if (msg.isOutgoing) return '${l10n.commonSentByMe}: ${msg.text}';
-    if (msg.senderName != null && msg.senderName!.isNotEmpty) {
-      return '${msg.senderName}: ${msg.text}';
+    if (msg.isOutgoing) {
+      return '${l10n.commonSentByMe}: ${_safeUiText(msg.text, fallback: '')}';
     }
-    return msg.text;
+    if (msg.senderName != null && msg.senderName!.isNotEmpty) {
+      return '${_safeUiText(msg.senderName, fallback: 'Desconhecido')}: ${_safeUiText(msg.text, fallback: '')}';
+    }
+    return _safeUiText(msg.text, fallback: '');
   }
 
   String _formatTimestamp(BuildContext context, int ts) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../config/feature_toggles.dart';
 
@@ -79,27 +80,54 @@ class AppsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final shortestSide = MediaQuery.sizeOf(context).shortestSide;
+    final isTablet = shortestSide >= 600;
+    final isWindowsDesktop =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+    final largeLayout = kIsWeb || isWindowsDesktop || isTablet;
     final enabledApps =
         _apps.where((app) => FeatureToggles.isEnabled(app.feature)).toList();
+
     return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-        child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 14,
-            mainAxisSpacing: 14,
-            childAspectRatio: 1.0,
-          ),
-          itemCount: enabledApps.length,
-          itemBuilder: (context, index) {
-            return _AppTile(
-              entry: enabledApps[index],
-              theme: theme,
-              onTap: () => _launch(context, enabledApps[index]),
-            );
-          },
-        ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final outerPadding =
+              largeLayout
+                  ? const EdgeInsets.fromLTRB(24, 24, 24, 20)
+                  : const EdgeInsets.fromLTRB(16, 20, 16, 16);
+          final maxContentWidth = largeLayout ? 1320.0 : double.infinity;
+          final availableWidth = constraints.maxWidth.clamp(0, maxContentWidth);
+          final tileTargetWidth = largeLayout ? 260.0 : 180.0;
+          final crossAxisCount = (availableWidth / tileTargetWidth)
+              .floor()
+              .clamp(2, largeLayout ? 5 : 3);
+
+          return Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxContentWidth),
+              child: Padding(
+                padding: outerPadding,
+                child: GridView.builder(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    crossAxisSpacing: largeLayout ? 16 : 14,
+                    mainAxisSpacing: largeLayout ? 16 : 14,
+                    childAspectRatio: largeLayout ? 1.24 : 1.0,
+                  ),
+                  itemCount: enabledApps.length,
+                  itemBuilder: (context, index) {
+                    return _AppTile(
+                      entry: enabledApps[index],
+                      theme: theme,
+                      dense: largeLayout,
+                      onTap: () => _launch(context, enabledApps[index]),
+                    );
+                  },
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -145,11 +173,13 @@ class _AppTile extends StatelessWidget {
   const _AppTile({
     required this.entry,
     required this.theme,
+    required this.dense,
     required this.onTap,
   });
 
   final _AppEntry entry;
   final ThemeData theme;
+  final bool dense;
   final VoidCallback onTap;
 
   @override
@@ -161,14 +191,14 @@ class _AppTile extends StatelessWidget {
         splashColor: entry.color.withAlpha(40),
         highlightColor: entry.color.withAlpha(20),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(dense ? 14 : 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Icon container
               Container(
-                width: 52,
-                height: 52,
+                width: dense ? 48 : 52,
+                height: dense ? 48 : 52,
                 decoration: BoxDecoration(
                   color: entry.color.withAlpha(30),
                   borderRadius: BorderRadius.circular(14),
@@ -177,7 +207,11 @@ class _AppTile extends StatelessWidget {
                     width: 1.2,
                   ),
                 ),
-                child: Icon(entry.icon, color: entry.color, size: 28),
+                child: Icon(
+                  entry.icon,
+                  color: entry.color,
+                  size: dense ? 24 : 28,
+                ),
               ),
               const Spacer(),
               // Title

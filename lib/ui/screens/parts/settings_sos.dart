@@ -85,7 +85,7 @@ class _SosSettingsCardState extends ConsumerState<_SosSettingsCard> {
               initialValue: settings.targetType,
               decoration: InputDecoration(
                 labelText: context.l10n.settingsSosTarget,
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
               ),
               items: [
                 DropdownMenuItem(
@@ -110,7 +110,7 @@ class _SosSettingsCardState extends ConsumerState<_SosSettingsCard> {
                 initialValue: settings.channelIndex,
                 decoration: InputDecoration(
                   labelText: context.l10n.settingsSosChannelLabel,
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                 ),
                 items: [
                   if (channels.isEmpty)
@@ -141,7 +141,7 @@ class _SosSettingsCardState extends ConsumerState<_SosSettingsCard> {
                 child: InputDecorator(
                   decoration: InputDecoration(
                     labelText: context.l10n.settingsSosDestinationContact,
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
                     suffixIcon: const Icon(Icons.search),
                   ),
                   child: Row(
@@ -177,7 +177,7 @@ class _SosSettingsCardState extends ConsumerState<_SosSettingsCard> {
               decoration: InputDecoration(
                 labelText: context.l10n.settingsSosMessage,
                 hintText: context.l10n.settingsSosMessageHint('{gps}'),
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
               ),
               onChanged:
                   (v) => ref
@@ -195,12 +195,46 @@ class _SosSettingsCardState extends ConsumerState<_SosSettingsCard> {
                       ref.read(sosSettingsProvider.notifier).setIncludeGps(v),
             ),
             const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    context.l10n.settingsSosHoldDuration,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+                Text(
+                  '${settings.holdDurationSeconds}s',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            Slider(
+              min: 3,
+              max: 5,
+              divisions: 2,
+              value: settings.holdDurationSeconds.toDouble(),
+              activeColor: theme.colorScheme.error,
+              onChanged:
+                  (v) => ref
+                      .read(sosSettingsProvider.notifier)
+                      .setHoldDuration(v.round()),
+            ),
+            Text(
+              context.l10n.settingsSosHoldDurationDesc,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                icon: const Icon(Icons.sos),
-                label: Text(context.l10n.settingsSosSendNow),
-                onPressed: () async {
+              child: _SosHoldButton(
+                holdSeconds: settings.holdDurationSeconds,
+                label: context.l10n.settingsSosHoldToSend,
+                onActivated: () async {
                   final result =
                       await ref.read(sosServiceProvider).sendConfiguredSos();
                   if (!context.mounted) return;
@@ -289,7 +323,7 @@ class _SosSettingsCardState extends ConsumerState<_SosSettingsCard> {
                         decoration: InputDecoration(
                           prefixIcon: const Icon(Icons.search),
                           hintText: context.l10n.settingsSosSearchHint,
-                          border: OutlineInputBorder(),
+                          border: const OutlineInputBorder(),
                         ),
                         onChanged: (v) => setLocal(() => query = v),
                       ),
@@ -350,5 +384,127 @@ class _SosSettingsCardState extends ConsumerState<_SosSettingsCard> {
     if (result != null) {
       await ref.read(sosSettingsProvider.notifier).setContactKey(result);
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Hold-to-activate SOS button widget
+// ---------------------------------------------------------------------------
+
+class _SosHoldButton extends StatefulWidget {
+  const _SosHoldButton({
+    required this.holdSeconds,
+    required this.label,
+    required this.onActivated,
+  });
+
+  final int holdSeconds;
+  final String label;
+  final Future<void> Function() onActivated;
+
+  @override
+  State<_SosHoldButton> createState() => _SosHoldButtonState();
+}
+
+class _SosHoldButtonState extends State<_SosHoldButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _anim;
+  bool _sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(
+      vsync: this,
+      duration: Duration(seconds: widget.holdSeconds),
+    )..addStatusListener(_onStatus);
+  }
+
+  Future<void> _onStatus(AnimationStatus status) async {
+    if (status == AnimationStatus.completed && mounted && !_sending) {
+      setState(() => _sending = true);
+      await widget.onActivated();
+      if (mounted) {
+        setState(() => _sending = false);
+        _anim.reset();
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(_SosHoldButton old) {
+    super.didUpdateWidget(old);
+    if (old.holdSeconds != widget.holdSeconds) {
+      _anim.duration = Duration(seconds: widget.holdSeconds);
+    }
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  void _start(TapDownDetails _) {
+    if (!_sending) _anim.forward();
+  }
+
+  void _cancel([TapUpDetails? _]) {
+    if (!_sending && _anim.status != AnimationStatus.completed) {
+      _anim.reverse();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.error;
+    return GestureDetector(
+      onTapDown: _start,
+      onTapUp: _cancel,
+      onTapCancel: () => _cancel(),
+      child: AnimatedBuilder(
+        animation: _anim,
+        builder: (context, _) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              color: color.withAlpha((30 + (180 * _anim.value).round())),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: color.withAlpha(120), width: 2),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CircularProgressIndicator(
+                        value: _sending ? null : _anim.value,
+                        strokeWidth: 3,
+                        color: color,
+                        backgroundColor: color.withAlpha(40),
+                      ),
+                      Icon(Icons.sos, size: 14, color: color),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  _sending ? '…' : widget.label,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 }

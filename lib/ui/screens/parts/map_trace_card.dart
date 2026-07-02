@@ -3,17 +3,17 @@ part of '../map_screen.dart';
 class _TraceResultCard extends StatefulWidget {
   const _TraceResultCard({
     required this.result,
+    required this.hops,
     required this.onClear,
     required this.onFit,
     required this.theme,
-    this.selfPos,
   });
 
   final TraceResult result;
+  final List<TraceHop> hops;
   final VoidCallback onClear;
   final VoidCallback onFit;
   final ThemeData theme;
-  final LatLng? selfPos;
 
   @override
   State<_TraceResultCard> createState() => _TraceResultCardState();
@@ -30,7 +30,7 @@ class _TraceResultCardState extends State<_TraceResultCard> {
         '${widget.result.timestamp.second.toString().padLeft(2, '0')}';
 
     const collapsedVisibleHops = 4;
-    final totalHops = widget.result.hops.length;
+    final totalHops = widget.hops.length;
     final canCollapse = totalHops > collapsedVisibleHops;
     final visibleHops =
         (_expanded || !canCollapse) ? totalHops : collapsedVisibleHops;
@@ -87,21 +87,54 @@ class _TraceResultCardState extends State<_TraceResultCard> {
               ],
             ),
             // Hop list
-            if (widget.result.hops.isNotEmpty) ...[
+            if (widget.result.targetName != null) ...[
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Icon(
+                    widget.result.targetHasGps
+                        ? Icons.person_pin_circle
+                        : Icons.person_outline,
+                    size: 13,
+                    color: widget.theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      widget.result.targetName!,
+                      style: widget.theme.textTheme.labelSmall?.copyWith(
+                        color: widget.theme.colorScheme.onSurfaceVariant,
+                        fontStyle:
+                            widget.result.targetHasGps
+                                ? FontStyle.normal
+                                : FontStyle.italic,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (!widget.result.targetHasGps)
+                    Text(
+                      'sem GPS',
+                      style: widget.theme.textTheme.labelSmall?.copyWith(
+                        color: widget.theme.colorScheme.outline,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+            if (widget.hops.isNotEmpty) ...[
               const SizedBox(height: 4),
               for (int i = 0; i < visibleHops; i++)
                 Builder(
                   builder: (ctx) {
-                    final hop = widget.result.hops[i];
+                    final hop = widget.hops[i];
                     // Distance from the previous GPS point (or selfPos) to this hop.
                     double? distM;
                     if (hop.hasGps) {
                       LatLng? prevPt;
-                      if (i == 0) {
-                        prevPt = widget.selfPos;
-                      } else {
+                      if (i > 0) {
                         for (int k = i - 1; k >= 0; k--) {
-                          final prev = widget.result.hops[k];
+                          final prev = widget.hops[k];
                           if (prev.hasGps) {
                             prevPt = LatLng(prev.latitude!, prev.longitude!);
                             break;

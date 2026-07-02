@@ -19,7 +19,7 @@ plugins {
 
 android {
     namespace = "pt.meshcore.lusoapp"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = maxOf(flutter.compileSdkVersion, 37)
     // NDK r28+ compiles 16 KB ELF-aligned .so files by default (Google Play requirement since Nov 2025)
     ndkVersion = "28.2.13676358"
 
@@ -94,4 +94,15 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+}
+
+configurations.all {
+    resolutionStrategy.eachDependency {
+        // home_widget pulls in alpha Glance deps that require AGP 9+.
+        // Pin them to stable releases compatible with AGP 8.x.
+        if (requested.group == "androidx.glance") {
+            useVersion("1.1.0")
+            because("glance-appwidget 1.3.0-alpha01 requires AGP 9+; 1.1.0 is the latest stable")
+        }
+    }
 }

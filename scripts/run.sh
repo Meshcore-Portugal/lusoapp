@@ -76,6 +76,44 @@ cmd_run() {
     fi
 }
 
+cmd_run_ios() {
+    local flavor="${1:-debug}"
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+        err "iOS simulator run is only supported on macOS"
+        exit 1
+    fi
+    if ! command -v xcrun >/dev/null 2>&1; then
+        err "xcrun not found. Xcode command line tools are required."
+        exit 1
+    fi
+
+    local booted_udid
+    booted_udid="$(xcrun simctl list devices booted | sed -nE 's/.*\(([0-9A-F-]{36})\).*/\1/p' | head -1)"
+
+    if [[ -z "$booted_udid" ]]; then
+        log "No booted iOS simulator found. Booting first available simulator..."
+        local fallback_udid
+        fallback_udid="$(xcrun simctl list devices available | sed -nE 's/.*\(([0-9A-F-]{36})\) \(Shutdown\)$/\1/p' | head -1)"
+        if [[ -z "$fallback_udid" ]]; then
+            err "No available iOS simulators found in this MacinCloud account."
+            err "Open Simulator app once and ensure at least one iOS simulator exists."
+            exit 1
+        fi
+        xcrun simctl boot "$fallback_udid" >/dev/null 2>&1 || true
+        open -a Simulator >/dev/null 2>&1 || true
+        booted_udid="$fallback_udid"
+    fi
+
+    log "Running on iOS Simulator $booted_udid ($flavor)..."
+    if [ "$flavor" = "release" ]; then
+        flutter run -d "$booted_udid" --release
+    elif [ "$flavor" = "profile" ]; then
+        flutter run -d "$booted_udid" --profile
+    else
+        flutter run -d "$booted_udid"
+    fi
+}
+
 cmd_build_apk() {
     log "Building release APK..."
     flutter build apk --release
@@ -167,6 +205,7 @@ shift 2>/dev/null || true
 
 case "$COMMAND" in
     run)        cmd_run "$@" ;;
+    run-ios)    cmd_run_ios "$@" ;;
     build)      cmd_build_apk ;;
     build-apk)  cmd_build_apk ;;
     build-aab)  cmd_build_aab ;;
@@ -193,6 +232,9 @@ case "$COMMAND" in
         echo "  run          Run on connected device (debug)"
         echo "  run release  Run in release mode"
         echo "  run profile  Run in profile mode"
+        echo "  run-ios      Run on auto-detected iOS simulator (macOS only)"
+        echo "  run-ios release  Run iOS simulator in release mode"
+        echo "  run-ios profile  Run iOS simulator in profile mode"
         echo "  build        Build release APK"
         echo "  build-apk    Build release APK"
         echo "  build-aab    Build release App Bundle (Google Play)"
@@ -206,7 +248,7 @@ case "$COMMAND" in
         echo "  clean        Clean build artifacts"
         echo "  get          Get/update dependencies"
         echo "  gen          Run code generation (build_runner)"
-  echo "  l10n         Regenerate localization Dart files from ARB (flutter gen-l10n)"
+          echo "  l10n         Regenerate localization Dart files from ARB (flutter gen-l10n)"
         echo "  doctor       Check Flutter environment"
         exit 1
         ;;

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -405,6 +406,71 @@ class NotificationService {
     return true;
   }
 
+  // ---------------------------------------------------------------------------
+  // Android Foreground Service for BLE connection stability
+  // ---------------------------------------------------------------------------
+
+  /// Start the Android foreground service with a persistent "Connected to Radio" notification.
+  /// This prevents Doze mode from killing BLE connections and background reconnect attempts.
+  /// On non-Android platforms, this is a no-op.
+  ///
+  /// [radioName] — name of the connected radio to display in the notification.
+  Future<void> startRadioForeground(String radioName) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    try {
+      const channel = MethodChannel('pt.meshcore.lusoapp/radio_service');
+      await channel.invokeMethod('startRadioForeground', {
+        'radioName': radioName,
+      });
+    } catch (e) {
+      // Log but don't crash if the platform method fails
+      print('Error starting radio foreground service: $e');
+    }
+  }
+
+  /// Update the Android foreground notification with latest radio metrics.
+  /// No-op on non-Android platforms.
+  Future<void> updateRadioForeground({
+    String? radioName,
+    int? noiseFloor,
+    int? lastRssi,
+    double? lastSnrDb,
+  }) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    try {
+      const channel = MethodChannel('pt.meshcore.lusoapp/radio_service');
+      await channel.invokeMethod('updateRadioForeground', {
+        if (radioName != null) 'radioName': radioName,
+        if (noiseFloor != null) 'noiseFloor': noiseFloor,
+        if (lastRssi != null) 'lastRssi': lastRssi,
+        if (lastSnrDb != null) 'lastSnrDb': lastSnrDb,
+      });
+    } catch (e) {
+      // Log but don't crash if the platform method fails
+      print('Error updating radio foreground service: $e');
+    }
+  }
+
+  /// Stop the Android foreground service and remove the persistent notification.
+  /// Called when the BLE connection is lost or the user disconnects.
+  /// On non-Android platforms, this is a no-op.
+  Future<void> stopRadioForeground() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    try {
+      const channel = MethodChannel('pt.meshcore.lusoapp/radio_service');
+      await channel.invokeMethod('stopRadioForeground');
+    } catch (e) {
+      // Log but don't crash if the platform method fails
+      print('Error stopping radio foreground service: $e');
+    }
+  }
+
   Future<void> _show({
     required String title,
     required String body,
@@ -421,7 +487,7 @@ class NotificationService {
       presentAlert: true,
       presentSound: true,
     );
-    final details = NotificationDetails(
+    const details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
       macOS: iosDetails,

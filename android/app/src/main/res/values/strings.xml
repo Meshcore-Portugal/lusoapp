@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="widget_description">MeshCore radio status widget</string>
+    
+    <!-- Foreground Service Notification Strings -->
+    <string name="radio_notification_channel_name">MeshCore Radio Connection</string>
+    <string name="radio_notification_channel_description">Notification for active radio connection via Bluetooth</string>
+    <string name="radio_notification_title">Connected to %s</string>
+    <string name="radio_notification_text">Connected via Bluetooth</string>
 </resources>

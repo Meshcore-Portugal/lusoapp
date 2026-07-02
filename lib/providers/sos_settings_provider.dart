@@ -13,6 +13,7 @@ class SosSettings extends Equatable {
     this.contactKeyBase64,
     this.messageTemplate = 'SOS - preciso de ajuda! {gps}',
     this.includeGps = true,
+    this.holdDurationSeconds = 3,
   });
 
   factory SosSettings.fromJson(Map<String, dynamic> json) {
@@ -28,6 +29,8 @@ class SosSettings extends Equatable {
               ? json['messageTemplate'] as String
               : 'SOS - preciso de ajuda! {gps}',
       includeGps: json['includeGps'] as bool? ?? true,
+      holdDurationSeconds: ((json['holdDurationSeconds'] as num?)?.toInt() ?? 3)
+          .clamp(3, 5),
     );
   }
 
@@ -36,6 +39,7 @@ class SosSettings extends Equatable {
   final String? contactKeyBase64;
   final String messageTemplate;
   final bool includeGps;
+  final int holdDurationSeconds;
 
   SosSettings copyWith({
     SosTargetType? targetType,
@@ -43,6 +47,7 @@ class SosSettings extends Equatable {
     String? contactKeyBase64,
     String? messageTemplate,
     bool? includeGps,
+    int? holdDurationSeconds,
     bool clearContact = false,
   }) {
     return SosSettings(
@@ -52,6 +57,7 @@ class SosSettings extends Equatable {
           clearContact ? null : (contactKeyBase64 ?? this.contactKeyBase64),
       messageTemplate: messageTemplate ?? this.messageTemplate,
       includeGps: includeGps ?? this.includeGps,
+      holdDurationSeconds: holdDurationSeconds ?? this.holdDurationSeconds,
     );
   }
 
@@ -61,6 +67,7 @@ class SosSettings extends Equatable {
     if (contactKeyBase64 != null) 'contactKeyBase64': contactKeyBase64,
     'messageTemplate': messageTemplate,
     'includeGps': includeGps,
+    'holdDurationSeconds': holdDurationSeconds,
   };
 
   @override
@@ -70,6 +77,7 @@ class SosSettings extends Equatable {
     contactKeyBase64,
     messageTemplate,
     includeGps,
+    holdDurationSeconds,
   ];
 }
 
@@ -123,6 +131,13 @@ class SosSettingsNotifier extends StateNotifier<SosSettings> {
   Future<void> setIncludeGps(bool value) async {
     if (state.includeGps == value) return;
     state = state.copyWith(includeGps: value);
+    await _persist();
+  }
+
+  Future<void> setHoldDuration(int seconds) async {
+    final clamped = seconds.clamp(3, 5);
+    if (state.holdDurationSeconds == clamped) return;
+    state = state.copyWith(holdDurationSeconds: clamped);
     await _persist();
   }
 }

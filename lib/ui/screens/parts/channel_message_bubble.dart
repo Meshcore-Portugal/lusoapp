@@ -77,23 +77,25 @@ class _MessageBubble extends ConsumerWidget {
     if (n == 0) return null;
     final lastOff = (n - 1) * path.pathHashSize;
     if (lastOff + path.pathHashSize > path.pathBytes.length) {
-      // Fallback: hex of first byte at offset
-      return lastOff < path.pathBytes.length
-          ? path.pathBytes[lastOff]
-              .toRadixString(16)
-              .padLeft(2, '0')
-              .toUpperCase()
-          : '?';
+      // Fallback: hex of remaining bytes at offset.
+      if (lastOff >= path.pathBytes.length) return '?';
+      final end = path.pathBytes.length;
+      return path.pathBytes
+          .sublist(lastOff, end)
+          .map((b) => b.toRadixString(16).padLeft(2, '0'))
+          .join()
+          .toUpperCase();
     }
     final name = _resolveHopName(
       path.pathBytes.sublist(lastOff, lastOff + path.pathHashSize),
       contacts,
     );
     if (name != null) return name;
-    // Fallback: hex prefix
-    return path.pathBytes[lastOff]
-        .toRadixString(16)
-        .padLeft(2, '0')
+    // Fallback: full hash prefix for the configured hash size.
+    return path.pathBytes
+        .sublist(lastOff, lastOff + path.pathHashSize)
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join()
         .toUpperCase();
   }
 
@@ -126,6 +128,8 @@ class _MessageBubble extends ConsumerWidget {
     required List<Contact> contacts,
     VoidCallback? onTap,
   }) {
+    final l10n = context.l10n;
+
     // ── OUTGOING: no paths, just heard count ────────────────────────────────
     if (isOutgoing && paths.isEmpty) {
       if (heardCount == 0) return const SizedBox.shrink();
@@ -153,7 +157,7 @@ class _MessageBubble extends ConsumerWidget {
           Icon(Icons.subdirectory_arrow_right, size: 12, color: subtleColor),
           const SizedBox(width: 3),
           Text(
-            '$hops salto${hops == 1 ? '' : 's'}',
+            '$hops ${hops == 1 ? l10n.commonSingularHop : l10n.commonPluralHops}',
             style: TextStyle(fontSize: 11, color: subtleColor),
           ),
         ],
@@ -193,6 +197,7 @@ class _MessageBubble extends ConsumerWidget {
           children: [
             Icon(Icons.router, size: 11, color: subtleColor),
             const SizedBox(width: 4),
+            Text('${l10n.chatLastRepeater}: ', style: labelStyle),
             if (lastName != null)
               Flexible(
                 child: Text(
@@ -383,15 +388,18 @@ class _MessageBubble extends ConsumerWidget {
     );
   }
 
-  static String _metaSuffix(ChatMessage msg) {
+  static String _metaSuffix(BuildContext context, ChatMessage msg) {
+    final l10n = context.l10n;
     final parts = <String>[];
     if (msg.snr != null) parts.add('SNR ${msg.snr!.toStringAsFixed(1)} dB');
     if (msg.pathLen != null) {
       final hops = msg.pathLen == 0xFF ? -1 : msg.pathLen! & 0x3F;
       if (hops <= 0) {
-        parts.add('Directo');
+        parts.add(l10n.commonDirect);
       } else {
-        parts.add('$hops hop${hops > 1 ? 's' : ''}');
+        parts.add(
+          '$hops ${hops == 1 ? l10n.commonSingularHop : l10n.commonPluralHops}',
+        );
       }
     }
     return parts.join(' • ');
@@ -447,6 +455,69 @@ class _MessageBubble extends ConsumerWidget {
                           msg.text,
                           timestamp: msg.timestamp,
                         );
+                      },
+                    ),
+                  // Block-sender — only for incoming messages from a named node.
+                  if (!msg.isOutgoing &&
+                      msg.senderName != null &&
+                      msg.senderName!.isNotEmpty)
+                    ListTile(
+                      leading: Icon(
+                        Icons.block,
+                        color: theme.colorScheme.error,
+                      ),
+                      title: Text(
+                        'Bloquear ${msg.senderName}',
+                        style: TextStyle(color: theme.colorScheme.error),
+                      ),
+                      onTap: () async {
+                        Navigator.pop(context);
+                        final blocked = ref.read(blockedSendersProvider);
+                        final name = msg.senderName!;
+                        if (blocked.contains(name)) {
+                          await ref
+                              .read(blockedSendersProvider.notifier)
+                              .unblock(name);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('$name desbloqueado'),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        } else {
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder:
+                                (ctx) => AlertDialog(
+                                  title: const Text('Bloquear remetente'),
+                                  content: Text(
+                                    'As mensagens de "$name" deixarão de aparecer neste canal. Desbloquear nas definições.',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed:
+                                          () => Navigator.pop(ctx, false),
+                                      child: const Text('Cancelar'),
+                                    ),
+                                    FilledButton(
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor:
+                                            theme.colorScheme.error,
+                                      ),
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: const Text('Bloquear'),
+                                    ),
+                                  ],
+                                ),
+                          );
+                          if (confirmed == true) {
+                            await ref
+                                .read(blockedSendersProvider.notifier)
+                                .block(name);
+                          }
+                        }
                       },
                     ),
                   ListTile(
@@ -520,13 +591,21 @@ class _MessageBubble extends ConsumerWidget {
   }
 
   void _showMsgDetails(BuildContext context, ChatMessage msg, ThemeData theme) {
+    final l10n = context.l10n;
     final time = DateTime.fromMillisecondsSinceEpoch(msg.timestamp * 1000);
     final timeStr =
         '${time.year}-${time.month.toString().padLeft(2, '0')}-${time.day.toString().padLeft(2, '0')} '
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}';
     int? hops;
+    int? incomingHashSize;
     if (msg.pathLen != null) {
-      hops = msg.pathLen == 0xFF ? 0 : msg.pathLen! & 0x3F;
+      final pathLen = msg.pathLen!;
+      if (pathLen == 0xFF) {
+        hops = 0;
+      } else {
+        hops = pathLen & 0x3F;
+        incomingHashSize = (pathLen >> 6) + 1;
+      }
     }
     showModalBottomSheet<void>(
       context: context,
@@ -546,7 +625,7 @@ class _MessageBubble extends ConsumerWidget {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'Detalhes da mensagem',
+                        l10n.chatMsgDetails,
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -556,18 +635,26 @@ class _MessageBubble extends ConsumerWidget {
                   const Divider(height: 20),
                   _DetailRow(
                     icon: Icons.access_time,
-                    label: 'Hora',
+                    label: l10n.commonTime,
                     value: timeStr,
                     theme: theme,
                   ),
                   if (hops != null)
                     _DetailRow(
                       icon: Icons.route,
-                      label: 'Caminho',
+                      label: l10n.commonPath,
                       value:
                           hops == 0
-                              ? 'Directo'
-                              : '$hops hop${hops > 1 ? 's' : ''}',
+                              ? l10n.commonDirect
+                              : '$hops ${hops == 1 ? l10n.commonSingularHop : l10n.commonPluralHops}',
+                      theme: theme,
+                    ),
+                  if (!msg.isOutgoing && incomingHashSize != null)
+                    _DetailRow(
+                      icon: Icons.pin,
+                      label: l10n.radioSettingsPathHashMode,
+                      value:
+                          '$incomingHashSize ${incomingHashSize == 1 ? 'byte' : 'bytes'}',
                       theme: theme,
                     ),
                   if (msg.snr != null)
@@ -577,10 +664,20 @@ class _MessageBubble extends ConsumerWidget {
                       value: '${msg.snr!.toStringAsFixed(1)} dB',
                       theme: theme,
                     ),
+                  if (msg.isOutgoing && msg.sentRouteFlag != null)
+                    _DetailRow(
+                      icon: Icons.send,
+                      label: l10n.privateSentVia,
+                      value:
+                          msg.sentRouteFlag == 0
+                              ? l10n.commonDirect
+                              : l10n.commonFlood,
+                      theme: theme,
+                    ),
                   if (msg.isChannel && msg.heardCount > 0)
                     _DetailRow(
                       icon: Icons.cell_tower,
-                      label: 'Repetidores',
+                      label: l10n.commonRepeaters,
                       value: '${msg.heardCount}',
                       theme: theme,
                     ),
@@ -606,7 +703,7 @@ class _MessageBubble extends ConsumerWidget {
     final time = DateTime.fromMillisecondsSinceEpoch(message.timestamp * 1000);
     final timeStr =
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-    final meta = _metaSuffix(message);
+    final meta = _metaSuffix(context, message);
     final metaLine = meta.isNotEmpty ? '$timeStr • $meta' : timeStr;
 
     if (isMe) {
@@ -829,16 +926,19 @@ class _MessageBubble extends ConsumerWidget {
                           );
                         },
                       ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            metaLine,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withAlpha(100),
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 3, left: 2),
-                  child: Text(
-                    metaLine,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withAlpha(100),
-                    ),
                   ),
                 ),
                 const SizedBox(height: 2),

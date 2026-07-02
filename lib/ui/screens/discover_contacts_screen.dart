@@ -602,6 +602,23 @@ class _DiscoveredContactTile extends ConsumerWidget {
     if (service == null) return;
 
     try {
+      // Before saving the new contact, prune old ones based on user configuration
+      // (days threshold + contact types) to make room on the radio if needed.
+      final pruneConfig = ref.read(pruneConfigProvider);
+      final prunedCount = ref
+          .read(contactsProvider.notifier)
+          .pruneStaleContactsWithConfig(pruneConfig);
+      if (prunedCount > 0 && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Removidos $prunedCount contactos antigos (sem contacto > ${pruneConfig.daysThreshold} dias)',
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
       final respFuture = service.responses
           .firstWhere((r) => r is OkResponse || r is ErrorResponse)
           .timeout(const Duration(seconds: 5));

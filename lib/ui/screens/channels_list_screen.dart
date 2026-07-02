@@ -24,6 +24,61 @@ part 'parts/channels_qr_dialog.dart';
 
 enum _ChannelType { publicChannel, hashtag, privateCreate, privateJoin }
 
+String _sanitizeUtf16Ui(String s) {
+  for (var i = 0; i < s.length; i++) {
+    final c = s.codeUnitAt(i);
+    if (c >= 0xD800 && c <= 0xDFFF) {
+      final buf = StringBuffer();
+      for (var j = 0; j < s.length; j++) {
+        final u = s.codeUnitAt(j);
+        if (u >= 0xD800 && u <= 0xDBFF) {
+          if (j + 1 < s.length) {
+            final u2 = s.codeUnitAt(j + 1);
+            if (u2 >= 0xDC00 && u2 <= 0xDFFF) {
+              buf.write(s[j]);
+              buf.write(s[j + 1]);
+              j++;
+              continue;
+            }
+          }
+          buf.writeCharCode(0xFFFD);
+        } else if (u >= 0xDC00 && u <= 0xDFFF) {
+          buf.writeCharCode(0xFFFD);
+        } else {
+          buf.write(s[j]);
+        }
+      }
+      return buf.toString();
+    }
+  }
+  return s;
+}
+
+String _safeUiText(String? value, {required String fallback}) {
+  final sanitized = _sanitizeUtf16Ui(value ?? '').trim();
+  return sanitized.isEmpty ? fallback : sanitized;
+}
+
+/// Bundles a radio's identity with its configured channel list.
+///
+/// Passing one [_TargetDevice] per radio to [_CreateChannelSheet] guarantees
+/// that duplicate detection is always scoped to a single device.  Two radios
+/// can legitimately share the same channel key (even in different slots)
+/// because each will have its own [_TargetDevice] instance.
+class _TargetDevice {
+  const _TargetDevice({required this.channels, this.id, this.label});
+
+  /// Device identifier (e.g. BLE MAC address).  Null when not yet known.
+  /// Included so a future multi-device UI can use it as a map key.
+  final String? id;
+
+  /// Human-readable name shown in duplicate-channel error messages.
+  final String? label;
+
+  /// Channels already configured **on this device only**.
+  final List<ChannelInfo> channels;
+}
+
 // Well-known public channel key (from the MeshCore companion protocol spec)
 const _kPublicKeyHex = '8b3387e9c5cdea6ac9e5edbaa115cd72';
 
@@ -143,6 +198,21 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen> {
     });
 
     final usedIndices = configured.map((c) => c.index).toSet();
+    // Build a _TargetDevice so channels and device identity travel together.
+    // Using currentRadioIdProvider when connected; last-known device otherwise.
+    // The same channel key on a different radio is NOT a duplicate — the
+    // duplicate check inside _CreateChannelSheet is scoped to targetDevice.channels.
+    final deviceId =
+        ref.watch(currentRadioIdProvider) ??
+        ref.watch(recentDevicesProvider.select((d) => d.firstOrNull?.id));
+    final deviceLabel = ref.watch(
+      recentDevicesProvider.select((d) => d.firstOrNull?.name),
+    );
+    final targetDevice = _TargetDevice(
+      id: deviceId,
+      label: deviceLabel,
+      channels: configured,
+    );
 
     void openTypePicker() {
       showModalBottomSheet<void>(
@@ -157,6 +227,7 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen> {
                   type: type,
                   maxChannels: maxChannels,
                   usedIndices: usedIndices,
+                  targetDevice: targetDevice,
                 );
               },
               onScanQr: () {
@@ -164,6 +235,7 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen> {
                 _scanQrToCreate(
                   maxChannels: maxChannels,
                   usedIndices: usedIndices,
+                  targetDevice: targetDevice,
                 );
               },
             ),
@@ -268,6 +340,7 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen> {
     required _ChannelType type,
     required int maxChannels,
     required Set<int> usedIndices,
+    required _TargetDevice targetDevice,
     String? prefillName,
     Uint8List? prefillSecret,
   }) {
@@ -280,6 +353,7 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen> {
             type: type,
             maxChannels: maxChannels,
             usedIndices: usedIndices,
+            targetDevice: targetDevice,
             prefillName: prefillName,
             prefillSecret: prefillSecret,
             onSave: (idx, name, secret) async {
@@ -296,6 +370,7 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen> {
   Future<void> _scanQrToCreate({
     required int maxChannels,
     required Set<int> usedIndices,
+    required _TargetDevice targetDevice,
   }) async {
     final raw = await Navigator.of(context).push<String>(
       MaterialPageRoute(
@@ -311,6 +386,7 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen> {
         type: _ChannelType.privateJoin,
         maxChannels: maxChannels,
         usedIndices: usedIndices,
+        targetDevice: targetDevice,
         prefillName: result.name,
         prefillSecret: result.secret,
       );

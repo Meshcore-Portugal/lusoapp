@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +9,43 @@ import 'package:go_router/go_router.dart';
 import '../../l10n/l10n.dart';
 import '../../providers/radio_providers.dart';
 import '../../transport/radio_transport.dart';
+import '../../utils/battery_utils.dart';
 import '../theme.dart';
+
+String _sanitizeUtf16Ui(String s) {
+  for (var i = 0; i < s.length; i++) {
+    final c = s.codeUnitAt(i);
+    if (c >= 0xD800 && c <= 0xDFFF) {
+      final buf = StringBuffer();
+      for (var j = 0; j < s.length; j++) {
+        final u = s.codeUnitAt(j);
+        if (u >= 0xD800 && u <= 0xDBFF) {
+          if (j + 1 < s.length) {
+            final u2 = s.codeUnitAt(j + 1);
+            if (u2 >= 0xDC00 && u2 <= 0xDFFF) {
+              buf.write(s[j]);
+              buf.write(s[j + 1]);
+              j++;
+              continue;
+            }
+          }
+          buf.writeCharCode(0xFFFD);
+        } else if (u >= 0xDC00 && u <= 0xDFFF) {
+          buf.writeCharCode(0xFFFD);
+        } else {
+          buf.write(s[j]);
+        }
+      }
+      return buf.toString();
+    }
+  }
+  return s;
+}
+
+String _safeUiText(String? value, {required String fallback}) {
+  final sanitized = _sanitizeUtf16Ui(value ?? '').trim();
+  return sanitized.isEmpty ? fallback : sanitized;
+}
 
 /// Main shell screen with bottom navigation.
 class HomeScreen extends ConsumerStatefulWidget {
@@ -58,10 +95,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     final currentPath = widget.currentPath;
     final tabIndex = widget.navigationShell.currentIndex;
+    final isIos = defaultTargetPlatform == TargetPlatform.iOS;
+    final isChannelsChatPage = currentPath.startsWith('/channels/');
+    final isContactsChatPage =
+        currentPath.startsWith('/chat/') ||
+        currentPath.startsWith('/room/') ||
+        currentPath.startsWith('/repeater/');
+    final showIosChatBack = isIos && (isChannelsChatPage || isContactsChatPage);
 
     // When inside an apps sub-page, show a back arrow and the app's name.
     final appSubTitle = _appSubTitle(context, currentPath);
     final isAppsSubPage = appSubTitle != null;
+    final shortestSide = MediaQuery.sizeOf(context).shortestSide;
+    final isTablet = shortestSide >= 600;
+    final isWindowsDesktop =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+    final useLargeNav = kIsWeb || isWindowsDesktop || isTablet;
+    final useExtendedRail = MediaQuery.sizeOf(context).width >= 1280;
+
+    final channelsIcon = Badge(
+      isLabelVisible: unreadChannels > 0,
+      label: Text(unreadChannels > 99 ? '99+' : '$unreadChannels'),
+      child: const Icon(Icons.forum_outlined),
+    );
+    final channelsSelectedIcon = Badge(
+      isLabelVisible: unreadChannels > 0,
+      label: Text(unreadChannels > 99 ? '99+' : '$unreadChannels'),
+      child: const Icon(Icons.forum),
+    );
+    final contactsIcon = Badge(
+      isLabelVisible: unreadContacts > 0,
+      label: Text(unreadContacts > 99 ? '99+' : '$unreadContacts'),
+      child: const Icon(Icons.contacts_outlined),
+    );
+    final contactsSelectedIcon = Badge(
+      isLabelVisible: unreadContacts > 0,
+      label: Text(unreadContacts > 99 ? '99+' : '$unreadContacts'),
+      child: const Icon(Icons.contacts),
+    );
 
     return BackButtonListener(
       onBackButtonPressed: () async {
@@ -69,10 +140,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return true;
       },
       child: Scaffold(
-        backgroundColor: AppTheme.background,
         appBar: AppBar(
           leading:
-              isAppsSubPage
+              showIosChatBack
+                  ? IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                    tooltip: context.l10n.commonBack,
+                    onPressed: () {
+                      if (isChannelsChatPage) {
+                        context.go('/channels');
+                      } else {
+                        context.go('/contacts');
+                      }
+                    },
+                  )
+                  : isAppsSubPage
                   ? IconButton(
                     icon: const Icon(Icons.arrow_back),
                     tooltip: context.l10n.commonBack,
@@ -96,7 +178,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         size: 24,
                       ),
                       const SizedBox(width: 8),
-                      Text(selfName ?? 'LusoAPP'),
+                      Text(_safeUiText(selfName, fallback: 'LusoAPP')),
                     ],
                   ),
           actions: [
@@ -137,56 +219,98 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ],
         ),
-        body: widget.navigationShell,
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: tabIndex,
-          onDestinationSelected: (index) {
-            widget.navigationShell.goBranch(index, initialLocation: true);
-          },
-          destinations: [
-            NavigationDestination(
-              icon: Badge(
-                isLabelVisible: unreadChannels > 0,
-                label: Text(unreadChannels > 99 ? '99+' : '${unreadChannels}'),
-                child: const Icon(Icons.forum_outlined),
-              ),
-              selectedIcon: Badge(
-                isLabelVisible: unreadChannels > 0,
-                label: Text(unreadChannels > 99 ? '99+' : '${unreadChannels}'),
-                child: const Icon(Icons.forum),
-              ),
-              label: context.l10n.navChannels,
-            ),
-            NavigationDestination(
-              icon: Badge(
-                isLabelVisible: unreadContacts > 0,
-                label: Text(unreadContacts > 99 ? '99+' : '${unreadContacts}'),
-                child: const Icon(Icons.contacts_outlined),
-              ),
-              selectedIcon: Badge(
-                isLabelVisible: unreadContacts > 0,
-                label: Text(unreadContacts > 99 ? '99+' : '${unreadContacts}'),
-                child: const Icon(Icons.contacts),
-              ),
-              label: context.l10n.navContacts,
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.map_outlined),
-              selectedIcon: const Icon(Icons.map),
-              label: context.l10n.navMap,
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.apps_outlined),
-              selectedIcon: const Icon(Icons.apps),
-              label: context.l10n.navApps,
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.settings_outlined),
-              selectedIcon: const Icon(Icons.settings),
-              label: context.l10n.navSettings,
-            ),
-          ],
-        ),
+        body:
+            useLargeNav
+                ? Row(
+                  children: [
+                    SafeArea(
+                      child: NavigationRail(
+                        selectedIndex: tabIndex,
+                        extended: useExtendedRail,
+                        minExtendedWidth: 180,
+                        onDestinationSelected: (index) {
+                          widget.navigationShell.goBranch(
+                            index,
+                            initialLocation: true,
+                          );
+                        },
+                        labelType:
+                            useExtendedRail
+                                ? NavigationRailLabelType.none
+                                : NavigationRailLabelType.selected,
+                        destinations: [
+                          NavigationRailDestination(
+                            icon: channelsIcon,
+                            selectedIcon: channelsSelectedIcon,
+                            label: Text(context.l10n.navChannels),
+                          ),
+                          NavigationRailDestination(
+                            icon: contactsIcon,
+                            selectedIcon: contactsSelectedIcon,
+                            label: Text(context.l10n.navContacts),
+                          ),
+                          NavigationRailDestination(
+                            icon: const Icon(Icons.map_outlined),
+                            selectedIcon: const Icon(Icons.map),
+                            label: Text(context.l10n.navMap),
+                          ),
+                          NavigationRailDestination(
+                            icon: const Icon(Icons.apps_outlined),
+                            selectedIcon: const Icon(Icons.apps),
+                            label: Text(context.l10n.navApps),
+                          ),
+                          NavigationRailDestination(
+                            icon: const Icon(Icons.settings_outlined),
+                            selectedIcon: const Icon(Icons.settings),
+                            label: Text(context.l10n.navSettings),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const VerticalDivider(width: 1),
+                    Expanded(child: widget.navigationShell),
+                  ],
+                )
+                : widget.navigationShell,
+        bottomNavigationBar:
+            useLargeNav
+                ? null
+                : NavigationBar(
+                  selectedIndex: tabIndex,
+                  onDestinationSelected: (index) {
+                    widget.navigationShell.goBranch(
+                      index,
+                      initialLocation: true,
+                    );
+                  },
+                  destinations: [
+                    NavigationDestination(
+                      icon: channelsIcon,
+                      selectedIcon: channelsSelectedIcon,
+                      label: context.l10n.navChannels,
+                    ),
+                    NavigationDestination(
+                      icon: contactsIcon,
+                      selectedIcon: contactsSelectedIcon,
+                      label: context.l10n.navContacts,
+                    ),
+                    NavigationDestination(
+                      icon: const Icon(Icons.map_outlined),
+                      selectedIcon: const Icon(Icons.map),
+                      label: context.l10n.navMap,
+                    ),
+                    NavigationDestination(
+                      icon: const Icon(Icons.apps_outlined),
+                      selectedIcon: const Icon(Icons.apps),
+                      label: context.l10n.navApps,
+                    ),
+                    NavigationDestination(
+                      icon: const Icon(Icons.settings_outlined),
+                      selectedIcon: const Icon(Icons.settings),
+                      label: context.l10n.navSettings,
+                    ),
+                  ],
+                ),
       ),
     );
   }
@@ -271,8 +395,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   int _batteryPercent(int mv) {
-    // LiPo curve: matches MeshCore firmware defaults (3000–4200 mV)
-    return (((mv.clamp(3000, 4200) - 3000) / 1200) * 100).round();
+    return batteryPercentFromMv(mv);
   }
 
   IconData _batteryIcon(int mv) {

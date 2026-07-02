@@ -82,3 +82,6 @@ opencode.json
 # Claude Code
 .claude/
 CLAUDE.md
+BT_CONNECTION_STABILITY_FIX.md
+CODE_REFERENCE.md
+QUICK_REFERENCE.md

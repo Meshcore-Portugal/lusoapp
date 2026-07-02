@@ -592,6 +592,30 @@ abstract class AppLocalizations {
   /// **'Ok'**
   String get commonOk;
 
+  /// No description provided for @pathHashMigrationNoticeTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Aviso da rede'**
+  String get pathHashMigrationNoticeTitle;
+
+  /// No description provided for @pathHashMigrationNoticeBody.
+  ///
+  /// In pt, this message translates to:
+  /// **'A rede mudará para o modo hash de 2 bytes após 2/7/2026 (2 de julho). A aplicação irá configurar automaticamente o seu rádio nessa data.'**
+  String get pathHashMigrationNoticeBody;
+
+  /// No description provided for @pathHashMigrationAppliedTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Rede atualizada'**
+  String get pathHashMigrationAppliedTitle;
+
+  /// No description provided for @pathHashMigrationAppliedBody.
+  ///
+  /// In pt, this message translates to:
+  /// **'O seu rádio foi automaticamente atualizado para o modo hash de 2 bytes a partir de 2/7/2026.'**
+  String get pathHashMigrationAppliedBody;
+
   /// No description provided for @commonLoading.
   ///
   /// In pt, this message translates to:
@@ -667,7 +691,7 @@ abstract class AppLocalizations {
   /// No description provided for @commonSent.
   ///
   /// In pt, this message translates to:
-  /// **'Enviada'**
+  /// **'Transmitida'**
   String get commonSent;
 
   /// No description provided for @commonSentByMe.
@@ -681,6 +705,24 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'A propagar...'**
   String get commonPropagating;
+
+  /// No description provided for @chatBadgePropagatingTooltip.
+  ///
+  /// In pt, this message translates to:
+  /// **'A aguardar eco de repetidor...'**
+  String get chatBadgePropagatingTooltip;
+
+  /// No description provided for @chatBadgeTransmittedTooltip.
+  ///
+  /// In pt, this message translates to:
+  /// **'Transmitida — sem eco de repetidor recebido'**
+  String get chatBadgeTransmittedTooltip;
+
+  /// No description provided for @chatBadgeHeardTooltip.
+  ///
+  /// In pt, this message translates to:
+  /// **'Ouvida por {count} repetidor(es)'**
+  String chatBadgeHeardTooltip(int count);
 
   /// No description provided for @commonConnecting.
   ///
@@ -1372,6 +1414,156 @@ abstract class AppLocalizations {
   /// **'(sem nome)'**
   String get settingsSosUnnamedChannel;
 
+  /// No description provided for @settingsSosHoldDuration.
+  ///
+  /// In pt, this message translates to:
+  /// **'Segurar para enviar (segundos)'**
+  String get settingsSosHoldDuration;
+
+  /// No description provided for @settingsSosHoldDurationDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Mantém o botão SOS pressionado este tempo antes de enviar. Evita envios acidentais.'**
+  String get settingsSosHoldDurationDesc;
+
+  /// No description provided for @settingsSosHoldToSend.
+  ///
+  /// In pt, this message translates to:
+  /// **'Segura para enviar SOS'**
+  String get settingsSosHoldToSend;
+
+  /// No description provided for @cannedMessagesSosHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Segura o chip SOS para enviar com as configurações definidas'**
+  String get cannedMessagesSosHint;
+
+  /// No description provided for @settingsPruneTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Limpeza de Contactos'**
+  String get settingsPruneTitle;
+
+  /// No description provided for @settingsPruneDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Remove contactos inativos da memória da rádio'**
+  String get settingsPruneDesc;
+
+  /// No description provided for @settingsPruneDaysLabel.
+  ///
+  /// In pt, this message translates to:
+  /// **'Dias de Inatividade'**
+  String get settingsPruneDaysLabel;
+
+  /// No description provided for @settingsPruneDaysDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Contactos sem contacto > X dias serão removidos'**
+  String get settingsPruneDaysDesc;
+
+  /// No description provided for @settingsPruneDaysUnit.
+  ///
+  /// In pt, this message translates to:
+  /// **'dias'**
+  String get settingsPruneDaysUnit;
+
+  /// No description provided for @settingsPruneTypesTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Tipos de Contacto a Remover'**
+  String get settingsPruneTypesTitle;
+
+  /// No description provided for @settingsPruneChatsTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Chats / Pessoais'**
+  String get settingsPruneChatsTitle;
+
+  /// No description provided for @settingsPruneChatsDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Remover contactos de chat (0x01)'**
+  String get settingsPruneChatsDesc;
+
+  /// No description provided for @settingsPruneRepeatersTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Repetidores'**
+  String get settingsPruneRepeatersTitle;
+
+  /// No description provided for @settingsPruneRepeatersDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Remover contactos de repetidor (0x02)'**
+  String get settingsPruneRepeatersDesc;
+
+  /// No description provided for @settingsPruneRoomsTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Salas'**
+  String get settingsPruneRoomsTitle;
+
+  /// No description provided for @settingsPruneRoomsDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Remover contactos de sala (0x03)'**
+  String get settingsPruneRoomsDesc;
+
+  /// No description provided for @settingsPruneSensorsTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sensores'**
+  String get settingsPruneSensorsTitle;
+
+  /// No description provided for @settingsPruneSensorsDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Remover contactos de sensor (0x04)'**
+  String get settingsPruneSensorsDesc;
+
+  /// No description provided for @settingsPruneRestoreDefaults.
+  ///
+  /// In pt, this message translates to:
+  /// **'Restaurar Padrão'**
+  String get settingsPruneRestoreDefaults;
+
+  /// No description provided for @settingsPublicKeyCopied.
+  ///
+  /// In pt, this message translates to:
+  /// **'Chave pública copiada'**
+  String get settingsPublicKeyCopied;
+
+  /// No description provided for @settingsShutdownUnavailable.
+  ///
+  /// In pt, this message translates to:
+  /// **'Shutdown não disponível neste firmware'**
+  String get settingsShutdownUnavailable;
+
+  /// No description provided for @settingsOwnQrCodeTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'O meu QR Code'**
+  String get settingsOwnQrCodeTitle;
+
+  /// No description provided for @settingsEditNameTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Alterar Nome'**
+  String get settingsEditNameTitle;
+
+  /// No description provided for @settingsNodeNameLabel.
+  ///
+  /// In pt, this message translates to:
+  /// **'Nome do nó'**
+  String get settingsNodeNameLabel;
+
+  /// No description provided for @settingsNodeNameHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Ex: CT1XXX-MC'**
+  String get settingsNodeNameHint;
+
   /// No description provided for @settingsPrivateKeyCopy.
   ///
   /// In pt, this message translates to:
@@ -1423,7 +1615,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsRestorePrivateKeyContent.
   ///
   /// In pt, this message translates to:
-  /// **'O rádio vai reiniciar automaticamente após a restauração. Prosseguir?'**
+  /// **'Esta operação vai substituir a chave privada actual do rádio. A nova identidade é aplicada imediatamente — a chave pública na app será actualizada.\n\nTens a certeza?'**
   String get settingsRestorePrivateKeyContent;
 
   /// No description provided for @settingsDeleteBackupTitle.
@@ -1435,14 +1627,92 @@ abstract class AppLocalizations {
   /// No description provided for @settingsKeySavedSuccess.
   ///
   /// In pt, this message translates to:
-  /// **'Cópia da chave privada guardada com sucesso'**
+  /// **'Chave privada guardada com sucesso.'**
   String get settingsKeySavedSuccess;
 
   /// No description provided for @settingsKeyImportedSuccess.
   ///
   /// In pt, this message translates to:
-  /// **'Chave importada com sucesso'**
+  /// **'Chave restaurada com sucesso. Chave pública actualizada.'**
   String get settingsKeyImportedSuccess;
+
+  /// No description provided for @settingsKeyExportFailed.
+  ///
+  /// In pt, this message translates to:
+  /// **'Exportação falhou. O firmware pode não ter suporte activado.'**
+  String get settingsKeyExportFailed;
+
+  /// No description provided for @settingsKeyRestoreFailed.
+  ///
+  /// In pt, this message translates to:
+  /// **'Restauro falhou. O firmware pode não ter suporte activado.'**
+  String get settingsKeyRestoreFailed;
+
+  /// No description provided for @settingsDeleteBackupContent.
+  ///
+  /// In pt, this message translates to:
+  /// **'A cópia da chave privada guardada neste dispositivo será eliminada. O rádio não é afectado.'**
+  String get settingsDeleteBackupContent;
+
+  /// No description provided for @settingsKeyCopied.
+  ///
+  /// In pt, this message translates to:
+  /// **'Chave privada copiada'**
+  String get settingsKeyCopied;
+
+  /// No description provided for @settingsKeyCopySaved.
+  ///
+  /// In pt, this message translates to:
+  /// **'Cópia guardada neste dispositivo.'**
+  String get settingsKeyCopySaved;
+
+  /// No description provided for @settingsCopyKeyTooltip.
+  ///
+  /// In pt, this message translates to:
+  /// **'Copiar chave completa'**
+  String get settingsCopyKeyTooltip;
+
+  /// No description provided for @settingsKeyConnectToBackup.
+  ///
+  /// In pt, this message translates to:
+  /// **'Liga ao rádio para fazer cópia de segurança da chave.'**
+  String get settingsKeyConnectToBackup;
+
+  /// No description provided for @settingsKeyShareSubject.
+  ///
+  /// In pt, this message translates to:
+  /// **'MeshCore — cópia da chave privada'**
+  String get settingsKeyShareSubject;
+
+  /// No description provided for @settingsPasteKeyTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Colar chave privada'**
+  String get settingsPasteKeyTitle;
+
+  /// No description provided for @settingsPasteKeyHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Cola aqui a chave privada de uma cópia anterior (128 caracteres hex).'**
+  String get settingsPasteKeyHint;
+
+  /// No description provided for @settingsKeyHexLabel.
+  ///
+  /// In pt, this message translates to:
+  /// **'Chave privada (hex)'**
+  String get settingsKeyHexLabel;
+
+  /// No description provided for @settingsKeyInvalidHex.
+  ///
+  /// In pt, this message translates to:
+  /// **'Chave inválida — deve ter exactamente 128 caracteres hexadecimais.'**
+  String get settingsKeyInvalidHex;
+
+  /// No description provided for @commonContinue.
+  ///
+  /// In pt, this message translates to:
+  /// **'Continuar'**
+  String get commonContinue;
 
   /// No description provided for @settingsAbout.
   ///
@@ -1551,6 +1821,18 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Anúncio · Flood'**
   String get contactsAdvertFlood;
+
+  /// No description provided for @contactsAdvertSentZeroHop.
+  ///
+  /// In pt, this message translates to:
+  /// **'Anúncio Zero Hop enviado'**
+  String get contactsAdvertSentZeroHop;
+
+  /// No description provided for @contactsAdvertSentFlood.
+  ///
+  /// In pt, this message translates to:
+  /// **'Anúncio Flood enviado'**
+  String get contactsAdvertSentFlood;
 
   /// No description provided for @contactsSort.
   ///
@@ -2530,11 +2812,23 @@ abstract class AppLocalizations {
   /// **'O teu rádio'**
   String get chatYourRadio;
 
+  /// No description provided for @chatLastRepeater.
+  ///
+  /// In pt, this message translates to:
+  /// **'Último repetidor'**
+  String get chatLastRepeater;
+
   /// No description provided for @chatYouSent.
   ///
   /// In pt, this message translates to:
   /// **'Enviaste a mensagem'**
   String get chatYouSent;
+
+  /// No description provided for @chatSentMessage.
+  ///
+  /// In pt, this message translates to:
+  /// **'Enviou a mensagem'**
+  String get chatSentMessage;
 
   /// No description provided for @chatReceived.
   ///
@@ -2547,6 +2841,12 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Salto'**
   String get chatHopLabel;
+
+  /// No description provided for @chatHopOrderFarthest.
+  ///
+  /// In pt, this message translates to:
+  /// **'mais distante'**
+  String get chatHopOrderFarthest;
 
   /// No description provided for @chatRepeated.
   ///
@@ -2823,6 +3123,12 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Falha ao ligar ao último dispositivo'**
   String get connectLastFailTitle;
+
+  /// No description provided for @connectCancelledMessage.
+  ///
+  /// In pt, this message translates to:
+  /// **'Ligação ao rádio cancelada'**
+  String get connectCancelledMessage;
 
   /// No description provided for @discoverTitle.
   ///

@@ -4,6 +4,41 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../protocol/models.dart';
 
+String _sanitizeUtf16(String s) {
+  for (var i = 0; i < s.length; i++) {
+    final c = s.codeUnitAt(i);
+    if (c >= 0xD800 && c <= 0xDFFF) {
+      final buf = StringBuffer();
+      for (var j = 0; j < s.length; j++) {
+        final u = s.codeUnitAt(j);
+        if (u >= 0xD800 && u <= 0xDBFF) {
+          if (j + 1 < s.length) {
+            final u2 = s.codeUnitAt(j + 1);
+            if (u2 >= 0xDC00 && u2 <= 0xDFFF) {
+              buf.write(s[j]);
+              buf.write(s[j + 1]);
+              j++;
+              continue;
+            }
+          }
+          buf.writeCharCode(0xFFFD);
+        } else if (u >= 0xDC00 && u <= 0xDFFF) {
+          buf.writeCharCode(0xFFFD);
+        } else {
+          buf.write(s[j]);
+        }
+      }
+      return buf.toString();
+    }
+  }
+  return s;
+}
+
+String _safeDeviceName(String name, {required String fallback}) {
+  final sanitized = _sanitizeUtf16(name).trim();
+  return sanitized.isEmpty ? fallback : sanitized;
+}
+
 /// Persistent storage for messages, contacts, and device settings.
 ///
 /// Uses [SharedPreferences] so it works on all platforms including web.
@@ -31,9 +66,10 @@ class StorageService {
     required String name,
   }) async {
     final prefs = await SharedPreferences.getInstance();
+    final safeName = _safeDeviceName(name, fallback: id);
     await prefs.setString(_keyLastDeviceId, id);
     await prefs.setString(_keyLastDeviceType, type);
-    await prefs.setString(_keyLastDeviceName, name);
+    await prefs.setString(_keyLastDeviceName, safeName);
   }
 
   /// Returns `null` when no device has been saved yet.
@@ -43,7 +79,11 @@ class StorageService {
     final type = prefs.getString(_keyLastDeviceType);
     final name = prefs.getString(_keyLastDeviceName);
     if (id == null || type == null) return null;
-    return LastDevice(id: id, type: type, name: name ?? id);
+    return LastDevice(
+      id: id,
+      type: type,
+      name: _safeDeviceName(name ?? id, fallback: id),
+    );
   }
 
   Future<void> clearLastDevice() async {
@@ -70,15 +110,16 @@ class StorageService {
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final safeName = _safeDeviceName(name, fallback: id);
       // Keep legacy keys in sync so loadLastDevice() still works.
       await prefs.setString(_keyLastDeviceId, id);
       await prefs.setString(_keyLastDeviceType, type);
-      await prefs.setString(_keyLastDeviceName, name);
+      await prefs.setString(_keyLastDeviceName, safeName);
       // Prepend, dedup by id, cap.
       final existing = _parseRecentDevices(prefs);
       final updated =
           [
-            LastDevice(id: id, type: type, name: name),
+            LastDevice(id: id, type: type, name: safeName),
             ...existing.where((d) => d.id != id),
           ].take(maxRecentDevices).toList();
       await prefs.setString(
@@ -91,7 +132,13 @@ class StorageService {
       );
       return updated;
     } catch (_) {
-      return [LastDevice(id: id, type: type, name: name)];
+      return [
+        LastDevice(
+          id: id,
+          type: type,
+          name: _safeDeviceName(name, fallback: id),
+        ),
+      ];
     }
   }
 
@@ -141,7 +188,13 @@ class StorageService {
       final type = prefs.getString(_keyLastDeviceType);
       final name = prefs.getString(_keyLastDeviceName);
       if (id == null || type == null) return [];
-      final seeded = [LastDevice(id: id, type: type, name: name ?? id)];
+      final seeded = [
+        LastDevice(
+          id: id,
+          type: type,
+          name: _safeDeviceName(name ?? id, fallback: id),
+        ),
+      ];
       await prefs.setString(
         _keyRecentDevices,
         jsonEncode(
@@ -166,7 +219,10 @@ class StorageService {
             (e) => LastDevice(
               id: e['id'] as String,
               type: e['type'] as String,
-              name: e['name'] as String,
+              name: _safeDeviceName(
+                e['name'] as String? ?? e['id'] as String,
+                fallback: e['id'] as String,
+              ),
             ),
           )
           .toList();
@@ -382,6 +438,7 @@ class StorageService {
 
   static const _keyPlan333Enabled = 'plan333_enabled';
   static const _keyPlan333Config = 'plan333_config';
+  static const _keyPlan333AutoSendState = 'plan333_auto_send_state';
 
   Future<void> savePlan333Enabled(bool enabled) async {
     try {
@@ -417,11 +474,30 @@ class StorageService {
     }
   }
 
+  /// Stores Plan333AutoSendState as a raw JSON string (caller handles encoding).
+  Future<void> savePlan333AutoSendState(String json) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyPlan333AutoSendState, json);
+    } catch (_) {}
+  }
+
+  /// Returns the stored Plan333AutoSendState JSON string, or null if not set.
+  Future<String?> loadPlan333AutoSendState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_keyPlan333AutoSendState);
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // QSL log
   // ---------------------------------------------------------------------------
 
   static const _keyQslLog = 'plan333_qsl_log';
+  static const _keyQslLogSessionStart = 'plan333_qsl_log_session_start';
 
   Future<void> saveQslLog(String json) async {
     try {
@@ -434,6 +510,26 @@ class StorageService {
     try {
       final prefs = await SharedPreferences.getInstance();
       return prefs.getString(_keyQslLog);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveQslLogSessionStart(int? epochMillis) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (epochMillis == null) {
+        await prefs.remove(_keyQslLogSessionStart);
+      } else {
+        await prefs.setInt(_keyQslLogSessionStart, epochMillis);
+      }
+    } catch (_) {}
+  }
+
+  Future<int?> loadQslLogSessionStart() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(_keyQslLogSessionStart);
     } catch (_) {
       return null;
     }

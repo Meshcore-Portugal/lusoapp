@@ -72,6 +72,19 @@ class _ContactPathSheetState extends ConsumerState<ContactPathSheet> {
     if (!mounted) return;
     if (error == null) {
       await service.requestContacts();
+      // Also clear the app-side path cache for this contact so _doTrace does
+      // not reuse the stale path on the next trace attempt.
+      final pubKey = widget.contact.publicKey;
+      final prefixHex =
+          pubKey
+              .sublist(0, pubKey.length >= 6 ? 6 : pubKey.length)
+              .map((b) => b.toRadixString(16).padLeft(2, '0'))
+              .join();
+      final cache = Map<String, PathCacheEntry>.from(
+        ref.read(pathCacheProvider),
+      );
+      cache.remove(prefixHex);
+      ref.read(pathCacheProvider.notifier).state = cache;
       setState(() {
         _resetting = false;
         _statusMessage =
@@ -112,7 +125,7 @@ class _ContactPathSheetState extends ConsumerState<ContactPathSheet> {
           final out = r.outPath.length;
           final inn = r.inPath.length;
           completer.complete(
-            'Caminho descoberto: $out salto${out == 1 ? '' : 's'} (saída)  /  '
+            'Caminho descoberto: $out salto${out == 1 ? '' : 's'} (saida)  /  '
             '$inn salto${inn == 1 ? '' : 's'} (entrada)',
           );
         }

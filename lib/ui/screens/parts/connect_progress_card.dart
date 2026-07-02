@@ -15,6 +15,7 @@ class _ConnectingCard extends StatelessWidget {
     required this.channelCount,
     required this.cachedContactCount,
     required this.cachedChannelCount,
+    required this.onCancel,
   });
 
   final _ConnectTarget? target;
@@ -26,6 +27,7 @@ class _ConnectingCard extends StatelessWidget {
   final int channelCount;
   final int cachedContactCount;
   final int cachedChannelCount;
+  final VoidCallback onCancel;
 
   static const _stepLabels = [
     'A ligar...',
@@ -63,7 +65,10 @@ class _ConnectingCard extends StatelessWidget {
                 const SizedBox(width: 12),
                 Flexible(
                   child: Text(
-                    target?.device.name ?? 'A ligar...',
+                    _safeUiName(
+                      target?.device.name,
+                      fallback: target?.device.id ?? 'A ligar...',
+                    ),
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -234,6 +239,18 @@ class _ConnectingCard extends StatelessWidget {
                   ),
                 );
               }),
+            ),
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              onPressed: onCancel,
+              icon: const Icon(Icons.close, size: 18),
+              label: Text(context.l10n.commonCancel),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: theme.colorScheme.onSurface.withAlpha(160),
+                side: BorderSide(
+                  color: theme.colorScheme.outline.withAlpha(120),
+                ),
+              ),
             ),
           ],
         ),

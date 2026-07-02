@@ -282,6 +282,20 @@ class AppLocalizationsEs extends AppLocalizations {
   String get commonOk => 'Ok';
 
   @override
+  String get pathHashMigrationNoticeTitle => 'Aviso de red';
+
+  @override
+  String get pathHashMigrationNoticeBody =>
+      'La red cambiará al modo hash de 2 bytes después del 2/7/2026 (2 de julio). La aplicación configurará automáticamente tu radio en esa fecha.';
+
+  @override
+  String get pathHashMigrationAppliedTitle => 'Red actualizada';
+
+  @override
+  String get pathHashMigrationAppliedBody =>
+      'Tu radio ha sido actualizado automáticamente al modo hash de 2 bytes a partir del 2/7/2026.';
+
+  @override
   String get commonLoading => 'Cargando...';
 
   @override
@@ -318,13 +332,25 @@ class AppLocalizationsEs extends AppLocalizations {
   String get commonMessageCopied => 'Mensaje copiado';
 
   @override
-  String get commonSent => 'Enviado';
+  String get commonSent => 'Transmitido';
 
   @override
   String get commonSentByMe => 'Yo';
 
   @override
   String get commonPropagating => 'Propagando...';
+
+  @override
+  String get chatBadgePropagatingTooltip => 'Esperando eco de repetidor...';
+
+  @override
+  String get chatBadgeTransmittedTooltip =>
+      'Transmitido — sin eco de repetidor recibido';
+
+  @override
+  String chatBadgeHeardTooltip(int count) {
+    return 'Escuchado por $count repetidor(es)';
+  }
 
   @override
   String get commonConnecting => 'Conectando...';
@@ -691,6 +717,87 @@ class AppLocalizationsEs extends AppLocalizations {
   String get settingsSosUnnamedChannel => '(sin nombre)';
 
   @override
+  String get settingsSosHoldDuration => 'Mantener para enviar (segundos)';
+
+  @override
+  String get settingsSosHoldDurationDesc =>
+      'Mantén el botón SOS pulsado este tiempo antes de enviar. Evita envíos accidentales.';
+
+  @override
+  String get settingsSosHoldToSend => 'Mantén para enviar SOS';
+
+  @override
+  String get cannedMessagesSosHint =>
+      'Mantén el chip SOS para enviar con la configuración definida';
+
+  @override
+  String get settingsPruneTitle => 'Limpieza de Contactos';
+
+  @override
+  String get settingsPruneDesc =>
+      'Eliminar contactos inactivos de la memoria de la radio';
+
+  @override
+  String get settingsPruneDaysLabel => 'Días de Inactividad';
+
+  @override
+  String get settingsPruneDaysDesc =>
+      'Los contactos sin contacto durante más de X días se eliminarán';
+
+  @override
+  String get settingsPruneDaysUnit => 'días';
+
+  @override
+  String get settingsPruneTypesTitle => 'Tipos de Contacto a Eliminar';
+
+  @override
+  String get settingsPruneChatsTitle => 'Chats / Personales';
+
+  @override
+  String get settingsPruneChatsDesc => 'Eliminar contactos de chat (0x01)';
+
+  @override
+  String get settingsPruneRepeatersTitle => 'Repetidores';
+
+  @override
+  String get settingsPruneRepeatersDesc =>
+      'Eliminar contactos de repetidor (0x02)';
+
+  @override
+  String get settingsPruneRoomsTitle => 'Salas';
+
+  @override
+  String get settingsPruneRoomsDesc => 'Eliminar contactos de sala (0x03)';
+
+  @override
+  String get settingsPruneSensorsTitle => 'Sensores';
+
+  @override
+  String get settingsPruneSensorsDesc => 'Eliminar contactos de sensor (0x04)';
+
+  @override
+  String get settingsPruneRestoreDefaults => 'Restaurar Predeterminados';
+
+  @override
+  String get settingsPublicKeyCopied => 'Clave pública copiada';
+
+  @override
+  String get settingsShutdownUnavailable =>
+      'Shutdown no está disponible en este firmware';
+
+  @override
+  String get settingsOwnQrCodeTitle => 'Mi Código QR';
+
+  @override
+  String get settingsEditNameTitle => 'Editar Nombre';
+
+  @override
+  String get settingsNodeNameLabel => 'Nombre del nodo';
+
+  @override
+  String get settingsNodeNameHint => 'Ej: CT1XXX-MC';
+
+  @override
   String get settingsPrivateKeyCopy => 'Copia de clave privada';
 
   @override
@@ -717,17 +824,62 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get settingsRestorePrivateKeyContent =>
-      'La radio se reiniciará automáticamente tras la restauración. ¿Continuar?';
+      'Esta operación reemplazará la clave privada actual de la radio. La nueva identidad se aplica inmediatamente — la clave pública en la app se actualizará.\n\n¿Estás seguro?';
 
   @override
   String get settingsDeleteBackupTitle => 'Eliminar copia de seguridad';
 
   @override
-  String get settingsKeySavedSuccess =>
-      'Copia de clave privada guardada con éxito';
+  String get settingsKeySavedSuccess => 'Clave privada guardada con éxito.';
 
   @override
-  String get settingsKeyImportedSuccess => 'Clave importada con éxito';
+  String get settingsKeyImportedSuccess =>
+      'Clave restaurada con éxito. Clave pública actualizada.';
+
+  @override
+  String get settingsKeyExportFailed =>
+      'Exportación fallida. El firmware puede no tener soporte activado.';
+
+  @override
+  String get settingsKeyRestoreFailed =>
+      'Restauración fallida. El firmware puede no tener soporte activado.';
+
+  @override
+  String get settingsDeleteBackupContent =>
+      'La copia de clave privada guardada en este dispositivo será eliminada. La radio no se ve afectada.';
+
+  @override
+  String get settingsKeyCopied => 'Clave privada copiada';
+
+  @override
+  String get settingsKeyCopySaved => 'Copia guardada en este dispositivo.';
+
+  @override
+  String get settingsCopyKeyTooltip => 'Copiar clave completa';
+
+  @override
+  String get settingsKeyConnectToBackup =>
+      'Conecta la radio para hacer una copia de seguridad de la clave.';
+
+  @override
+  String get settingsKeyShareSubject => 'MeshCore — copia de clave privada';
+
+  @override
+  String get settingsPasteKeyTitle => 'Pegar clave privada';
+
+  @override
+  String get settingsPasteKeyHint =>
+      'Pega aquí la clave privada de una copia anterior (128 caracteres hex).';
+
+  @override
+  String get settingsKeyHexLabel => 'Clave privada (hex)';
+
+  @override
+  String get settingsKeyInvalidHex =>
+      'Clave inválida — debe tener exactamente 128 caracteres hexadecimales.';
+
+  @override
+  String get commonContinue => 'Continuar';
 
   @override
   String get settingsAbout => 'Acerca de';
@@ -783,6 +935,12 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get contactsAdvertFlood => 'Anuncio · Flood';
+
+  @override
+  String get contactsAdvertSentZeroHop => 'Anuncio Zero Hop enviado';
+
+  @override
+  String get contactsAdvertSentFlood => 'Anuncio Flood enviado';
 
   @override
   String get contactsSort => 'Ordenar';
@@ -1298,13 +1456,22 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatYourRadio => 'Tu radio';
 
   @override
+  String get chatLastRepeater => 'Último repetidor';
+
+  @override
   String get chatYouSent => 'Enviaste el mensaje';
+
+  @override
+  String get chatSentMessage => 'Envió el mensaje';
 
   @override
   String get chatReceived => 'Recibió el mensaje';
 
   @override
   String get chatHopLabel => 'Salto';
+
+  @override
+  String get chatHopOrderFarthest => 'más lejano';
 
   @override
   String get chatRepeated => 'Repitió';
@@ -1452,6 +1619,9 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get connectLastFailTitle =>
       'Error al conectar con el último dispositivo';
+
+  @override
+  String get connectCancelledMessage => 'Conexión al radio cancelada';
 
   @override
   String get discoverTitle => 'Descubrir';

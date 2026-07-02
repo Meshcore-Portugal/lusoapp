@@ -1,7 +1,7 @@
 name: lusoapp
 description: "MeshCore Companion App - MeshCore Portugal"
 publish_to: "none"
-version: 0.4.3+15
+version: 0.4.3+19
 
 environment:
   sdk: ^3.7.0
@@ -41,6 +41,7 @@ dependencies:
   qr_flutter: ^4.1.0
   mobile_scanner: ^6.0.0
   image_picker: ^1.1.0
+  file_picker: ^8.1.7
 
   # Cryptography (SHA-256 for hashtag channel key derivation)
   crypto: ^3.0.3

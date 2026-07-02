@@ -1,5 +1,35 @@
 part of '../private_chat_screen.dart';
 
+String formatPrivateDeliveryStatus(
+  ChatMessage message, {
+  required String pendingLabel,
+  required String confirmedLabel,
+  required String failedLabel,
+  required String retryLabel,
+  required String floodLabel,
+  int maxAttempts = 4,
+  int floodAfterAttempt = 2,
+}) {
+  final attemptNumber = message.retryCount + 1;
+  final usesFlood = attemptNumber >= floodAfterAttempt;
+  final floodSuffix = usesFlood ? ' • $floodLabel' : '';
+
+  if (message.failed) {
+    if (message.retryCount > 0) {
+      return '$failedLabel • $retryLabel $attemptNumber/$maxAttempts$floodSuffix';
+    }
+    return failedLabel;
+  }
+
+  if (message.confirmed) return confirmedLabel;
+
+  if (message.retryCount > 0) {
+    return '$retryLabel $attemptNumber/$maxAttempts$floodSuffix';
+  }
+
+  return pendingLabel;
+}
+
 class _PrivateMessageBubble extends StatelessWidget {
   const _PrivateMessageBubble({
     required this.message,
@@ -61,8 +91,8 @@ class _PrivateMessageBubble extends StatelessWidget {
   /// reported by the radio when the frame arrived.
   ///
   /// For **outgoing** messages we rely solely on [msg.sentRouteFlag]:
-  ///   0 → sent via the stored direct path ("Direto")
-  ///   1 → sent via flood ("Flood")
+  ///   0 → sent via stored path (not flood; may still use repeaters)
+  ///   1 → sent via flood
   ///
   /// We deliberately do NOT derive hop count from the contact's current
   /// [contactPathLen] for outgoing messages. That value changes whenever the
@@ -71,18 +101,24 @@ class _PrivateMessageBubble extends StatelessWidget {
   static (String label, IconData icon, Color? color)? _msgRouteInfo(
     ChatMessage msg,
     ThemeData theme,
+    BuildContext context,
   ) {
+    final l10n = context.l10n;
     // Incoming: use the path length the radio reported for this frame.
     // Firmware convention: 0xFF = arrived via direct (stored) route;
     //                      N    = arrived via flood with (N & 0x3F) hops.
     if (msg.pathLen != null) {
       final pathLen = msg.pathLen!;
       if (pathLen == 0xFF) {
-        return ('Direto', Icons.arrow_forward, Colors.green.shade600);
+        return (l10n.commonDirect, Icons.arrow_forward, Colors.green.shade600);
       }
       final hops = pathLen & 0x3F;
       if (hops == 0) {
-        return ('Flood', Icons.waves, theme.colorScheme.onSurfaceVariant);
+        return (
+          l10n.commonFlood,
+          Icons.waves,
+          theme.colorScheme.onSurfaceVariant,
+        );
       }
       return (
         '$hops salto${hops > 1 ? 's' : ''}',
@@ -94,9 +130,13 @@ class _PrivateMessageBubble extends StatelessWidget {
     // Outgoing: use only the routing mode chosen at send time.
     if (msg.isOutgoing && msg.sentRouteFlag != null) {
       if (msg.sentRouteFlag == 0) {
-        return ('Direto', Icons.arrow_forward, Colors.green.shade600);
+        return (l10n.commonPath, Icons.alt_route, Colors.green.shade600);
       } else {
-        return ('Flood', Icons.waves, theme.colorScheme.onSurfaceVariant);
+        return (
+          l10n.commonFlood,
+          Icons.waves,
+          theme.colorScheme.onSurfaceVariant,
+        );
       }
     }
 
@@ -176,16 +216,31 @@ class _PrivateMessageBubble extends StatelessWidget {
   }
 
   void _showMsgDetails(BuildContext context, ChatMessage msg, ThemeData theme) {
+    final l10n = context.l10n;
+    final statusText = formatPrivateDeliveryStatus(
+      msg,
+      pendingLabel: l10n.privatePending,
+      confirmedLabel: l10n.privateConfirmed,
+      failedLabel: l10n.chatFailed,
+      retryLabel: l10n.chatRetry,
+      floodLabel: l10n.commonFlood,
+    );
     final time = DateTime.fromMillisecondsSinceEpoch(msg.timestamp * 1000);
     final timeStr =
         '${time.year}-${time.month.toString().padLeft(2, '0')}-${time.day.toString().padLeft(2, '0')} '
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}';
 
     int? hops;
+    int? incomingHashSize;
     if (msg.pathLen != null) {
-      hops = msg.pathLen == 0xFF ? 0 : msg.pathLen! & 0x3F;
+      final pathLen = msg.pathLen!;
+      if (pathLen == 0xFF) {
+        hops = 0;
+      } else {
+        hops = pathLen & 0x3F;
+        incomingHashSize = (pathLen >> 6) + 1;
+      }
     } else if (msg.isOutgoing && msg.sentRouteFlag != null) {
-      // Outgoing direct route — use contact's known path length
       if (msg.sentRouteFlag == 0 &&
           contactPathLen != null &&
           contactPathLen != 0xFF) {
@@ -213,7 +268,7 @@ class _PrivateMessageBubble extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'Detalhes da mensagem',
+                        l10n.chatMsgDetails,
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -223,18 +278,26 @@ class _PrivateMessageBubble extends StatelessWidget {
                   const Divider(height: 20),
                   _DetailRow(
                     icon: Icons.access_time,
-                    label: 'Hora',
+                    label: l10n.commonTime,
                     value: timeStr,
                     theme: theme,
                   ),
                   if (hops != null)
                     _DetailRow(
                       icon: Icons.route,
-                      label: 'Caminho',
+                      label: l10n.commonPath,
                       value:
                           hops == 0
-                              ? 'Direto'
-                              : '$hops salto${hops > 1 ? 's' : ''}',
+                              ? l10n.commonDirect
+                              : '$hops ${hops == 1 ? l10n.commonSingularHop : l10n.commonPluralHops}',
+                      theme: theme,
+                    ),
+                  if (!msg.isOutgoing && incomingHashSize != null)
+                    _DetailRow(
+                      icon: Icons.pin,
+                      label: l10n.radioSettingsPathHashMode,
+                      value:
+                          '$incomingHashSize ${incomingHashSize == 1 ? 'byte' : 'bytes'}',
                       theme: theme,
                     ),
                   if (msg.snr != null)
@@ -247,8 +310,11 @@ class _PrivateMessageBubble extends StatelessWidget {
                   if (msg.isOutgoing && msg.sentRouteFlag != null)
                     _DetailRow(
                       icon: Icons.send,
-                      label: 'Enviado via',
-                      value: msg.sentRouteFlag == 0 ? 'Direto' : 'Flood',
+                      label: l10n.privateSentVia,
+                      value:
+                          msg.sentRouteFlag == 0
+                              ? l10n.commonPath
+                              : l10n.commonFlood,
                       theme: theme,
                     ),
                   if (msg.isOutgoing)
@@ -259,13 +325,8 @@ class _PrivateMessageBubble extends StatelessWidget {
                               : msg.confirmed
                               ? Icons.done_all
                               : Icons.done,
-                      label: 'Estado',
-                      value:
-                          msg.failed
-                              ? context.l10n.chatFailed
-                              : msg.confirmed
-                              ? 'Confirmado'
-                              : 'Pendente',
+                      label: l10n.commonStatus,
+                      value: statusText,
                       theme: theme,
                     ),
                   const SizedBox(height: 8),
@@ -285,7 +346,15 @@ class _PrivateMessageBubble extends StatelessWidget {
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
     final meta = _metaSuffix(message);
     final metaLine = meta.isNotEmpty ? '$timeStr • $meta' : timeStr;
-    final routeInfo = _msgRouteInfo(message, theme);
+    final routeInfo = _msgRouteInfo(message, theme, context);
+    final statusText = formatPrivateDeliveryStatus(
+      message,
+      pendingLabel: context.l10n.privatePending,
+      confirmedLabel: context.l10n.privateConfirmed,
+      failedLabel: context.l10n.chatFailed,
+      retryLabel: context.l10n.chatRetry,
+      floodLabel: context.l10n.commonFlood,
+    );
 
     if (isMe) {
       return GestureDetector(
@@ -371,6 +440,21 @@ class _PrivateMessageBubble extends StatelessWidget {
                                   ? theme.colorScheme.primary
                                   : theme.colorScheme.onSurface.withAlpha(130),
                         ),
+                      if (message.retryCount > 0 || message.failed) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          statusText,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color:
+                                message.failed
+                                    ? theme.colorScheme.error
+                                    : theme.colorScheme.onSurface.withAlpha(
+                                      130,
+                                    ),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

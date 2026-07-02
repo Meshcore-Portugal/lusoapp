@@ -120,7 +120,11 @@ class CannedMessagesNotifier extends StateNotifier<List<CannedMessage>> {
       }
       state = loaded;
     } catch (_) {
+      // Decoding failed (corrupt / incompatible data) — recover by seeding
+      // defaults AND persisting them so the bad data is overwritten and future
+      // restarts load correctly.
       state = _defaultLibrary();
+      await _persist();
     }
   }
 
