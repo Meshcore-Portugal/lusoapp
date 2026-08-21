@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:logger/logger.dart';
 
 import '../protocol/protocol.dart';
@@ -213,6 +215,82 @@ class RadioService {
     await _send(CompanionEncoder.setAutoAddConfig(bitmask, maxHops));
   }
 
+  /// Request the persisted default flood scope (firmware v11+).
+  /// Returns null when unsupported, timed out, or no valid response arrived.
+  Future<DefaultFloodScopeResponse?> requestDefaultFloodScope({
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    final wait = _waitForResponseWhere(
+      (r) => r is DefaultFloodScopeResponse || r is ErrorResponse,
+      timeout: timeout,
+    );
+    await _send(CompanionEncoder.getDefaultFloodScope());
+    final resp = await wait;
+    return resp is DefaultFloodScopeResponse ? resp : null;
+  }
+
+  /// Persist default flood scope region name (firmware v11+).
+  ///
+  /// Pass null/empty [regionName] to clear the persisted default scope.
+  Future<bool> setDefaultFloodScope(
+    String? regionName, {
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    final trimmed = regionName?.trim() ?? '';
+    final scopeKey = _deriveFloodScopeKey(trimmed);
+
+    final wait = _waitForResponseWhere(
+      (r) => r is OkResponse || r is ErrorResponse,
+      timeout: timeout,
+    );
+    await _send(
+      CompanionEncoder.setDefaultFloodScope(name: trimmed, scopeKey: scopeKey),
+    );
+    final resp = await wait;
+    return resp is OkResponse;
+  }
+
+  /// Query a repeater for its configured region list via CMD_SEND_ANON_REQ.
+  ///
+  /// Returns null on timeout/parse errors; empty list means a valid reply with
+  /// no discoverable regions.
+  Future<List<String>?> requestRegions(
+    Uint8List publicKey, {
+    int pathLen = 0,
+    Uint8List? pathBytes,
+    Duration timeout = const Duration(seconds: 12),
+  }) async {
+    if (publicKey.length < 32) {
+      throw ArgumentError('publicKey must be at least 32 bytes');
+    }
+
+    final sentWait = _waitForResponseWhere(
+      (r) => r is SentResponse || r is ErrorResponse,
+      timeout: const Duration(seconds: 4),
+    );
+    await _send(
+      CompanionEncoder.sendAnonRegionsReq(
+        publicKey,
+        pathLen: pathLen,
+        pathBytes: pathBytes,
+      ),
+    );
+
+    final sent = await sentWait;
+    if (sent is! SentResponse) return null;
+    if (!sent.expectsAck) return null;
+
+    final binary = await _waitForResponseWhere(
+      (r) => r is BinaryResponsePush && r.tag == sent.expectedAck,
+      timeout:
+          sent.suggestedTimeoutMs > 0
+              ? Duration(milliseconds: sent.suggestedTimeoutMs + 3000)
+              : timeout,
+    );
+    if (binary is! BinaryResponsePush) return null;
+    return CompanionDecoder.parseRegionsFromBinaryResponse(binary.responseData);
+  }
+
   /// Re-send APP_START so the radio replies with a fresh [SelfInfoResponse].
   /// Use this after operations that change the radio's identity (e.g. key import).
   Future<void> requestSelfInfo({String appName = 'lusoapp'}) async {
@@ -390,6 +468,34 @@ class RadioService {
       if (e is StateError && !isConnected) return;
       rethrow;
     }
+  }
+
+  Future<CompanionResponse?> _waitForResponseWhere(
+    bool Function(CompanionResponse) matcher, {
+    required Duration timeout,
+  }) async {
+    final completer = Completer<CompanionResponse?>();
+    late final StreamSubscription<CompanionResponse> sub;
+    sub = responses.listen((response) {
+      if (!completer.isCompleted && matcher(response)) {
+        completer.complete(response);
+        sub.cancel();
+      }
+    });
+    try {
+      return await completer.future.timeout(timeout);
+    } on TimeoutException {
+      await sub.cancel();
+      return null;
+    }
+  }
+
+  Uint8List _deriveFloodScopeKey(String regionName) {
+    final trimmed = regionName.trim();
+    if (trimmed.isEmpty) return Uint8List(16);
+    final normalized = trimmed.startsWith('#') ? trimmed : '#$trimmed';
+    final digest = sha256.convert(utf8.encode(normalized));
+    return Uint8List.fromList(digest.bytes.sublist(0, 16));
   }
 
   bool _keysEqual(Uint8List a, Uint8List b) {

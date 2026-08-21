@@ -381,6 +381,25 @@
     }
   },
   "contactsSaveToRadioError": "Erro ao guardar contacto no rádio",
+  "contactsStorageFilterTooltip": "Armazenamento",
+  "contactsStorageAll": "Todos (rádio + app)",
+  "contactsStorageOnRadio": "Guardados no rádio",
+  "contactsStorageAppOnly": "Apenas na app",
+  "contactsStoredOnRadioTooltip": "Guardado no rádio",
+  "contactsStoredAppOnlyTooltip": "Apenas na app — não está no rádio",
+  "contactsKeepOnRadio": "Guardar no rádio",
+  "contactsKeepOnRadioOnHint": "Ocupa um lugar na tabela de contactos do rádio",
+  "contactsRemovedFromRadio": "{name} removido do rádio (mantido na app)",
+  "@contactsRemovedFromRadio": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "contactsRemoveFromRadioError": "Erro ao remover contacto do rádio",
+  "contactsEmptyAppOnly": "Sem contactos apenas na app",
+  "contactsEmptyAppOnlyHint": "Todos os contactos conhecidos estão guardados no rádio",
   "contactsSaveTimeout": "Timeout: rádio não respondeu",
   "contactsRemoveTitle": "Remover contacto(s)?",
   "contactsRemovedPrefix": "Removidos",
@@ -758,6 +777,24 @@
   "radioSettingsShowPublicKeys": "Mostrar Chaves Públicas",
   "radioSettingsShowPublicKeysDesc": "Quando ativo, as chaves públicas serão mostradas na lista de contactos.",
   "radioSettingsBandPresetsTitle": "Predefinições de Banda",
+  "radioSettingsRegionScopeTitle": "Regiões e Flood Scope",
+  "radioSettingsRegionScopeDesc": "Alinha o flood scope predefinido do rádio com as regiões conhecidas.",
+  "radioSettingsRegionScopeUnsupported": "Disponível apenas em firmware v11+.",
+  "radioSettingsRegionScopeDefaultLabel": "Flood scope predefinido",
+  "radioSettingsRegionScopeDefaultAll": "Todas as regiões (limpar predefinição)",
+  "radioSettingsRegionScopeAddKnownLabel": "Adicionar região conhecida",
+  "radioSettingsRegionScopeNoRepeaters": "Sem repetidores disponíveis para descoberta",
+  "radioSettingsRegionScopeDiscoverButton": "Descobrir regiões via repetidores",
+  "radioSettingsRegionScopeSaved": "Flood scope predefinido atualizado.",
+  "radioSettingsRegionScopeSaveFailed": "Falha ao atualizar o flood scope predefinido.",
+  "radioSettingsRegionsKnownCount": "Regiões conhecidas: {count}",
+  "@radioSettingsRegionsKnownCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "roomJoinTitle": "Entrar na sala",
   "roomJoinInstruction": "Esta sala pode requerer uma palavra-passe. Deixe em branco se for pública.",
   "roomPasswordLabel": "Palavra-passe (opcional)",

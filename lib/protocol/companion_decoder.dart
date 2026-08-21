@@ -97,6 +97,8 @@ class CompanionDecoder {
         return _parseSignature(data);
       case respStats:
         return _parseStats(data);
+      case respDefaultFloodScope:
+        return _parseDefaultFloodScope(data);
       // Unsolicited push codes
       case pushAdvert:
       case pushNewAdvert:
@@ -145,6 +147,26 @@ class CompanionDecoder {
         _log.w('Unknown response code: 0x${code.toRadixString(16)}');
         return UnknownResponse(code, data);
     }
+  }
+
+  /// Parse a region list from a binary anon-response payload.
+  ///
+  /// Wire format is `[timestamp:4][csv_utf8_regions]`.
+  /// Returns null if payload is malformed.
+  static List<String>? parseRegionsFromBinaryResponse(Uint8List responseData) {
+    if (responseData.length < 4) return null;
+    final regionData = responseData.sublist(4);
+    final raw = _decodeRadioString(regionData).replaceAll('\x00', '').trim();
+    if (raw.isEmpty) return const [];
+    final regions =
+        raw
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty && e != '*')
+            .toSet()
+            .toList();
+    regions.sort();
+    return regions;
   }
 
   /// Extract frames from a raw byte stream.
@@ -690,6 +712,26 @@ class CompanionDecoder {
       default:
         return null;
     }
+  }
+
+  static DefaultFloodScopeResponse _parseDefaultFloodScope(Uint8List data) {
+    // Empty payload means no default scope configured.
+    if (data.isEmpty) {
+      return const DefaultFloodScopeResponse(name: null, scopeKey: null);
+    }
+    // Firmware emits exactly 31-byte name + 16-byte key.
+    if (data.length != 47) {
+      return const DefaultFloodScopeResponse(name: null, scopeKey: null);
+    }
+
+    final nameField = data.sublist(0, 31);
+    final nameEnd = _findNullTerminator(nameField, 0, nameField.length);
+    final name = _decodeRadioString(nameField.sublist(0, nameEnd)).trim();
+    final key = Uint8List.fromList(data.sublist(31, 47));
+    return DefaultFloodScopeResponse(
+      name: name.isEmpty ? null : name,
+      scopeKey: key,
+    );
   }
 
   // --- Utility ---

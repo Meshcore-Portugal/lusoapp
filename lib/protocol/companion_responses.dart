@@ -228,6 +228,20 @@ class AutoAddConfigResponse extends CompanionResponse {
   final int maxHops;
 }
 
+/// Response to CMD_GET_DEFAULT_FLOOD_SCOPE (0x40), firmware v11+.
+///
+/// `name == null` and `scopeKey == null` means the radio has no persisted
+/// default scope configured.
+class DefaultFloodScopeResponse extends CompanionResponse {
+  const DefaultFloodScopeResponse({required this.name, required this.scopeKey});
+
+  final String? name;
+  final Uint8List? scopeKey;
+
+  bool get isConfigured =>
+      name != null && name!.trim().isNotEmpty && scopeKey != null;
+}
+
 /// Core device statistics (CMD_GET_STATS + STATS_TYPE_CORE).
 class StatsCoreResponse extends CompanionResponse {
   const StatsCoreResponse({

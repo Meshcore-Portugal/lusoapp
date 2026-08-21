@@ -382,6 +382,59 @@ class CompanionEncoder {
     return _frame(cmdSendBinaryReq, payload.toBytes());
   }
 
+  /// SEND_ANON_REQ — request region list from a repeater.
+  ///
+  /// Wire format (after command byte):
+  /// `[pub_key:32][anon_req_type:1][path_len:1][reversed_path:N]`
+  ///
+  /// [pathLen] uses MeshCore's encoded path-len byte format.
+  static Uint8List sendAnonRegionsReq(
+    Uint8List publicKey, {
+    int pathLen = 0,
+    Uint8List? pathBytes,
+  }) {
+    if (publicKey.length < 32) {
+      throw ArgumentError('publicKey must be at least 32 bytes');
+    }
+    final path = pathBytes ?? Uint8List(0);
+    final payload = BytesBuilder();
+    payload.add(publicKey.sublist(0, 32));
+    payload.addByte(anonReqTypeRegions);
+    payload.addByte(pathLen & 0xFF);
+    if (path.isNotEmpty) {
+      payload.add(path.reversed.toList());
+    }
+    return _frame(cmdSendAnonReq, payload.toBytes());
+  }
+
+  /// GET_DEFAULT_FLOOD_SCOPE — read persisted default flood scope (fw v11+).
+  static Uint8List getDefaultFloodScope() => _frame(cmdGetDefaultFloodScope);
+
+  /// SET_DEFAULT_FLOOD_SCOPE — persist default flood scope (fw v11+).
+  ///
+  /// Clear format: `[cmd]`
+  /// Set format: `[cmd][name:31 zero-padded UTF-8][scope_key:16]`
+  static Uint8List setDefaultFloodScope({
+    required String name,
+    required Uint8List scopeKey,
+  }) {
+    if (name.trim().isEmpty) {
+      return _frame(cmdSetDefaultFloodScope);
+    }
+
+    final payload = BytesBuilder();
+    final nameField = Uint8List(31);
+    final encoded = _utf8Prefix(name.trim(), maxBytes: 30);
+    nameField.setRange(0, encoded.length, encoded);
+    payload.add(nameField);
+
+    final keyField = Uint8List(16);
+    final copyLen = scopeKey.length < 16 ? scopeKey.length : 16;
+    keyField.setRange(0, copyLen, scopeKey);
+    payload.add(keyField);
+    return _frame(cmdSetDefaultFloodScope, payload.toBytes());
+  }
+
   /// SEND_PATH_DISCOVERY_REQ — flood the network to discover a path to a contact.
   /// Spec: {code, reserved(1)=0, pub_key(32)}
   /// The radio responds with RESP_CODE_SENT, then later with
@@ -422,6 +475,17 @@ class CompanionEncoder {
   // --- Utility ---
 
   static int _nowEpoch() => DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+  static List<int> _utf8Prefix(String value, {required int maxBytes}) {
+    if (maxBytes <= 0 || value.isEmpty) return const [];
+    final out = <int>[];
+    for (final rune in value.runes) {
+      final chunk = utf8.encode(String.fromCharCode(rune));
+      if (out.length + chunk.length > maxBytes) break;
+      out.addAll(chunk);
+    }
+    return out;
+  }
 
   static Uint8List _uint32LE(int value) {
     final data = ByteData(4)..setUint32(0, value, Endian.little);

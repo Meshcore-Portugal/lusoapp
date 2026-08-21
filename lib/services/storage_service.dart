@@ -303,6 +303,8 @@ class StorageService {
   static const _keyChannels = 'channels_v1';
   static const _keyChannelsV2Prefix = 'channels_v2_';
   static const _keyMutedChannelsV2Prefix = 'muted_channels_v2_';
+  static const _keyKnownRegionsV1Prefix = 'known_regions_v1_';
+  static const _keyDefaultFloodScopeV1Prefix = 'default_flood_scope_v1_';
 
   /// Sanitise a device ID for use as a storage key suffix.
   /// Replaces any non-alphanumeric characters (colons, slashes, etc.) with '_'.
@@ -399,6 +401,75 @@ class StorageService {
       return list.map(int.parse).toSet();
     } catch (_) {
       return {};
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Region/default-scope state — radio-scoped (v1)
+  // ---------------------------------------------------------------------------
+
+  Future<void> saveKnownRegionsForRadio(
+    String deviceId,
+    List<String> regions,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final normalized =
+          regions
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+      await prefs.setStringList(
+        '$_keyKnownRegionsV1Prefix${sanitizeId(deviceId)}',
+        normalized,
+      );
+    } catch (_) {}
+  }
+
+  Future<List<String>> loadKnownRegionsForRadio(String deviceId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw =
+          prefs.getStringList(
+            '$_keyKnownRegionsV1Prefix${sanitizeId(deviceId)}',
+          ) ??
+          const <String>[];
+      final out =
+          raw.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList()
+            ..sort();
+      return out;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> saveDefaultFloodScopeForRadio(
+    String deviceId,
+    String? scopeName,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '$_keyDefaultFloodScopeV1Prefix${sanitizeId(deviceId)}';
+      final trimmed = scopeName?.trim() ?? '';
+      if (trimmed.isEmpty) {
+        await prefs.remove(key);
+      } else {
+        await prefs.setString(key, trimmed);
+      }
+    } catch (_) {}
+  }
+
+  Future<String?> loadDefaultFloodScopeForRadio(String deviceId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '$_keyDefaultFloodScopeV1Prefix${sanitizeId(deviceId)}';
+      final raw = prefs.getString(key)?.trim();
+      if (raw == null || raw.isEmpty) return null;
+      return raw;
+    } catch (_) {
+      return null;
     }
   }
 

@@ -374,6 +374,25 @@
   "contactsTypeCompanion": "Type: Companion",
   "contactsSavedToRadio": "{name} saved to radio",
   "contactsSaveToRadioError": "Error saving contact to radio",
+  "contactsStorageFilterTooltip": "Storage",
+  "contactsStorageAll": "All (radio + app)",
+  "contactsStorageOnRadio": "Stored on radio",
+  "contactsStorageAppOnly": "App only",
+  "contactsStoredOnRadioTooltip": "Stored on the radio",
+  "contactsStoredAppOnlyTooltip": "App only — not on the radio",
+  "contactsKeepOnRadio": "Store on radio",
+  "contactsKeepOnRadioOnHint": "Takes up a slot in the radio's contact table",
+  "contactsRemovedFromRadio": "{name} removed from the radio (kept in the app)",
+  "@contactsRemovedFromRadio": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "contactsRemoveFromRadioError": "Error removing contact from the radio",
+  "contactsEmptyAppOnly": "No app-only contacts",
+  "contactsEmptyAppOnlyHint": "Every known contact is stored on the radio",
   "contactsSaveTimeout": "Timeout: radio did not respond",
   "contactsRemoveTitle": "Remove contact(s)?",
   "contactsRemovedPrefix": "Removed",
@@ -737,6 +756,24 @@
   "radioSettingsShowPublicKeys": "Show Public Keys",
   "radioSettingsShowPublicKeysDesc": "When enabled, public keys will be shown in contacts list.",
   "radioSettingsBandPresetsTitle": "Band Presets",
+  "radioSettingsRegionScopeTitle": "Regions and Flood Scope",
+  "radioSettingsRegionScopeDesc": "Align the radio's default flood scope with your known regions.",
+  "radioSettingsRegionScopeUnsupported": "Available only on firmware v11+.",
+  "radioSettingsRegionScopeDefaultLabel": "Default flood scope",
+  "radioSettingsRegionScopeDefaultAll": "All regions (clear default)",
+  "radioSettingsRegionScopeAddKnownLabel": "Add known region",
+  "radioSettingsRegionScopeNoRepeaters": "No repeaters available for discovery",
+  "radioSettingsRegionScopeDiscoverButton": "Discover regions via repeaters",
+  "radioSettingsRegionScopeSaved": "Default flood scope updated.",
+  "radioSettingsRegionScopeSaveFailed": "Failed to update default flood scope.",
+  "radioSettingsRegionsKnownCount": "Known regions: {count}",
+  "@radioSettingsRegionsKnownCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "roomJoinTitle": "Join room",
   "roomJoinInstruction": "This room may require a password. Leave blank if public.",
   "roomPasswordLabel": "Password (optional)",

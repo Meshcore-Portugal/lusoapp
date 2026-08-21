@@ -192,6 +192,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
   @override
   Widget build(BuildContext context) {
     final filter = ref.watch(contactFilterProvider);
+    final storageFilter = ref.watch(contactStorageFilterProvider);
     final sort = ref.watch(contactSortProvider);
     final allContacts = ref.watch(contactsProvider);
     final radioKeys = ref.watch(radioContactsSnapshotProvider);
@@ -203,17 +204,29 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
     final lastMsgTs = ref.watch(contactLastMsgTsProvider);
     final autoAddSettings = ref.watch(advertAutoAddProvider);
 
-    // Only show contacts actually stored on the radio. Advert-heard contacts
-    // that haven't been saved to the radio appear in the discover screen only.
-    // Fall back to the full cache while disconnected or while the initial
-    // sync is still in progress (so the list isn't blank during connect).
+    // The radio keeps its own contact table; the app additionally caches every
+    // contact heard via advert. [storageFilter] chooses which of the two sets
+    // to show. Until the first full sync completes we don't know what the radio
+    // holds, so the filter is ignored and the whole cache is shown (otherwise
+    // the list would be blank during connect).
     final isConnected = transportState == TransportState.connected;
+    final storageKnown = isConnected && contactsSynced;
+    bool isOnRadio(Contact c) => radioKeys.contains(_radioKeyHex(c.publicKey));
+
+    final onRadioCount =
+        storageKnown ? allContacts.where(isOnRadio).length : allContacts.length;
+    final appOnlyCount = storageKnown ? allContacts.length - onRadioCount : 0;
+
     final contacts =
-        (!isConnected || !contactsSynced)
+        !storageKnown
             ? allContacts // Not yet synced — show cached list
-            : allContacts
-                .where((c) => radioKeys.contains(_radioKeyHex(c.publicKey)))
-                .toList();
+            : switch (storageFilter) {
+              ContactStorageFilter.todos => allContacts,
+              ContactStorageFilter.noRadio =>
+                allContacts.where(isOnRadio).toList(),
+              ContactStorageFilter.apenasApp =>
+                allContacts.where((c) => !isOnRadio(c)).toList(),
+            };
 
     final chatContacts = contacts.where((c) => c.isChat).toList();
     final repeaters = contacts.where((c) => c.isRepeater).toList();
@@ -422,6 +435,69 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                           ),
                         ],
                   ),
+                  // Storage filter — radio table vs app-only cache.
+                  PopupMenuButton<ContactStorageFilter>(
+                    icon: Icon(
+                      _storageIcon(storageFilter),
+                      color:
+                          storageKnown &&
+                                  storageFilter != ContactStorageFilter.noRadio
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                    ),
+                    tooltip: context.l10n.contactsStorageFilterTooltip,
+                    enabled: storageKnown,
+                    initialValue: storageFilter,
+                    onSelected:
+                        (f) => ref
+                            .read(contactStorageFilterProvider.notifier)
+                            .set(f),
+                    itemBuilder:
+                        (_) => [
+                          PopupMenuItem(
+                            value: ContactStorageFilter.todos,
+                            child: ListTile(
+                              leading: Icon(
+                                _storageIcon(ContactStorageFilter.todos),
+                              ),
+                              title: Text(
+                                '${context.l10n.contactsStorageAll} '
+                                '(${allContacts.length})',
+                              ),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: ContactStorageFilter.noRadio,
+                            child: ListTile(
+                              leading: Icon(
+                                _storageIcon(ContactStorageFilter.noRadio),
+                              ),
+                              title: Text(
+                                '${context.l10n.contactsStorageOnRadio} '
+                                '($onRadioCount)',
+                              ),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: ContactStorageFilter.apenasApp,
+                            child: ListTile(
+                              leading: Icon(
+                                _storageIcon(ContactStorageFilter.apenasApp),
+                              ),
+                              title: Text(
+                                '${context.l10n.contactsStorageAppOnly} '
+                                '($appOnlyCount)',
+                              ),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                        ],
+                  ),
                   PopupMenuButton<ContactSort>(
                     icon: Icon(
                       Icons.sort,
@@ -492,7 +568,13 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
             Expanded(
               child:
                   filtered.isEmpty
-                      ? _EmptyState(filter: filter)
+                      ? _EmptyState(
+                        filter: filter,
+                        storageFilter:
+                            storageKnown
+                                ? storageFilter
+                                : ContactStorageFilter.todos,
+                      )
                       : Builder(
                         builder: (context) {
                           final list = ListView.builder(
@@ -512,6 +594,8 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                               );
                               return _ContactTile(
                                 contact: contact,
+                                isOnRadio: !storageKnown || isOnRadio(contact),
+                                storageKnown: storageKnown,
                                 isMultiSelectMode: _multiSelectMode,
                                 isSelected: isSelected,
                                 showPublicKey: autoAddSettings.showPublicKeys,
@@ -663,13 +747,33 @@ class ContactFilterBar extends StatelessWidget {
 // Empty state
 // ---------------------------------------------------------------------------
 
+/// Icon representing where contacts are stored, used both by the toolbar
+/// storage filter and by the per-contact badge.
+IconData _storageIcon(ContactStorageFilter f) => switch (f) {
+  ContactStorageFilter.todos => Icons.devices_outlined,
+  ContactStorageFilter.noRadio => Icons.memory,
+  ContactStorageFilter.apenasApp => Icons.phone_android,
+};
+
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.filter});
+  const _EmptyState({
+    required this.filter,
+    this.storageFilter = ContactStorageFilter.todos,
+  });
   final ContactFilter filter;
+  final ContactStorageFilter storageFilter;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    // The app-only view has its own wording — "no contacts" there means every
+    // known contact is already on the radio, not that the list is empty.
+    if (storageFilter == ContactStorageFilter.apenasApp) {
+      return _EmptyBody(
+        icon: Icons.phone_android,
+        message: context.l10n.contactsEmptyAppOnly,
+        hint: context.l10n.contactsEmptyAppOnlyHint,
+      );
+    }
     final (icon, msg) = switch (filter) {
       ContactFilter.companheiros => (
         Icons.person_off,
@@ -697,6 +801,27 @@ class _EmptyState extends StatelessWidget {
       ),
     };
 
+    return _EmptyBody(
+      icon: icon,
+      message: msg,
+      hint: context.l10n.contactsEmptyHint,
+    );
+  }
+}
+
+class _EmptyBody extends StatelessWidget {
+  const _EmptyBody({
+    required this.icon,
+    required this.message,
+    required this.hint,
+  });
+  final IconData icon;
+  final String message;
+  final String hint;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -708,16 +833,13 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            msg,
+            message,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: theme.colorScheme.onSurface.withAlpha(120),
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            context.l10n.contactsEmptyHint,
-            style: theme.textTheme.bodySmall,
-          ),
+          Text(hint, style: theme.textTheme.bodySmall),
         ],
       ),
     );
@@ -739,6 +861,8 @@ enum _ContactsToolbarAction { discover, multiSelect }
 class _ContactTile extends ConsumerWidget {
   const _ContactTile({
     required this.contact,
+    this.isOnRadio = true,
+    this.storageKnown = false,
     this.isMultiSelectMode = false,
     this.isSelected = false,
     this.showPublicKey = true,
@@ -747,6 +871,14 @@ class _ContactTile extends ConsumerWidget {
   });
 
   final Contact contact;
+
+  /// Whether the radio's contact table holds this contact. Only meaningful
+  /// when [storageKnown] is true (i.e. a full sync has completed).
+  final bool isOnRadio;
+
+  /// True once the radio's contact list has been synced this connection, so
+  /// [isOnRadio] reflects the radio and not just an optimistic default.
+  final bool storageKnown;
   final bool isMultiSelectMode;
   final bool isSelected;
   final bool showPublicKey;
@@ -822,8 +954,34 @@ class _ContactTile extends ConsumerWidget {
           return '$namePrefix$base$keyPart';
         }(), style: theme.textTheme.bodySmall),
         trailing:
-            isFavorite
-                ? const Icon(Icons.star, color: Colors.amber, size: 20)
+            (isFavorite || storageKnown)
+                ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isFavorite)
+                      const Icon(Icons.star, color: Colors.amber, size: 20),
+                    if (storageKnown) ...[
+                      const SizedBox(width: 6),
+                      Tooltip(
+                        message:
+                            isOnRadio
+                                ? context.l10n.contactsStoredOnRadioTooltip
+                                : context.l10n.contactsStoredAppOnlyTooltip,
+                        child: Icon(
+                          isOnRadio
+                              ? _storageIcon(ContactStorageFilter.noRadio)
+                              : _storageIcon(ContactStorageFilter.apenasApp),
+                          size: 18,
+                          color:
+                              isOnRadio
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.onSurfaceVariant
+                                      .withAlpha(150),
+                        ),
+                      ),
+                    ],
+                  ],
+                )
                 : null,
         onTap:
             isMultiSelectMode
@@ -1078,6 +1236,45 @@ class _ContactTile extends ConsumerWidget {
     }
   }
 
+  /// Drops the contact from the radio's contact table while keeping it in the
+  /// app's cache — the inverse of [_saveToRadio]. Used by the "store on radio"
+  /// switch; deleting everywhere is [_confirmDelete].
+  Future<void> _removeFromRadio(BuildContext context, WidgetRef ref) async {
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+    try {
+      final respFuture = service.responses
+          .firstWhere((r) => r is OkResponse || r is ErrorResponse)
+          .timeout(const Duration(seconds: 5));
+      await service.removeContact(contact.publicKey);
+      final resp = await respFuture;
+      if (!context.mounted) return;
+      if (resp is OkResponse) {
+        // Re-sync so the radio snapshot (and therefore the storage badge)
+        // converges. The local cache keeps the contact: ContactsNotifier.refresh
+        // preserves entries that are absent from the radio's list.
+        await service.requestContacts();
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              context.l10n.contactsRemovedFromRadio(contact.displayName),
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.contactsRemoveFromRadioError)),
+        );
+      }
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.contactsRemoveTimeout)),
+      );
+    }
+  }
+
   void _showOptionsSheet(
     BuildContext context,
     WidgetRef ref,
@@ -1086,19 +1283,21 @@ class _ContactTile extends ConsumerWidget {
   ) {
     final theme = Theme.of(context);
 
-    // A contact is "on radio" when it appears in the service's confirmed
-    // contact list (populated by GET_CONTACTS). Advert-only contacts
-    // (heard via pushNewAdvert) are cached locally but not on the radio.
+    // A contact is "on radio" when the radio's contact table holds it. Once a
+    // full sync has completed the caller knows this ([storageKnown]); before
+    // that, fall back to the service's last received contact list.
     final service = ref.read(radioServiceProvider);
-    final isOnRadio =
-        service == null ||
-        service.contacts.any(
-          (c) =>
-              c.publicKey
-                  .map((b) => b.toRadixString(16).padLeft(2, '0'))
-                  .join() ==
-              keyHex,
-        );
+    final onRadio =
+        storageKnown
+            ? isOnRadio
+            : service == null ||
+                service.contacts.any(
+                  (c) =>
+                      c.publicKey
+                          .map((b) => b.toRadixString(16).padLeft(2, '0'))
+                          .join() ==
+                      keyHex,
+                );
 
     showModalBottomSheet<void>(
       context: context,
@@ -1158,17 +1357,35 @@ class _ContactTile extends ConsumerWidget {
                     ),
                   ),
                   const Divider(),
-                  // Save to radio — only shown for locally-cached (advert-only) contacts
-                  if (!isOnRadio)
-                    ListTile(
-                      leading: const Icon(Icons.save_outlined),
-                      title: Text(context.l10n.contactsSaveToRadioTitle),
-                      subtitle: Text(context.l10n.contactsNotSavedHint),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _saveToRadio(context, ref);
-                      },
+                  // Where this contact is stored. Turning the switch off frees
+                  // a slot in the radio's contact table but keeps the contact
+                  // in the app's own storage; deleting from both is the
+                  // "remove contact" action further down.
+                  SwitchListTile(
+                    value: onRadio,
+                    secondary: Icon(
+                      onRadio
+                          ? _storageIcon(ContactStorageFilter.noRadio)
+                          : _storageIcon(ContactStorageFilter.apenasApp),
                     ),
+                    title: Text(context.l10n.contactsKeepOnRadio),
+                    subtitle: Text(
+                      onRadio
+                          ? context.l10n.contactsKeepOnRadioOnHint
+                          : context.l10n.contactsNotSavedHint,
+                    ),
+                    onChanged:
+                        service == null
+                            ? null
+                            : (value) {
+                              Navigator.pop(ctx);
+                              if (value) {
+                                _saveToRadio(context, ref);
+                              } else {
+                                _removeFromRadio(context, ref);
+                              }
+                            },
+                  ),
                   // Favourite
                   ListTile(
                     leading: Icon(

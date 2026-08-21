@@ -78,6 +78,99 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     _ref.read(connectionStepProvider.notifier).state = label;
   }
 
+  List<String> _normalizeRegions(Iterable<String> regions) {
+    final out =
+        regions.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList()
+          ..sort();
+    return out;
+  }
+
+  Future<void> _setKnownRegions(List<String> regions) async {
+    final normalized = _normalizeRegions(regions);
+    _ref.read(knownRegionsProvider.notifier).state = normalized;
+    final radioId = _ref.read(currentRadioIdProvider);
+    if (radioId != null) {
+      await StorageService.instance.saveKnownRegionsForRadio(
+        radioId,
+        normalized,
+      );
+    }
+  }
+
+  Future<void> _setDefaultFloodScopeName(String? scopeName) async {
+    final trimmed = scopeName?.trim();
+    final normalized = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+    _ref.read(defaultFloodScopeNameProvider.notifier).state = normalized;
+    final radioId = _ref.read(currentRadioIdProvider);
+    if (radioId != null) {
+      await StorageService.instance.saveDefaultFloodScopeForRadio(
+        radioId,
+        normalized,
+      );
+    }
+  }
+
+  /// Refresh default flood scope from the radio (firmware v11+).
+  Future<void> refreshDefaultFloodScope() async {
+    final service = _ref.read(radioServiceProvider);
+    if (service == null) return;
+    final resp = await service.requestDefaultFloodScope();
+    if (resp == null) return;
+    await _setDefaultFloodScopeName(resp.name);
+    if (resp.name != null && resp.name!.trim().isNotEmpty) {
+      final merged = [..._ref.read(knownRegionsProvider), resp.name!];
+      await _setKnownRegions(merged);
+    }
+  }
+
+  /// Persist the radio's default flood scope (firmware v11+).
+  /// Returns true on success.
+  Future<bool> setDefaultFloodScopeName(String? scopeName) async {
+    final service = _ref.read(radioServiceProvider);
+    if (service == null) return false;
+    final ok = await service.setDefaultFloodScope(scopeName);
+    if (!ok) return false;
+    await _setDefaultFloodScopeName(scopeName);
+    final trimmed = scopeName?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      final merged = [..._ref.read(knownRegionsProvider), trimmed];
+      await _setKnownRegions(merged);
+    }
+    return true;
+  }
+
+  /// Query connected repeaters for their region lists and merge into known regions.
+  /// Returns the merged known-regions list, or null if no service is connected.
+  Future<List<String>?> discoverRegionsFromRepeaters() async {
+    final service = _ref.read(radioServiceProvider);
+    if (service == null) return null;
+
+    final repeaterContacts =
+        _ref
+            .read(contactsProvider)
+            .where((c) => c.type == advTypeRepeater)
+            .toList();
+    if (repeaterContacts.isEmpty) {
+      return _ref.read(knownRegionsProvider);
+    }
+
+    final discovered = <String>{..._ref.read(knownRegionsProvider)};
+    for (final repeater in repeaterContacts) {
+      try {
+        final regions = await service.requestRegions(repeater.publicKey);
+        if (regions != null) {
+          discovered.addAll(regions);
+        }
+      } catch (_) {
+        // Continue with other repeaters.
+      }
+    }
+
+    final merged = _normalizeRegions(discovered);
+    await _setKnownRegions(merged);
+    return merged;
+  }
+
   Future<bool> connectBle(String deviceId, String deviceName) async {
     _manualDisconnect = false;
     // Clear stale snapshot and sync flag so the contacts screen falls back
@@ -112,6 +205,13 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         await _ref.read(mutedChannelsProvider.notifier).loadForRadio(deviceId);
         await _ref.read(blockedSendersProvider.notifier).loadForRadio(deviceId);
         await _ref.read(advertAutoAddProvider.notifier).loadForRadio(deviceId);
+        _ref.read(knownRegionsProvider.notifier).state = await StorageService
+            .instance
+            .loadKnownRegionsForRadio(deviceId);
+        _ref
+            .read(defaultFloodScopeNameProvider.notifier)
+            .state = await StorageService.instance
+            .loadDefaultFloodScopeForRadio(deviceId);
 
         await _fetchInitialData(service);
         state = TransportState.connected;
@@ -197,6 +297,13 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         await _ref.read(mutedChannelsProvider.notifier).loadForRadio(deviceId);
         await _ref.read(blockedSendersProvider.notifier).loadForRadio(deviceId);
         await _ref.read(advertAutoAddProvider.notifier).loadForRadio(deviceId);
+        _ref.read(knownRegionsProvider.notifier).state = await StorageService
+            .instance
+            .loadKnownRegionsForRadio(deviceId);
+        _ref
+            .read(defaultFloodScopeNameProvider.notifier)
+            .state = await StorageService.instance
+            .loadDefaultFloodScopeForRadio(deviceId);
 
         await _fetchInitialData(service);
         state = TransportState.connected;
@@ -319,6 +426,13 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         await _ref.read(mutedChannelsProvider.notifier).loadForRadio(deviceId);
         await _ref.read(blockedSendersProvider.notifier).loadForRadio(deviceId);
         await _ref.read(advertAutoAddProvider.notifier).loadForRadio(deviceId);
+        _ref.read(knownRegionsProvider.notifier).state = await StorageService
+            .instance
+            .loadKnownRegionsForRadio(deviceId);
+        _ref
+            .read(defaultFloodScopeNameProvider.notifier)
+            .state = await StorageService.instance
+            .loadDefaultFloodScopeForRadio(deviceId);
 
         await _fetchInitialData(service);
         state = TransportState.connected;
@@ -418,6 +532,8 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     _ref.read(contactsSyncedProvider.notifier).state = false;
     _ref.read(traceHistoryProvider.notifier).clear();
     _ref.read(traceRequestContextProvider.notifier).state = {};
+    _ref.read(knownRegionsProvider.notifier).state = const [];
+    _ref.read(defaultFloodScopeNameProvider.notifier).state = null;
     // Clear the current radio ID so channel storage is not accidentally
     // written to the disconnected radio's scope.
     _ref.read(currentRadioIdProvider.notifier).state = null;
@@ -1065,6 +1181,12 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           _ref
               .read(advertAutoAddProvider.notifier)
               .loadFromRadio(bitmask, maxHops);
+        case DefaultFloodScopeResponse(:final name):
+          unawaited(_setDefaultFloodScopeName(name));
+          if (name != null && name.trim().isNotEmpty) {
+            final merged = [..._ref.read(knownRegionsProvider), name];
+            unawaited(_setKnownRegions(merged));
+          }
         case LogRxDataPush(:final data):
           _processLogRxData(data);
         default:
@@ -1326,6 +1448,15 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     // 5. Read the radio's auto-add config and seed the UI from the radio's
     //    persisted values (radio is source of truth for these settings).
     unawaited(service.requestAutoAddConfig().catchError((_) {}));
+
+    // 5a. Firmware v11+ exposes a persisted default flood scope.
+    // Keep this non-blocking so older firmware still completes connect fast.
+    unawaited(refreshDefaultFloodScope().catchError((_) {}));
+
+    // 5b. Opportunistic region discovery: only when no cached list exists.
+    if (_ref.read(knownRegionsProvider).isEmpty) {
+      unawaited(discoverRegionsFromRepeaters().catchError((_) {}));
+    }
 
     // 6. Drain any messages queued while the app was disconnected.
     //    The spec says to send CMD_SYNC_NEXT_MESSAGE during initialisation.

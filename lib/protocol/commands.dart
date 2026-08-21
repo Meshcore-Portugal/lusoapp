@@ -57,6 +57,7 @@ const int cmdSendBinaryReq = 0x32;
 const int cmdSendPathDiscoveryReq = 0x34;
 const int cmdSendControlData = 0x37;
 const int cmdGetStats = 0x38;
+const int cmdSendAnonReq = 0x39;
 const int cmdSetAutoAddConfig = 0x3A; // 58 — write autoadd bitmask + max-hops
 const int cmdGetAutoAddConfig = 0x3B; // 59 — read  autoadd bitmask + max-hops
 
@@ -64,6 +65,10 @@ const int cmdGetAutoAddConfig = 0x3B; // 59 — read  autoadd bitmask + max-hops
 /// Mode 0 = 1-byte hashes (default, all firmwares), 1 = 2-byte, 2 = 3-byte.
 /// Reported back in the device-info response at byte 80 (firmware v10+).
 const int cmdSetPathHashMode = 0x3D; // 61 — frame: [cmd, 0x00, mode]
+const int cmdSetDefaultFloodScope =
+    0x3F; // 63 — set/clear persisted default flood scope
+const int cmdGetDefaultFloodScope =
+    0x40; // 64 — read persisted default flood scope
 
 // ---------------------------------------------------------------------------
 // CMD_GET_STATS sub-types
@@ -102,6 +107,15 @@ const int respChannelInfo = 0x12;
 const int respSignature = 0x14;
 const int respStats = 0x18;
 const int respAutoAddConfig = 0x19; // 25 — response to CMD_GET_AUTOADD_CONFIG
+const int respDefaultFloodScope =
+    0x1C; // 28 — response to CMD_GET_DEFAULT_FLOOD_SCOPE
+
+// ---------------------------------------------------------------------------
+// ANON request types
+// ---------------------------------------------------------------------------
+
+/// Anonymous request: query a repeater for its region list.
+const int anonReqTypeRegions = 0x01;
 
 // ---------------------------------------------------------------------------
 // autoadd_config bitmask bits  (companion radio firmware — MyMesh.cpp)

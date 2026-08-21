@@ -1056,6 +1056,48 @@ class AppLocalizationsEs extends AppLocalizations {
   String get contactsSaveToRadioError => 'Error al guardar contacto en radio';
 
   @override
+  String get contactsStorageFilterTooltip => 'Almacenamiento';
+
+  @override
+  String get contactsStorageAll => 'Todos (radio + app)';
+
+  @override
+  String get contactsStorageOnRadio => 'Guardados en la radio';
+
+  @override
+  String get contactsStorageAppOnly => 'Solo en la app';
+
+  @override
+  String get contactsStoredOnRadioTooltip => 'Guardado en la radio';
+
+  @override
+  String get contactsStoredAppOnlyTooltip =>
+      'Solo en la app — no está en la radio';
+
+  @override
+  String get contactsKeepOnRadio => 'Guardar en la radio';
+
+  @override
+  String get contactsKeepOnRadioOnHint =>
+      'Ocupa un lugar en la tabla de contactos de la radio';
+
+  @override
+  String contactsRemovedFromRadio(String name) {
+    return '$name eliminado de la radio (conservado en la app)';
+  }
+
+  @override
+  String get contactsRemoveFromRadioError =>
+      'Error al eliminar el contacto de la radio';
+
+  @override
+  String get contactsEmptyAppOnly => 'Sin contactos solo en la app';
+
+  @override
+  String get contactsEmptyAppOnlyHint =>
+      'Todos los contactos conocidos están guardados en la radio';
+
+  @override
   String get contactsSaveTimeout => 'Timeout: la radio no respondió';
 
   @override
@@ -2114,6 +2156,49 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get radioSettingsBandPresetsTitle => 'Preajustes de Banda';
+
+  @override
+  String get radioSettingsRegionScopeTitle => 'Regiones y Flood Scope';
+
+  @override
+  String get radioSettingsRegionScopeDesc =>
+      'Alinea el flood scope predeterminado de la radio con las regiones conocidas.';
+
+  @override
+  String get radioSettingsRegionScopeUnsupported =>
+      'Disponible solo en firmware v11+.';
+
+  @override
+  String get radioSettingsRegionScopeDefaultLabel =>
+      'Flood scope predeterminado';
+
+  @override
+  String get radioSettingsRegionScopeDefaultAll =>
+      'Todas las regiones (limpiar predeterminado)';
+
+  @override
+  String get radioSettingsRegionScopeAddKnownLabel => 'Añadir región conocida';
+
+  @override
+  String get radioSettingsRegionScopeNoRepeaters =>
+      'No hay repetidores disponibles para descubrir';
+
+  @override
+  String get radioSettingsRegionScopeDiscoverButton =>
+      'Descubrir regiones vía repetidores';
+
+  @override
+  String get radioSettingsRegionScopeSaved =>
+      'Flood scope predeterminado actualizado.';
+
+  @override
+  String get radioSettingsRegionScopeSaveFailed =>
+      'Error al actualizar el flood scope predeterminado.';
+
+  @override
+  String radioSettingsRegionsKnownCount(int count) {
+    return 'Regiones conocidas: $count';
+  }
 
   @override
   String get roomJoinTitle => 'Entrar en sala';

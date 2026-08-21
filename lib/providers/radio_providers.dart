@@ -93,6 +93,13 @@ final radioConfigProvider = StateProvider<RadioConfig?>((_) => null);
 final deviceInfoProvider = StateProvider<DeviceInfo?>((_) => null);
 final batteryProvider = StateProvider<int>((_) => 0);
 
+/// Known region names for the currently connected radio.
+final knownRegionsProvider = StateProvider<List<String>>((_) => const []);
+
+/// Persisted default flood scope name for the currently connected radio.
+/// Null means "all regions" / no explicit default.
+final defaultFloodScopeNameProvider = StateProvider<String?>((_) => null);
+
 /// (storageUsed, storageTotal) in bytes; both null until first RESP_BATT_AND_STORAGE.
 final storageProvider = StateProvider<(int?, int?)>((_) => (null, null));
 
@@ -1307,6 +1314,21 @@ enum ContactFilter {
 
 enum ContactSort { nome, ouvidoRecentemente, ultimaMensagem }
 
+/// Where a contact lives.  Orthogonal to [ContactFilter] (which filters by
+/// contact type): the radio keeps its own contact table, while the app also
+/// caches every contact heard via advert.  [noRadio] is the historical
+/// behaviour of the contacts screen and stays the default.
+enum ContactStorageFilter {
+  /// Everything the app knows about — radio-stored plus app-only.
+  todos,
+
+  /// Only contacts confirmed present in the radio's contact table.
+  noRadio,
+
+  /// Only contacts cached by the app but absent from the radio's table.
+  apenasApp,
+}
+
 class _ContactFilterNotifier extends StateNotifier<ContactFilter> {
   _ContactFilterNotifier() : super(ContactFilter.todos) {
     _load();
@@ -1324,6 +1346,27 @@ class _ContactFilterNotifier extends StateNotifier<ContactFilter> {
     state = f;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('contacts_filter', f.index);
+  }
+}
+
+class _ContactStorageFilterNotifier
+    extends StateNotifier<ContactStorageFilter> {
+  _ContactStorageFilterNotifier() : super(ContactStorageFilter.noRadio) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final idx = prefs.getInt('contacts_storage_filter');
+    if (idx != null && idx >= 0 && idx < ContactStorageFilter.values.length) {
+      state = ContactStorageFilter.values[idx];
+    }
+  }
+
+  Future<void> set(ContactStorageFilter f) async {
+    state = f;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('contacts_storage_filter', f.index);
   }
 }
 
@@ -1350,6 +1393,11 @@ class _ContactSortNotifier extends StateNotifier<ContactSort> {
 final contactFilterProvider =
     StateNotifierProvider<_ContactFilterNotifier, ContactFilter>(
       (_) => _ContactFilterNotifier(),
+    );
+
+final contactStorageFilterProvider =
+    StateNotifierProvider<_ContactStorageFilterNotifier, ContactStorageFilter>(
+      (_) => _ContactStorageFilterNotifier(),
     );
 
 final contactSortProvider =

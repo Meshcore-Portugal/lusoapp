@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../l10n/l10n.dart';
 import '../../protocol/protocol.dart';
 import '../../providers/radio_providers.dart';
+import '../../services/storage_service.dart';
 import 'discover_contacts_screen.dart';
 
 part 'parts/radio_summary_card.dart';
@@ -461,11 +462,242 @@ class _RadioSettingsScreenState extends ConsumerState<RadioSettingsScreen> {
               const SizedBox(height: 24),
               const _AdvertAutoAddCard(),
 
+              // ----- Region / default flood scope -----
+              const SizedBox(height: 24),
+              const _RegionScopeCard(),
+
               // ----- Experimental settings -----
               const SizedBox(height: 24),
               const _ExperimentalCard(),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RegionScopeCard extends ConsumerStatefulWidget {
+  const _RegionScopeCard();
+
+  @override
+  ConsumerState<_RegionScopeCard> createState() => _RegionScopeCardState();
+}
+
+class _RegionScopeCardState extends ConsumerState<_RegionScopeCard> {
+  final _newRegionController = TextEditingController();
+  bool _savingDefault = false;
+  bool _discovering = false;
+
+  @override
+  void dispose() {
+    _newRegionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveDefault(String? scopeName) async {
+    final l10n = context.l10n;
+    setState(() => _savingDefault = true);
+    final ok = await ref
+        .read(connectionProvider.notifier)
+        .setDefaultFloodScopeName(scopeName);
+    if (!mounted) return;
+    setState(() => _savingDefault = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? l10n.radioSettingsRegionScopeSaved
+              : l10n.radioSettingsRegionScopeSaveFailed,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _discover() async {
+    final l10n = context.l10n;
+    setState(() => _discovering = true);
+    final merged =
+        await ref
+            .read(connectionProvider.notifier)
+            .discoverRegionsFromRepeaters();
+    if (!mounted) return;
+    setState(() => _discovering = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          merged == null
+              ? l10n.commonRadioDisconnected
+              : l10n.radioSettingsRegionsKnownCount(merged.length),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final theme = Theme.of(context);
+    final deviceInfo = ref.watch(deviceInfoProvider);
+    final knownRegions = ref.watch(knownRegionsProvider);
+    final defaultScope = ref.watch(defaultFloodScopeNameProvider);
+    final repeaterCount =
+        ref
+            .watch(contactsProvider)
+            .where((c) => c.type == advTypeRepeater)
+            .length;
+    final supported = (deviceInfo?.firmwareVersion ?? 0) >= 11;
+
+    final options = <String?>[null, ...knownRegions];
+    final selected = options.contains(defaultScope) ? defaultScope : null;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.public, size: 18, color: theme.colorScheme.primary),
+                const SizedBox(width: 6),
+                Text(
+                  l10n.radioSettingsRegionScopeTitle,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.radioSettingsRegionScopeDesc,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (!supported) ...[
+              const SizedBox(height: 8),
+              Text(
+                l10n.radioSettingsRegionScopeUnsupported,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ],
+            const Divider(height: 24),
+            DropdownButtonFormField<String?>(
+              key: ValueKey(
+                'scope_${selected ?? "all"}_${knownRegions.length}',
+              ),
+              initialValue: selected,
+              decoration: InputDecoration(
+                labelText: l10n.radioSettingsRegionScopeDefaultLabel,
+                border: const OutlineInputBorder(),
+              ),
+              items: [
+                DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text(l10n.radioSettingsRegionScopeDefaultAll),
+                ),
+                ...knownRegions.map(
+                  (r) => DropdownMenuItem<String?>(value: r, child: Text(r)),
+                ),
+              ],
+              onChanged:
+                  (!supported || _savingDefault)
+                      ? null
+                      : (value) {
+                        _saveDefault(value);
+                      },
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _newRegionController,
+                    enabled: supported,
+                    decoration: InputDecoration(
+                      labelText: l10n.radioSettingsRegionScopeAddKnownLabel,
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  onPressed:
+                      supported
+                          ? () async {
+                            final v = _newRegionController.text.trim();
+                            if (v.isEmpty) return;
+                            final merged = [...knownRegions, v]..sort();
+                            ref.read(knownRegionsProvider.notifier).state =
+                                merged.toSet().toList()..sort();
+                            final radioId = ref.read(currentRadioIdProvider);
+                            if (radioId != null) {
+                              await StorageService.instance
+                                  .saveKnownRegionsForRadio(radioId, merged);
+                            }
+                            _newRegionController.clear();
+                          }
+                          : null,
+                  icon: const Icon(Icons.add),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final region in knownRegions)
+                  InputChip(
+                    label: Text(region),
+                    onDeleted:
+                        supported
+                            ? () async {
+                              final next =
+                                  knownRegions
+                                      .where((r) => r != region)
+                                      .toList();
+                              ref.read(knownRegionsProvider.notifier).state =
+                                  next;
+                              final radioId = ref.read(currentRadioIdProvider);
+                              if (radioId != null) {
+                                await StorageService.instance
+                                    .saveKnownRegionsForRadio(radioId, next);
+                              }
+                              if (defaultScope == region) {
+                                await _saveDefault(null);
+                              }
+                            }
+                            : null,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed:
+                  (!supported || _discovering || repeaterCount == 0)
+                      ? null
+                      : _discover,
+              icon:
+                  _discovering
+                      ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.travel_explore),
+              label: Text(
+                repeaterCount == 0
+                    ? l10n.radioSettingsRegionScopeNoRepeaters
+                    : l10n.radioSettingsRegionScopeDiscoverButton,
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -2050,6 +2050,78 @@ abstract class AppLocalizations {
   /// **'Erro ao guardar contacto no rádio'**
   String get contactsSaveToRadioError;
 
+  /// No description provided for @contactsStorageFilterTooltip.
+  ///
+  /// In pt, this message translates to:
+  /// **'Armazenamento'**
+  String get contactsStorageFilterTooltip;
+
+  /// No description provided for @contactsStorageAll.
+  ///
+  /// In pt, this message translates to:
+  /// **'Todos (rádio + app)'**
+  String get contactsStorageAll;
+
+  /// No description provided for @contactsStorageOnRadio.
+  ///
+  /// In pt, this message translates to:
+  /// **'Guardados no rádio'**
+  String get contactsStorageOnRadio;
+
+  /// No description provided for @contactsStorageAppOnly.
+  ///
+  /// In pt, this message translates to:
+  /// **'Apenas na app'**
+  String get contactsStorageAppOnly;
+
+  /// No description provided for @contactsStoredOnRadioTooltip.
+  ///
+  /// In pt, this message translates to:
+  /// **'Guardado no rádio'**
+  String get contactsStoredOnRadioTooltip;
+
+  /// No description provided for @contactsStoredAppOnlyTooltip.
+  ///
+  /// In pt, this message translates to:
+  /// **'Apenas na app — não está no rádio'**
+  String get contactsStoredAppOnlyTooltip;
+
+  /// No description provided for @contactsKeepOnRadio.
+  ///
+  /// In pt, this message translates to:
+  /// **'Guardar no rádio'**
+  String get contactsKeepOnRadio;
+
+  /// No description provided for @contactsKeepOnRadioOnHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Ocupa um lugar na tabela de contactos do rádio'**
+  String get contactsKeepOnRadioOnHint;
+
+  /// No description provided for @contactsRemovedFromRadio.
+  ///
+  /// In pt, this message translates to:
+  /// **'{name} removido do rádio (mantido na app)'**
+  String contactsRemovedFromRadio(String name);
+
+  /// No description provided for @contactsRemoveFromRadioError.
+  ///
+  /// In pt, this message translates to:
+  /// **'Erro ao remover contacto do rádio'**
+  String get contactsRemoveFromRadioError;
+
+  /// No description provided for @contactsEmptyAppOnly.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sem contactos apenas na app'**
+  String get contactsEmptyAppOnly;
+
+  /// No description provided for @contactsEmptyAppOnlyHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Todos os contactos conhecidos estão guardados no rádio'**
+  String get contactsEmptyAppOnlyHint;
+
   /// No description provided for @contactsSaveTimeout.
   ///
   /// In pt, this message translates to:
@@ -4017,6 +4089,72 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Predefinições de Banda'**
   String get radioSettingsBandPresetsTitle;
+
+  /// No description provided for @radioSettingsRegionScopeTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Regiões e Flood Scope'**
+  String get radioSettingsRegionScopeTitle;
+
+  /// No description provided for @radioSettingsRegionScopeDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Alinha o flood scope predefinido do rádio com as regiões conhecidas.'**
+  String get radioSettingsRegionScopeDesc;
+
+  /// No description provided for @radioSettingsRegionScopeUnsupported.
+  ///
+  /// In pt, this message translates to:
+  /// **'Disponível apenas em firmware v11+.'**
+  String get radioSettingsRegionScopeUnsupported;
+
+  /// No description provided for @radioSettingsRegionScopeDefaultLabel.
+  ///
+  /// In pt, this message translates to:
+  /// **'Flood scope predefinido'**
+  String get radioSettingsRegionScopeDefaultLabel;
+
+  /// No description provided for @radioSettingsRegionScopeDefaultAll.
+  ///
+  /// In pt, this message translates to:
+  /// **'Todas as regiões (limpar predefinição)'**
+  String get radioSettingsRegionScopeDefaultAll;
+
+  /// No description provided for @radioSettingsRegionScopeAddKnownLabel.
+  ///
+  /// In pt, this message translates to:
+  /// **'Adicionar região conhecida'**
+  String get radioSettingsRegionScopeAddKnownLabel;
+
+  /// No description provided for @radioSettingsRegionScopeNoRepeaters.
+  ///
+  /// In pt, this message translates to:
+  /// **'Sem repetidores disponíveis para descoberta'**
+  String get radioSettingsRegionScopeNoRepeaters;
+
+  /// No description provided for @radioSettingsRegionScopeDiscoverButton.
+  ///
+  /// In pt, this message translates to:
+  /// **'Descobrir regiões via repetidores'**
+  String get radioSettingsRegionScopeDiscoverButton;
+
+  /// No description provided for @radioSettingsRegionScopeSaved.
+  ///
+  /// In pt, this message translates to:
+  /// **'Flood scope predefinido atualizado.'**
+  String get radioSettingsRegionScopeSaved;
+
+  /// No description provided for @radioSettingsRegionScopeSaveFailed.
+  ///
+  /// In pt, this message translates to:
+  /// **'Falha ao atualizar o flood scope predefinido.'**
+  String get radioSettingsRegionScopeSaveFailed;
+
+  /// No description provided for @radioSettingsRegionsKnownCount.
+  ///
+  /// In pt, this message translates to:
+  /// **'Regiões conhecidas: {count}'**
+  String radioSettingsRegionsKnownCount(int count);
 
   /// No description provided for @roomJoinTitle.
   ///
