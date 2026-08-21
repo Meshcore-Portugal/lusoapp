@@ -221,7 +221,13 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           radioNodeName,
           fallback: _safeUiName(deviceName, fallback: deviceId),
         );
-        await NotificationService.instance.startRadioForeground(displayName);
+        // Fire-and-forget: starting the Android foreground service is a
+        // platform-channel round trip that has nothing to do with the radio
+        // data being ready. Awaiting it kept the connect screen up (and the
+        // navigation to /channels waiting) after the sync had already finished.
+        unawaited(
+          NotificationService.instance.startRadioForeground(displayName),
+        );
         // Prefer the radio's configured node name; fall back to the BLE
         // advertisement name so the reconnect button always shows something.
         final recentList = await StorageService.instance.upsertRecentDevice(
@@ -313,7 +319,13 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           radioNodeName,
           fallback: _safeUiName(deviceName, fallback: deviceId),
         );
-        await NotificationService.instance.startRadioForeground(displayName);
+        // Fire-and-forget: starting the Android foreground service is a
+        // platform-channel round trip that has nothing to do with the radio
+        // data being ready. Awaiting it kept the connect screen up (and the
+        // navigation to /channels waiting) after the sync had already finished.
+        unawaited(
+          NotificationService.instance.startRadioForeground(displayName),
+        );
         final typeStr =
             mode == ConnectionMode.kiss ? 'serialKiss' : 'serialCompanion';
         final recentList = await StorageService.instance.upsertRecentDevice(
@@ -443,7 +455,13 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           radioNodeName,
           fallback: _safeUiName(deviceName, fallback: deviceId),
         );
-        await NotificationService.instance.startRadioForeground(displayName);
+        // Fire-and-forget: starting the Android foreground service is a
+        // platform-channel round trip that has nothing to do with the radio
+        // data being ready. Awaiting it kept the connect screen up (and the
+        // navigation to /channels waiting) after the sync had already finished.
+        unawaited(
+          NotificationService.instance.startRadioForeground(displayName),
+        );
 
         // Type strings distinguish Web Serial from native serial in the recent
         // devices list so the reconnect button calls the correct entry point.

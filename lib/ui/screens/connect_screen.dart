@@ -580,7 +580,12 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       _cachedContactCount = ref.read(radioContactsSnapshotProvider).length;
       _cachedChannelCount = ref.read(radioChannelsSnapshotProvider).length;
     });
-    if (last.type == 'ble' && !_checkBluetoothOn()) return;
+    if (last.type == 'ble' && !_checkBluetoothOn()) {
+      // The target is already set above, so clear it — otherwise the progress
+      // card stays on screen for an attempt that never started.
+      setState(() => _connectingTarget = null);
+      return;
+    }
     _cancelledByUser = false;
 
     final connection = ref.read(connectionProvider.notifier);
@@ -874,7 +879,14 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               ),
               SizedBox(height: showScanAreaExpanded ? 20 : 48),
 
-              if (state == TransportState.connecting)
+              // Stay on the progress card for the whole attempt. The notifier
+              // flips to `connected` as soon as the initial sync finishes, but
+              // the connect future runs a little longer before we navigate —
+              // gating on TransportState alone made the device picker flash
+              // back into view for that window, on top of a radio that is
+              // already busy.
+              if (_connectingTarget != null ||
+                  state == TransportState.connecting)
                 _ConnectingCard(
                   target: _connectingTarget,
                   stepLabel: stepLabel,
