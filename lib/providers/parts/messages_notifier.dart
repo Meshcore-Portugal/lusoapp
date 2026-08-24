@@ -38,6 +38,54 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     _partitioned = map;
   }
 
+  /// Append one message to its own bucket instead of re-partitioning the whole
+  /// list. Messages are appended in arrival order, which matches the order a
+  /// full rebuild would produce, so the buckets stay identical.
+  void _appendPartitioned(ChatMessage m) {
+    (_partitioned[_partitionKey(m)] ??= <ChatMessage>[]).add(m);
+  }
+
+  /// Keep [contactLastMsgTsProvider] up to date for the private messages in
+  /// [msgs]. Maintained incrementally — this map used to be derived by scanning
+  /// every message (and hashing every entry) on each state change, with the
+  /// contacts screen watching the result.
+  void _touchLastMsgTs(Iterable<ChatMessage> msgs) {
+    final current = _ref.read(contactLastMsgTsProvider);
+    Map<String, int>? next;
+    for (final m in msgs) {
+      if (m.channelIndex != null) continue;
+      final key = m.senderKey;
+      if (key == null || key.length < 6) continue;
+      final hex = _hex6(key);
+      if (((next ?? current)[hex] ?? 0) >= m.timestamp) continue;
+      next ??= Map<String, int>.from(current);
+      next[hex] = m.timestamp;
+    }
+    if (next != null) {
+      _ref.read(contactLastMsgTsProvider.notifier).state = next;
+    }
+  }
+
+  /// Recompute the last-message timestamp for one contact from its bucket.
+  /// Needed after a delete, where the newest message may be the one removed.
+  void _recomputeLastMsgTs(Uint8List senderKey) {
+    if (senderKey.length < 6) return;
+    final hex = _hex6(senderKey);
+    var newest = 0;
+    for (final m in _partitioned['c_$hex'] ?? const <ChatMessage>[]) {
+      if (m.timestamp > newest) newest = m.timestamp;
+    }
+    final current = _ref.read(contactLastMsgTsProvider);
+    if ((current[hex] ?? 0) == newest) return;
+    final next = Map<String, int>.from(current);
+    if (newest == 0) {
+      next.remove(hex);
+    } else {
+      next[hex] = newest;
+    }
+    _ref.read(contactLastMsgTsProvider.notifier).state = next;
+  }
+
   /// Bump the per-key version counter so scoped provider watchers rebuild.
   void _bumpVersion(String key) {
     final current = _ref.read(messageVersionsProvider);
@@ -264,7 +312,8 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     );
     if (dominated) return;
     state = [...state, message];
-    _rebuildPartitioned(state);
+    _appendPartitioned(message);
+    _touchLastMsgTs([message]);
     _bumpVersion(key);
     _saveForMessage(message);
   }
@@ -272,7 +321,8 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   void addOutgoing(ChatMessage message) {
     state = [...state, message];
     final key = _partitionKey(message);
-    _rebuildPartitioned(state);
+    _appendPartitioned(message);
+    _touchLastMsgTs([message]);
     _bumpVersion(key);
     _saveForMessage(message);
     _ref.read(networkStatsProvider.notifier).incrementTx();
@@ -564,28 +614,52 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
   }
 
   void _mergeStored(List<ChatMessage> stored) {
-    // Deduplicate by (timestamp, isOutgoing, text hashCode).
-    final existing = {for (final m in state) _msgId(m)};
-    final incoming =
-        stored.where((m) => !existing.contains(_msgId(m))).toList();
-    if (incoming.isEmpty) return;
-    final merged = [...incoming, ...state]
-      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    state = merged;
-    _rebuildPartitioned(state);
-    // Bump versions for all keys touched by the newly merged messages.
-    final touchedKeys = incoming.map(_partitionKey).toSet();
-    for (final k in touchedKeys) {
-      _bumpVersion(k);
-    }
-  }
+    if (stored.isEmpty) return;
 
-  String _msgId(ChatMessage m) {
-    // Use the full text instead of hashCode — hashCode is not stable and
-    // can collide, causing legitimate messages to be treated as duplicates.
-    final keyPart =
-        m.senderKey != null ? _hex6(m.senderKey!) : 'ch${m.channelIndex}';
-    return '${m.timestamp}_${m.isOutgoing ? 1 : 0}_${m.channelIndex}_${m.text}_$keyPart';
+    // Dedup and sort per conversation bucket rather than across the whole app.
+    //
+    // This runs every time a chat screen is opened. It used to build a
+    // full-text identity string for *every message in the app*, then sort and
+    // re-partition the entire message list — so opening one conversation got
+    // steadily slower as other conversations were loaded.
+    //
+    // Within a bucket the partition key already pins the channel or sender, so
+    // (timestamp, isOutgoing, text) is a sufficient identity. Using a record
+    // avoids allocating a concatenated string per message.
+    final byKey = <String, List<ChatMessage>>{};
+    for (final m in stored) {
+      (byKey[_partitionKey(m)] ??= <ChatMessage>[]).add(m);
+    }
+
+    final added = <ChatMessage>[];
+    for (final entry in byKey.entries) {
+      final key = entry.key;
+      final bucket = _partitioned[key] ??= <ChatMessage>[];
+      final seen = <(int, bool, String)>{
+        for (final m in bucket) (m.timestamp, m.isOutgoing, m.text),
+      };
+
+      var bucketChanged = false;
+      for (final m in entry.value) {
+        if (!seen.add((m.timestamp, m.isOutgoing, m.text))) continue;
+        bucket.add(m);
+        added.add(m);
+        bucketChanged = true;
+      }
+
+      if (bucketChanged) {
+        // Only the touched conversation is re-sorted; display order comes from
+        // the bucket, not from the flat state list.
+        bucket.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        _bumpVersion(key);
+      }
+    }
+
+    if (added.isEmpty) return;
+    // No global sort: nothing reads ordering off the flat list (addMessage has
+    // always appended without sorting), and screens read the partition.
+    state = [...state, ...added];
+    _touchLastMsgTs(added);
   }
 
   /// True when both messages have the same sender (or both have no sender).
@@ -604,15 +678,16 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
     } else {
       return;
     }
-    // Use the partition to get messages for this key — O(1) instead of O(n).
-    final partKey = _partitionKey(msg);
-    final forKey = List<ChatMessage>.from(_partitioned[partKey] ?? const []);
-
-    // Serialise saves per key: chain each save behind the previous one so
-    // a slower earlier future never overwrites a faster later snapshot.
+    // One row in, or an update of this message's status fields — the database
+    // handles both. This used to re-encode the entire conversation (up to
+    // maxMessagesPerKey messages) and rewrite the whole preferences file on
+    // every message, ack, retry and heard-count bump.
+    //
+    // Saves are still serialised per key so a slower earlier write cannot land
+    // after a later one for the same message.
     final prev = _saveLocks[storageKey] ?? Future.value();
     final next = prev.then(
-      (_) => StorageService.instance.saveMessages(storageKey, forKey),
+      (_) => StorageService.instance.upsertMessage(storageKey, msg),
     );
     _saveLocks[storageKey] = next;
     // Clean up the lock entry once the save completes to avoid unbounded growth.
@@ -632,6 +707,10 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
 
   /// Get messages for a specific contact (private).
   /// O(1) via _partitioned map — no list scan needed.
+  ///
+  /// The returned list is owned by this notifier and is appended to in place
+  /// by [_appendPartitioned]. Read it during build and do not retain or mutate
+  /// it; re-read after the conversation's [messageVersionsProvider] entry ticks.
   List<ChatMessage> forContact(Uint8List? contactKey) {
     if (contactKey == null) return const [];
     return _partitioned['c_${_hex6(contactKey)}'] ?? const [];
@@ -639,14 +718,27 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
 
   /// Get messages for a specific channel.
   /// O(1) via _partitioned map — no list scan needed.
+  ///
+  /// Same ownership contract as [forContact].
   List<ChatMessage> forChannel(int channelIndex) {
     return _partitioned['ch_$channelIndex'] ?? const [];
   }
 
+  /// Globally-unique identity for one message: the conversation discriminator
+  /// plus the fields that identify it inside that conversation. Used only by
+  /// [deleteMessage], where an O(n) pass over all messages is fine because it
+  /// is a one-off user action.
+  static (String, int, bool, String) _globalMsgId(ChatMessage m) => (
+    _partitionKey(m),
+    m.timestamp,
+    m.isOutgoing,
+    m.text,
+  );
+
   /// Delete a single message from state and re-persist its conversation.
   void deleteMessage(ChatMessage msg) {
-    final targetId = _msgId(msg);
-    state = state.where((m) => _msgId(m) != targetId).toList();
+    final targetId = _globalMsgId(msg);
+    state = state.where((m) => _globalMsgId(m) != targetId).toList();
     _rebuildPartitioned(state);
     if (msg.channelIndex != null) {
       final forKey =
@@ -666,6 +758,8 @@ class MessagesNotifier extends StateNotifier<List<ChatMessage>> {
               )
               .toList();
       StorageService.instance.saveMessages(key, forKey);
+      // The deleted message may have been the newest for this contact.
+      _recomputeLastMsgTs(msg.senderKey!);
     }
   }
 

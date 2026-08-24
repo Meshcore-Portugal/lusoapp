@@ -102,15 +102,6 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
     return null;
   }
 
-  bool _prefixMatch(Uint8List a, Uint8List b) {
-    final len = a.length < b.length ? a.length : b.length;
-    if (len < 4) return false;
-    for (var i = 0; i < len && i < 6; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
-  }
-
   // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
@@ -180,11 +171,13 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
         .retryPrivateMessage(msg, forceFlood: true);
   }
 
+  /// The list is reversed, so the newest message sits at offset 0 — scrolling
+  /// to the bottom never has to resolve the list's full extent.
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollCtrl.hasClients) {
         _scrollCtrl.animateTo(
-          _scrollCtrl.position.maxScrollExtent,
+          0,
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
@@ -209,25 +202,32 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
       }
     });
 
+    // Watch ONLY this room's message version — rebuild when a message arrives
+    // for this conversation, not on every message app-wide. Same pattern as
+    // channel_chat_screen; watching the global list here meant every packet
+    // rebuilt the room and re-scanned every message in the app.
+    ref.watch(
+      messageVersionsProvider.select((vs) => vs['c_$_prefix6Hex'] ?? 0),
+    );
     // While in chat, clear unread and scroll to bottom on new messages.
-    ref.listen<List<ChatMessage>>(messagesProvider, (prev, next) {
-      if (_joinState == _JoinState.joined) {
-        ref.read(unreadCountsProvider.notifier).markContactRead(_prefix6Hex);
-        if (prev != null && next.length > prev.length) _scrollToBottom();
-      }
-    });
+    ref.listen<int>(
+      messageVersionsProvider.select((vs) => vs['c_$_prefix6Hex'] ?? 0),
+      (prev, next) {
+        if (_joinState == _JoinState.joined) {
+          ref.read(unreadCountsProvider.notifier).markContactRead(_prefix6Hex);
+          if (prev != null && next > prev) _scrollToBottom();
+        }
+      },
+    );
 
     final contacts = ref.watch(contactsProvider);
     final contact = _findContact(contacts);
     final theme = Theme.of(context);
-    final allMessages = ref.watch(messagesProvider);
 
-    final roomMessages =
-        allMessages.where((m) {
-          if (m.isChannel) return false;
-          if (m.senderKey == null) return false;
-          return _prefixMatch(m.senderKey!, _contactKey);
-        }).toList();
+    // O(1) partition lookup — no filter scan over all messages.
+    final roomMessages = ref
+        .read(messagesProvider.notifier)
+        .forContact(_contactKey);
 
     return Column(
       children: [
@@ -488,12 +488,17 @@ class _ChatBody extends StatelessWidget {
       );
     }
 
+    // Reversed: index 0 is the newest message, rendered at the bottom. This
+    // keeps opening a room independent of history length — a forward list has
+    // to estimate its full extent to scroll to the end, which meant building
+    // its way through the whole conversation.
     return ListView.builder(
       controller: scrollController,
+      reverse: true,
       padding: const EdgeInsets.all(8),
       itemCount: messages.length,
       itemBuilder: (context, index) {
-        final msg = messages[index];
+        final msg = messages[messages.length - 1 - index];
         return _RoomMessageBubble(
           message: msg,
           onReply: msg.isOutgoing ? null : () => onSetReply(msg),

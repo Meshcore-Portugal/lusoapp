@@ -592,6 +592,10 @@ class _RegionScopeCardState extends ConsumerState<_RegionScopeCard> {
                 'scope_${selected ?? "all"}_${knownRegions.length}',
               ),
               initialValue: selected,
+              // isExpanded lets the selected label take the full field width and
+              // ellipsize; without it long translations (e.g. pt "Todas as
+              // regioes (limpar predefinicao)") overflow the Row horizontally.
+              isExpanded: true,
               decoration: InputDecoration(
                 labelText: l10n.radioSettingsRegionScopeDefaultLabel,
                 border: const OutlineInputBorder(),
@@ -599,10 +603,17 @@ class _RegionScopeCardState extends ConsumerState<_RegionScopeCard> {
               items: [
                 DropdownMenuItem<String?>(
                   value: null,
-                  child: Text(l10n.radioSettingsRegionScopeDefaultAll),
+                  child: Text(
+                    l10n.radioSettingsRegionScopeDefaultAll,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 ...knownRegions.map(
-                  (r) => DropdownMenuItem<String?>(value: r, child: Text(r)),
+                  (r) => DropdownMenuItem<String?>(
+                    value: r,
+                    child: Text(r, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
                 ),
               ],
               onChanged:

@@ -694,12 +694,20 @@ class _MessageBubble extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isMe = message.isOutgoing;
-    final allPaths = ref.watch(packetHeardProvider);
+    // Watch only this message's own path list. Watching the whole map meant a
+    // new map identity on every packet heard, which rebuilt every visible
+    // bubble in the list and made scrolling stutter on a busy mesh.
+    final hashHex = message.packetHashHex;
     final paths =
-        message.packetHashHex != null
-            ? (allPaths[message.packetHashHex] ?? <MessagePath>[])
-            : <MessagePath>[];
-    final contacts = ref.watch(contactsProvider);
+        hashHex == null
+            ? const <MessagePath>[]
+            : ref.watch(packetHeardProvider.select((m) => m[hashHex])) ??
+                const <MessagePath>[];
+    // The contact list is only read to resolve hop names, and _buildPathLine
+    // returns before touching it when there are no paths — so don't subscribe
+    // to it (350+ entries, rebuilt on every advert) unless it will be used.
+    final contacts =
+        paths.isEmpty ? const <Contact>[] : ref.watch(contactsProvider);
     final time = DateTime.fromMillisecondsSinceEpoch(message.timestamp * 1000);
     final timeStr =
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';

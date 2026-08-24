@@ -6,11 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lusoapp/providers/radio_providers.dart';
 import 'package:lusoapp/protocol/protocol.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../support/test_db.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
+    useInMemoryDatabase();
     SharedPreferences.setMockInitialValues({});
   });
 

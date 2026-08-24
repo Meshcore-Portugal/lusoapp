@@ -16,6 +16,29 @@ import '../widgets/canned_message_picker.dart';
 part 'parts/channel_message_bubble.dart';
 part 'parts/channel_paths_sheet.dart';
 
+/// What a slot of the reversed chat list should render.
+///
+/// The list is built with `reverse: true` so the newest message sits at scroll
+/// offset 0, which is what keeps opening a channel cheap. That inverts the
+/// index, and an optional unread-divider slot shifts everything after it — easy
+/// to get off by one, so the arithmetic lives here and is tested directly.
+///
+/// Returns the index into the messages list, or null for the divider slot.
+int? channelChatItemIndex({
+  required int reversedIndex,
+  required int messageCount,
+  required int firstUnreadIndex,
+}) {
+  final hasDivider = firstUnreadIndex >= 0;
+  final itemCount = messageCount + (hasDivider ? 1 : 0);
+  // Back to forward (oldest-first) coordinates.
+  final forwardIndex = itemCount - 1 - reversedIndex;
+  if (hasDivider && forwardIndex == firstUnreadIndex) return null;
+  return (hasDivider && forwardIndex > firstUnreadIndex)
+      ? forwardIndex - 1
+      : forwardIndex;
+}
+
 /// Channel list and chat screen.
 class ChannelChatScreen extends ConsumerStatefulWidget {
   const ChannelChatScreen({super.key, required this.channelIndex});
@@ -131,9 +154,9 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
 
   void _onScroll() {
     if (!_scrollController.hasClients) return;
-    final atBottom =
-        _scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 80;
+    // Reversed list: offset 0 is the newest message, so "at bottom" is a small
+    // offset rather than a position near maxScrollExtent.
+    final atBottom = _scrollController.position.pixels <= 80;
     if (atBottom != _atBottom) setState(() => _atBottom = atBottom);
     // Once the user has scrolled to the bottom, dismiss the unread divider.
     if (atBottom && _firstUnreadIndex != -1) {
@@ -240,12 +263,20 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
       // Try precise scroll first.
       final ctx = _unreadDividerKey.currentContext;
       if (ctx != null) {
-        Scrollable.ensureVisible(ctx, alignment: 0.0, duration: Duration.zero);
+        // The list is reversed, so its leading edge is the bottom of the
+        // screen: alignment 1.0 (trailing) is what puts the divider at the
+        // *top* of the viewport. In a forward list this would be 0.0.
+        Scrollable.ensureVisible(ctx, alignment: 1.0, duration: Duration.zero);
         return;
       }
 
       // Divider not built yet — do a rough jump to bring it into the build
       // window of the lazy list, then retry next frame.
+      //
+      // The list is reversed, so offset grows going *back* in time: an item at
+      // forward index i sits at roughly (total - 1 - i) / total of the extent.
+      // Unread messages are recent, which puts the divider near offset 0 where
+      // the lazy list has already built — so this fallback rarely runs now.
       if (_scrollController.hasClients) {
         final max = _scrollController.position.maxScrollExtent;
         if (max > 0) {
@@ -253,7 +284,8 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
               .read(messagesProvider.notifier)
               .forChannel(widget.channelIndex);
           if (msgs.isNotEmpty) {
-            final fraction = _firstUnreadIndex / (msgs.length + 1);
+            final total = msgs.length + 1;
+            final fraction = (total - 1 - _firstUnreadIndex) / total;
             _scrollController.jumpTo((fraction * max).clamp(0.0, max));
           }
         }
@@ -263,27 +295,24 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
     });
   }
 
+  /// Scroll to the newest message.
+  ///
+  /// The list is reversed, so the target is offset 0 — an exact, always-valid
+  /// position. The old forward list had to scroll to `maxScrollExtent`, which
+  /// a lazy list can only *estimate* until it has built its way through the
+  /// conversation; [attempts] existed to re-jump as that estimate corrected
+  /// itself. None of that is needed now, and the parameter is ignored.
   void _scrollToBottom({bool animate = true, int attempts = 1}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
-      final target = _scrollController.position.maxScrollExtent;
       if (animate) {
         _scrollController.animateTo(
-          target,
+          0,
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
       } else {
-        _scrollController.jumpTo(target);
-      }
-
-      if (attempts > 1) {
-        final retryDelay = animate ? 240 : 80;
-        Future<void>.delayed(Duration(milliseconds: retryDelay), () {
-          if (mounted) {
-            _scrollToBottom(animate: false, attempts: attempts - 1);
-          }
-        });
+        _scrollController.jumpTo(0);
       }
     });
   }
@@ -492,29 +521,32 @@ class _ChannelChatScreenState extends ConsumerState<ChannelChatScreen> {
                         ],
                       ),
                     )
+                    // Reversed: index 0 is the newest message, drawn at the
+                    // bottom. A forward list has to estimate its full extent to
+                    // scroll to the end, which meant building through the whole
+                    // conversation every time the channel was opened.
                     : ListView.builder(
                       controller: _scrollController,
+                      reverse: true,
                       padding: const EdgeInsets.all(8),
                       // Extra item slot for the unread divider when active.
                       itemCount:
                           channelMessages.length +
                           (_firstUnreadIndex >= 0 ? 1 : 0),
                       itemBuilder: (context, index) {
-                        // If the divider is active and we hit its slot, render it.
-                        if (_firstUnreadIndex >= 0 &&
-                            index == _firstUnreadIndex) {
+                        final msgIndex = channelChatItemIndex(
+                          reversedIndex: index,
+                          messageCount: channelMessages.length,
+                          firstUnreadIndex: _firstUnreadIndex,
+                        );
+                        // null marks the unread-divider slot.
+                        if (msgIndex == null) {
                           return _UnreadDivider(
                             key: _unreadDividerKey,
                             onDismiss:
                                 () => setState(() => _firstUnreadIndex = -1),
                           );
                         }
-                        // Shift real message index down by 1 after the divider.
-                        final msgIndex =
-                            (_firstUnreadIndex >= 0 &&
-                                    index > _firstUnreadIndex)
-                                ? index - 1
-                                : index;
                         final msg = channelMessages[msgIndex];
                         return _MessageBubble(
                           message: msg,

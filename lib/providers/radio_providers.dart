@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -482,46 +483,16 @@ final messageVersionsProvider = StateProvider<Map<String, int>>(
   (_) => const {},
 );
 
-// Stable snapshot of (contact hex6 → last private message timestamp).
-// Uses custom equality so that a channel message arriving does NOT cause
-// contacts_screen to rebuild; only actual private-message ts changes do.
-class _MsgTsSnapshot {
-  const _MsgTsSnapshot(this.data);
-  final Map<String, int> data;
-
-  @override
-  bool operator ==(Object other) {
-    if (other is! _MsgTsSnapshot) return false;
-    if (data.length != other.data.length) return false;
-    for (final e in data.entries) {
-      if (other.data[e.key] != e.value) return false;
-    }
-    return true;
-  }
-
-  @override
-  int get hashCode =>
-      Object.hashAll(data.entries.map((e) => Object.hash(e.key, e.value)));
-}
-
-final contactLastMsgTsProvider = Provider<Map<String, int>>((ref) {
-  return ref
-      .watch(
-        messagesProvider.select((msgs) {
-          final result = <String, int>{};
-          for (final m in msgs) {
-            if (m.senderKey != null &&
-                m.senderKey!.length >= 6 &&
-                m.channelIndex == null) {
-              final k = _hex6(m.senderKey!);
-              if (m.timestamp > (result[k] ?? 0)) result[k] = m.timestamp;
-            }
-          }
-          return _MsgTsSnapshot(result);
-        }),
-      )
-      .data;
-});
+/// Contact hex6 → timestamp of that contact's most recent private message.
+/// Used by contacts_screen to sort by last message.
+///
+/// Maintained incrementally by [MessagesNotifier] (see `_touchLastMsgTs`).
+/// It was previously derived by scanning every message in the app and hashing
+/// every entry of the result on each state change — with the contacts screen
+/// watching it, that ran on every packet-driven message update.
+final contactLastMsgTsProvider = StateProvider<Map<String, int>>(
+  (_) => const {},
+);
 
 // ---------------------------------------------------------------------------
 // Unread message counts
@@ -1161,6 +1132,18 @@ class PacketHeardNotifier
     extends StateNotifier<Map<String, List<MessagePath>>> {
   PacketHeardNotifier() : super({});
 
+  /// Maximum number of distinct packet hashes retained. The map is keyed by
+  /// packet hash, so without a cap it grows for the lifetime of the install —
+  /// every packet heard on the mesh adds an entry. Oldest-inserted hashes are
+  /// evicted first (Dart maps preserve insertion order).
+  static const int maxHashes = 2000;
+
+  /// [record] runs for every packet heard and each save re-encodes the whole
+  /// map, so persisting inline meant a full rewrite of the preferences file
+  /// per packet. Batching turns that into at most one write per window.
+  static const Duration _saveDebounce = Duration(seconds: 5);
+  Timer? _saveTimer;
+
   /// Load persisted paths from storage (called on app start and after reset).
   Future<void> loadFromStorage() async {
     final saved = await StorageService.instance.loadMessagePaths();
@@ -1187,19 +1170,49 @@ class PacketHeardNotifier
       pathHashSize: pathHashSize,
       pathBytes: pathBytes,
     );
-    final prev = state[hashHex] ?? [];
+    final prev = state[hashHex] ?? const <MessagePath>[];
     final next = [...prev, path];
-    state = {...state, hashHex: next};
-    // Persist after every record so paths survive app restarts.
-    StorageService.instance.saveMessagePaths(state);
+    final updated = {...state, hashHex: next};
+    if (updated.length > maxHashes) {
+      for (final k in updated.keys.take(updated.length - maxHashes).toList()) {
+        updated.remove(k);
+      }
+    }
+    state = updated;
+    // One row per reception. Pruning is debounced because it is a table-wide
+    // DELETE and does not need to run per packet.
+    unawaited(StorageService.instance.appendPacketPath(hashHex, path));
+    _schedulePrune();
     return next.length;
+  }
+
+  void _schedulePrune() {
+    if (_saveTimer?.isActive ?? false) return;
+    _saveTimer = Timer(_saveDebounce, flush);
+  }
+
+  /// Apply the retention limit now, cancelling any pending debounced prune.
+  void flush() {
+    _saveTimer?.cancel();
+    _saveTimer = null;
+    unawaited(StorageService.instance.prunePacketPaths());
   }
 
   /// Clear the in-memory state (e.g. on disconnect) then reload persisted
   /// paths so historical data remains available for the UI.
   void reset() {
+    // Persist what was heard this session before dropping it, otherwise a
+    // pending debounced save would be lost on disconnect.
+    flush();
     state = {};
     Future.microtask(loadFromStorage);
+  }
+
+  @override
+  void dispose() {
+    if (_saveTimer?.isActive ?? false) flush();
+    _saveTimer?.cancel();
+    super.dispose();
   }
 }
 
@@ -1236,7 +1249,9 @@ class RxLogEntry {
 }
 
 class RxLogNotifier extends StateNotifier<List<RxLogEntry>> {
-  RxLogNotifier() : super(const []);
+  RxLogNotifier(this._ref) : super(const []);
+
+  final Ref _ref;
 
   static const int _maxEntries = 4000;
 
@@ -1263,6 +1278,10 @@ class RxLogNotifier extends StateNotifier<List<RxLogEntry>> {
       pathHops: parsed?.pathHashCount,
     );
 
+    // Feed the rolling best-SNR tracker rather than letting it re-scan this
+    // whole list on every packet.
+    _ref.read(_bestSnrProvider.notifier).record(entry.receivedAt, snr);
+
     final next = [...state, entry];
     if (next.length > _maxEntries) {
       state = next.sublist(next.length - _maxEntries);
@@ -1271,11 +1290,14 @@ class RxLogNotifier extends StateNotifier<List<RxLogEntry>> {
     }
   }
 
-  void clear() => state = const [];
+  void clear() {
+    state = const [];
+    _ref.read(_bestSnrProvider.notifier).clear();
+  }
 }
 
 final rxLogProvider = StateNotifierProvider<RxLogNotifier, List<RxLogEntry>>(
-  (ref) => RxLogNotifier(),
+  RxLogNotifier.new,
 );
 
 // ---------------------------------------------------------------------------
@@ -1289,18 +1311,52 @@ final rxLogProvider = StateNotifierProvider<RxLogNotifier, List<RxLogEntry>>(
 /// Set to true before navigating to /apps/telemetry to auto-scroll to RF section.
 final telemetryScrollToRfProvider = StateProvider<bool>((_) => false);
 
+/// Highest SNR heard in the last [_BestSnrNotifier.window], maintained
+/// incrementally.
+///
+/// Fed by [RxLogNotifier.recordFromLogRxFrame]. The previous implementation
+/// derived this by re-scanning the entire (up to 4000-entry) RX log on every
+/// packet — and the HomeScreen AppBar watches it, so each packet cost a full
+/// scan plus a rebuild even when the displayed value had not changed.
+class _BestSnrNotifier extends StateNotifier<double?> {
+  _BestSnrNotifier() : super(null);
+
+  static const Duration window = Duration(minutes: 5);
+
+  /// Sliding-window maximum: a monotonically decreasing deque of candidates,
+  /// oldest first. The front is always the maximum of the current window, so
+  /// both insertion and expiry are O(1) amortised.
+  final ListQueue<(DateTime, double)> _candidates = ListQueue();
+
+  void record(DateTime at, double snr) {
+    while (_candidates.isNotEmpty && _candidates.last.$2 <= snr) {
+      _candidates.removeLast();
+    }
+    _candidates.addLast((at, snr));
+
+    final cutoff = at.subtract(window);
+    while (_candidates.isNotEmpty && !_candidates.first.$1.isAfter(cutoff)) {
+      _candidates.removeFirst();
+    }
+
+    final best = _candidates.isEmpty ? null : _candidates.first.$2;
+    if (best != state) state = best;
+  }
+
+  void clear() {
+    _candidates.clear();
+    state = null;
+  }
+}
+
+final _bestSnrProvider = StateNotifierProvider<_BestSnrNotifier, double?>(
+  (_) => _BestSnrNotifier(),
+);
+
 final bestSignalSnrProvider = Provider<double?>((ref) {
   final isConnected = ref.watch(connectionProvider) == TransportState.connected;
   if (!isConnected) return null;
-
-  final log = ref.watch(rxLogProvider);
-  if (log.isEmpty) return null;
-
-  final cutoff = DateTime.now().subtract(const Duration(minutes: 5));
-  final recent = log.where((e) => e.receivedAt.isAfter(cutoff));
-  if (recent.isEmpty) return null;
-
-  return recent.map((e) => e.snr).reduce((a, b) => a > b ? a : b);
+  return ref.watch(_bestSnrProvider);
 });
 
 enum ContactFilter {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
@@ -122,6 +124,28 @@ class _McAppPtState extends ConsumerState<McAppPt> {
   }
 
   Future<void> _initStorage() async {
+    // Move messages / contacts / packet paths out of SharedPreferences into
+    // the database, once, before anything reads them. Until this has run the
+    // old data still lives in prefs, so every load below would come back empty.
+    //
+    // It also deletes the migrated prefs keys, which is what shrinks the
+    // preferences file back to settings-only and fixes cold-start time for
+    // users upgrading with a large history.
+    try {
+      final result = await StorageService.instance.migrateFromPrefs();
+      if (result.didWork || !result.completed) {
+        debugPrint('[Storage] migration: $result');
+      }
+    } catch (e) {
+      // Never block startup on migration — it retries on the next launch.
+      debugPrint('[Storage] migration failed: $e');
+    }
+
+    // Retention runs once per launch, after migration, so a long-running
+    // install cannot grow without bound. Two SQL statements, nothing loaded
+    // into Dart, so it does not delay the first frame meaningfully.
+    unawaited(StorageService.instance.applyRetention());
+
     // Restore cached contacts so the contacts screen is populated
     // before the user connects to a radio.
     await ref.read(contactsProvider.notifier).loadFromStorage();

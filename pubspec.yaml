@@ -75,11 +75,25 @@ dependencies:
   # Guarded by Platform.isWindows at all call sites; compiles on all platforms.
   win_ble: ^1.1.1
 
+  # Local database for bulk data (messages, contacts, packet paths).
+  # SharedPreferences is a whole-file store: it rewrote everything on every
+  # packet heard and loaded the entire blob at startup. Drift is used rather
+  # than sqflite because it is the only option that also supports web, via
+  # web/sqlite3.wasm + web/drift_worker.js.
+  # drift_flutter brings in the native sqlite3 libraries for us.
+  drift: ^2.34.3
+  drift_flutter: ^0.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.3
+  # Imported directly by the timer-based provider tests (debounce, ACK timeouts).
+  fake_async: ^1.3.3
+  # Codegen for the drift database (`dart run build_runner build`).
+  drift_dev: ^2.34.0
+  build_runner: ^2.15.1
 
 flutter_launcher_icons:
   android: true

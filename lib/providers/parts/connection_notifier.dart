@@ -1471,10 +1471,11 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     // Keep this non-blocking so older firmware still completes connect fast.
     unawaited(refreshDefaultFloodScope().catchError((_) {}));
 
-    // 5b. Opportunistic region discovery: only when no cached list exists.
-    if (_ref.read(knownRegionsProvider).isEmpty) {
-      unawaited(discoverRegionsFromRepeaters().catchError((_) {}));
-    }
+    // 5b. Region discovery is NOT run automatically on connect.  It sends one
+    //     CMD_SEND_ANON_REQ per repeater contact, which puts a burst of packets
+    //     on the mesh at every app launch (and repeats forever on firmware that
+    //     never answers, since the cached list stays empty).  The user triggers
+    //     it on demand from Radio Settings -> Discover regions instead.
 
     // 6. Drain any messages queued while the app was disconnected.
     //    The spec says to send CMD_SYNC_NEXT_MESSAGE during initialisation.

@@ -110,11 +110,13 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     _scrollToBottom();
   }
 
+  /// The list is reversed, so the newest message sits at offset 0 — scrolling
+  /// to the bottom never has to resolve the list's full extent.
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          0,
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
@@ -130,9 +132,9 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
 
   void _onScroll() {
     if (!_scrollController.hasClients) return;
-    final atBottom =
-        _scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 80;
+    // Reversed list: offset 0 is the newest message, so "at bottom" is a small
+    // offset rather than a position near maxScrollExtent.
+    final atBottom = _scrollController.position.pixels <= 80;
     if (atBottom != _atBottom) setState(() => _atBottom = atBottom);
   }
 
@@ -355,12 +357,18 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
                         ],
                       ),
                     )
+                    // Reversed: index 0 is the newest message, drawn at the
+                    // bottom. A forward list has to estimate its full extent to
+                    // scroll to the end, which meant building through the whole
+                    // conversation every time the chat was opened.
                     : ListView.builder(
                       controller: _scrollController,
+                      reverse: true,
                       padding: const EdgeInsets.all(8),
                       itemCount: contactMessages.length,
                       itemBuilder: (context, index) {
-                        final msg = contactMessages[index];
+                        final msg =
+                            contactMessages[contactMessages.length - 1 - index];
                         return _PrivateMessageBubble(
                           message: msg,
                           selfName: selfName,

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../protocol/models.dart';
+import 'db/app_database.dart';
+import 'db/stores.dart';
 
 String _sanitizeUtf16(String s) {
   for (var i = 0; i < s.length; i++) {
@@ -41,7 +43,15 @@ String _safeDeviceName(String name, {required String fallback}) {
 
 /// Persistent storage for messages, contacts, and device settings.
 ///
-/// Uses [SharedPreferences] so it works on all platforms including web.
+/// Bulk data (messages, contacts, packet paths) lives in a SQLite database via
+/// drift; small settings stay in [SharedPreferences].
+///
+/// SharedPreferences is a whole-file store: every write rewrote the entire
+/// file, and `getInstance()` loads every key across the platform channel at
+/// startup. With messages and per-packet path records in there it grew to
+/// megabytes, which is what made cold start slow and writes expensive.
+/// Settings are small and unaffected, so they stayed put.
+///
 /// Messages are capped at [maxMessagesPerKey] entries per conversation key
 /// to bound storage growth.
 class StorageService {
@@ -54,7 +64,38 @@ class StorageService {
   static const _keyContacts = 'contacts_v1';
   static const int maxMessagesPerKey = 2000;
 
-  static String _messagesKey(String key) => 'msgs_v1_$key';
+  /// Maximum distinct packet hashes retained on disk. Mirrors the in-memory
+  /// cap in `PacketHeardNotifier`.
+  static const int maxPacketPathHashes = 2000;
+
+  /// Legacy prefs key prefix for a conversation's messages. Retained only so
+  /// [migrateFromPrefs] can find and clear the old entries.
+  static const _legacyMessagesPrefix = 'msgs_v1_';
+
+  // ---------------------------------------------------------------------------
+  // Database
+  // ---------------------------------------------------------------------------
+
+  AppDatabase? _db;
+
+  /// The database, opened on first use.
+  AppDatabase get db => _db ??= AppDatabase();
+
+  /// Inject a database (e.g. an in-memory one) for tests.
+  void debugUseDatabase(AppDatabase database) {
+    _db = database;
+    _messages = null;
+    _contacts = null;
+    _paths = null;
+  }
+
+  MessageStore? _messages;
+  ContactStore? _contacts;
+  PacketPathStore? _paths;
+
+  MessageStore get messages => _messages ??= MessageStore(db);
+  ContactStore get contacts => _contacts ??= ContactStore(db);
+  PacketPathStore get packetPaths => _paths ??= PacketPathStore(db);
 
   // ---------------------------------------------------------------------------
   // Last connected device
@@ -235,29 +276,32 @@ class StorageService {
   // Messages  (key = 'contact_<hex6>' or 'ch_<index>')
   // ---------------------------------------------------------------------------
 
-  Future<void> saveMessages(String key, List<ChatMessage> messages) async {
+  /// Write or update one message. This is the hot path: it costs a single row
+  /// insert (or an update of the mutable status fields when the message is
+  /// already stored), rather than re-encoding the whole conversation.
+  Future<void> upsertMessage(String key, ChatMessage message) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final tail =
-          messages.length > maxMessagesPerKey
-              ? messages.sublist(messages.length - maxMessagesPerKey)
-              : messages;
-      final json = jsonEncode(tail.map((m) => m.toJson()).toList());
-      await prefs.setString(_messagesKey(key), json);
+      await messages.upsert(key, message);
     } catch (_) {
       // Storage errors are non-fatal — messages still live in memory.
     }
   }
 
+  /// Replace every stored message for [key]. Prefer [upsertMessage] for single
+  /// messages; this exists for bulk rewrites such as deleting one message.
+  Future<void> saveMessages(String key, List<ChatMessage> msgs) async {
+    try {
+      final tail =
+          msgs.length > maxMessagesPerKey
+              ? msgs.sublist(msgs.length - maxMessagesPerKey)
+              : msgs;
+      await messages.replaceAll(key, tail);
+    } catch (_) {}
+  }
+
   Future<List<ChatMessage>> loadMessages(String key) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final json = prefs.getString(_messagesKey(key));
-      if (json == null) return [];
-      final list = jsonDecode(json) as List<dynamic>;
-      return list
-          .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
-          .toList();
+      return await messages.load(key, limit: maxMessagesPerKey);
     } catch (_) {
       return [];
     }
@@ -265,8 +309,23 @@ class StorageService {
 
   Future<void> clearMessages(String key) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_messagesKey(key));
+      await messages.clear(key);
+    } catch (_) {}
+  }
+
+  /// Trim [key] back to [maxMessagesPerKey] rows, newest kept.
+  Future<void> pruneMessages(String key) async {
+    try {
+      await messages.prune(key, keep: maxMessagesPerKey);
+    } catch (_) {}
+  }
+
+  /// Apply retention limits across the whole database. Cheap enough to run at
+  /// startup: two statements, no data loaded into Dart.
+  Future<void> applyRetention() async {
+    try {
+      await messages.pruneAll(keepPerConversation: maxMessagesPerKey);
+      await packetPaths.pruneToHashLimit(keepHashes: maxPacketPathHashes);
     } catch (_) {}
   }
 
@@ -274,23 +333,15 @@ class StorageService {
   // Contacts
   // ---------------------------------------------------------------------------
 
-  Future<void> saveContacts(List<Contact> contacts) async {
+  Future<void> saveContacts(List<Contact> list) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final json = jsonEncode(contacts.map((c) => c.toJson()).toList());
-      await prefs.setString(_keyContacts, json);
+      await contacts.replaceAll(list);
     } catch (_) {}
   }
 
   Future<List<Contact>> loadContacts() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final json = prefs.getString(_keyContacts);
-      if (json == null) return [];
-      final list = jsonDecode(json) as List<dynamic>;
-      return list
-          .map((e) => Contact.fromJson(e as Map<String, dynamic>))
-          .toList();
+      return await contacts.loadAll();
     } catch (_) {
       return [];
     }
@@ -642,38 +693,39 @@ class StorageService {
   static const _keyMessagePaths = 'msg_paths_v1';
   static const int _maxPathsPerHash = 10;
 
+  /// Append one packet reception — one row, no rewrite of anything else.
+  Future<void> appendPacketPath(String hashHex, MessagePath path) async {
+    try {
+      await packetPaths.append(hashHex, path);
+    } catch (_) {}
+  }
+
   Future<void> saveMessagePaths(Map<String, List<MessagePath>> paths) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final map = <String, dynamic>{};
-      for (final entry in paths.entries) {
-        final list = entry.value;
-        final tail =
-            list.length > _maxPathsPerHash
-                ? list.sublist(list.length - _maxPathsPerHash)
-                : list;
-        map[entry.key] = tail.map((p) => p.toJson()).toList();
-      }
-      await prefs.setString(_keyMessagePaths, jsonEncode(map));
+      final capped = <String, List<MessagePath>>{
+        for (final entry in paths.entries)
+          entry.key:
+              entry.value.length > _maxPathsPerHash
+                  ? entry.value.sublist(entry.value.length - _maxPathsPerHash)
+                  : entry.value,
+      };
+      await packetPaths.replaceAll(capped);
     } catch (_) {}
   }
 
   Future<Map<String, List<MessagePath>>> loadMessagePaths() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_keyMessagePaths);
-      if (raw == null) return {};
-      final map = jsonDecode(raw) as Map<String, dynamic>;
-      return {
-        for (final entry in map.entries)
-          entry.key:
-              (entry.value as List<dynamic>)
-                  .map((e) => MessagePath.fromJson(e as Map<String, dynamic>))
-                  .toList(),
-      };
+      return await packetPaths.loadAll();
     } catch (_) {
       return {};
     }
+  }
+
+  /// Drop all but the [maxPacketPathHashes] most recently heard packet hashes.
+  Future<void> prunePacketPaths() async {
+    try {
+      await packetPaths.pruneToHashLimit(keepHashes: maxPacketPathHashes);
+    } catch (_) {}
   }
 
   // ---------------------------------------------------------------------------
@@ -709,6 +761,189 @@ class StorageService {
       await prefs.remove(_prvKeyBackupStorageKey(pubKeyHex6));
     } catch (_) {}
   }
+
+  // ---------------------------------------------------------------------------
+  // One-time migration of bulk data out of SharedPreferences
+  // ---------------------------------------------------------------------------
+
+  static const _keyStorageMigrated = 'storage_migrated_v1';
+
+  /// Move messages, contacts and packet paths from the old JSON-in-prefs
+  /// representation into the database, then delete the old keys.
+  ///
+  /// Deleting them is the point: they are what made the preferences file grow
+  /// to megabytes, and that file is read in full at every launch.
+  ///
+  /// Safe to call on every start — it no-ops once the flag is set. Each key is
+  /// migrated independently, and a key is only removed once its rows are
+  /// confirmed present, so a failure part-way leaves the remaining originals
+  /// intact for the next launch to retry.
+  Future<StorageMigrationResult> migrateFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_keyStorageMigrated) ?? false) {
+      return const StorageMigrationResult.alreadyDone();
+    }
+
+    var conversations = 0;
+    var migratedMessages = 0;
+    var migratedContacts = 0;
+    var migratedPathHashes = 0;
+    final failures = <String>[];
+
+    // -- Messages: one prefs key per conversation ----------------------------
+    final messageKeys =
+        prefs
+            .getKeys()
+            .where((k) => k.startsWith(_legacyMessagesPrefix))
+            .toList();
+    for (final prefsKey in messageKeys) {
+      final convKey = prefsKey.substring(_legacyMessagesPrefix.length);
+      try {
+        final raw = prefs.getString(prefsKey);
+        if (raw == null) {
+          await prefs.remove(prefsKey);
+          continue;
+        }
+        final decoded =
+            (jsonDecode(raw) as List<dynamic>)
+                .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
+                .toList();
+        if (decoded.isEmpty) {
+          await prefs.remove(prefsKey);
+          continue;
+        }
+        final tail =
+            decoded.length > maxMessagesPerKey
+                ? decoded.sublist(decoded.length - maxMessagesPerKey)
+                : decoded;
+        await messages.replaceAll(convKey, tail);
+
+        // Only drop the original once the rows are actually queryable.
+        final stored = await messages.load(convKey, limit: maxMessagesPerKey);
+        if (stored.isEmpty) {
+          failures.add(prefsKey);
+          continue;
+        }
+        await prefs.remove(prefsKey);
+        conversations++;
+        migratedMessages += stored.length;
+      } catch (_) {
+        // Leave this key in place; the next launch retries it.
+        failures.add(prefsKey);
+      }
+    }
+
+    // -- Contacts ------------------------------------------------------------
+    try {
+      final raw = prefs.getString(_keyContacts);
+      if (raw != null) {
+        final decoded =
+            (jsonDecode(raw) as List<dynamic>)
+                .map((e) => Contact.fromJson(e as Map<String, dynamic>))
+                .toList();
+        if (decoded.isEmpty) {
+          await prefs.remove(_keyContacts);
+        } else {
+          await contacts.replaceAll(decoded);
+          if (await contacts.count() > 0) {
+            await prefs.remove(_keyContacts);
+            migratedContacts = decoded.length;
+          } else {
+            failures.add(_keyContacts);
+          }
+        }
+      }
+    } catch (_) {
+      failures.add(_keyContacts);
+    }
+
+    // -- Packet paths --------------------------------------------------------
+    try {
+      final raw = prefs.getString(_keyMessagePaths);
+      if (raw != null) {
+        final map = jsonDecode(raw) as Map<String, dynamic>;
+        if (map.isEmpty) {
+          await prefs.remove(_keyMessagePaths);
+        } else {
+          final decoded = <String, List<MessagePath>>{
+            for (final entry in map.entries)
+              entry.key:
+                  (entry.value as List<dynamic>)
+                      .map(
+                        (e) => MessagePath.fromJson(e as Map<String, dynamic>),
+                      )
+                      .toList(),
+          };
+          await packetPaths.replaceAll(decoded);
+          await prunePacketPaths();
+          if (await packetPaths.distinctHashCount() > 0) {
+            await prefs.remove(_keyMessagePaths);
+            migratedPathHashes = decoded.length;
+          } else {
+            failures.add(_keyMessagePaths);
+          }
+        }
+      }
+    } catch (_) {
+      failures.add(_keyMessagePaths);
+    }
+
+    // Only declare victory when nothing was left behind, so a partial run is
+    // retried rather than silently stranding data in prefs.
+    if (failures.isEmpty) {
+      await prefs.setBool(_keyStorageMigrated, true);
+    }
+
+    return StorageMigrationResult(
+      conversations: conversations,
+      messages: migratedMessages,
+      contacts: migratedContacts,
+      packetPathHashes: migratedPathHashes,
+      failedKeys: failures,
+      completed: failures.isEmpty,
+    );
+  }
+}
+
+/// Outcome of [StorageService.migrateFromPrefs], for logging and tests.
+class StorageMigrationResult {
+  const StorageMigrationResult({
+    required this.conversations,
+    required this.messages,
+    required this.contacts,
+    required this.packetPathHashes,
+    required this.failedKeys,
+    required this.completed,
+  });
+
+  const StorageMigrationResult.alreadyDone()
+    : conversations = 0,
+      messages = 0,
+      contacts = 0,
+      packetPathHashes = 0,
+      failedKeys = const [],
+      completed = true;
+
+  final int conversations;
+  final int messages;
+  final int contacts;
+  final int packetPathHashes;
+
+  /// Prefs keys that could not be migrated and were deliberately left in place.
+  final List<String> failedKeys;
+
+  /// True when every key was migrated and the done-flag was set.
+  final bool completed;
+
+  /// True when this run actually moved something.
+  bool get didWork => conversations > 0 || contacts > 0 || packetPathHashes > 0;
+
+  @override
+  String toString() =>
+      'StorageMigrationResult(conversations: $conversations, '
+      'messages: $messages, contacts: $contacts, '
+      'packetPathHashes: $packetPathHashes, '
+      'failed: ${failedKeys.length}, completed: $completed)';
 }
 
 // ---------------------------------------------------------------------------

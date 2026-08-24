@@ -4,12 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lusoapp/protocol/models.dart';
 import 'package:lusoapp/providers/radio_providers.dart';
+import '../support/test_db.dart';
 
 void main() {
   group('ContactsNotifier.pruneStaleContacts', () {
     late ProviderContainer container;
 
     setUp(() {
+      useInMemoryDatabase();
       container = ProviderContainer();
     });
 
