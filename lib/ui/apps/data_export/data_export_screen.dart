@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../l10n/l10n.dart';
 import '../../../protocol/models.dart';
 import '../../../providers/radio_providers.dart';
+import '../../../services/storage_service.dart';
 
 /// Data Export app — exports contacts (CSV) and map data (KML) via share sheet.
 class DataExportScreen extends ConsumerStatefulWidget {
@@ -24,6 +25,7 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
   bool _exportingContacts = false;
   bool _exportingMessages = false;
   bool _exportingKml = false;
+  bool _exportingDatabase = false;
   bool _importingContacts = false;
   bool _importingMessages = false;
 
@@ -872,6 +874,67 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
   }
 
   // ---------------------------------------------------------------------------
+  // SQLite — full database snapshot
+  // ---------------------------------------------------------------------------
+
+  /// Take a consistent copy of the live drift/SQLite database.
+  ///
+  /// `VACUUM INTO` is used rather than copying the database file off disk: the
+  /// database is open while the app runs, so a plain file copy can miss commits
+  /// still sitting in the WAL (or capture a torn page mid-write). VACUUM INTO
+  /// writes a fully checkpointed, self-contained snapshot from inside SQLite,
+  /// so the exported file opens cleanly on its own.
+  Future<Uint8List> _buildDatabaseSnapshot() async {
+    final tmpDir = await getTemporaryDirectory();
+    final snapshot = File(
+      '${tmpDir.path}/meshcore_snapshot_'
+      '${DateTime.now().millisecondsSinceEpoch}.db',
+    );
+    // VACUUM INTO refuses to overwrite, so the target must not exist.
+    if (await snapshot.exists()) await snapshot.delete();
+
+    final escapedPath = snapshot.path.replaceAll("'", "''");
+    await StorageService.instance.db.customStatement(
+      "VACUUM INTO '$escapedPath'",
+    );
+
+    try {
+      return await snapshot.readAsBytes();
+    } finally {
+      // Never leave a full copy of the user's messages in the temp directory.
+      if (await snapshot.exists()) await snapshot.delete();
+    }
+  }
+
+  Future<void> _exportDatabase() async {
+    final action = await _showExportSheet('Database');
+    if (action == null) return;
+    setState(() => _exportingDatabase = true);
+    try {
+      final bytes = await _buildDatabaseSnapshot();
+      final filename = _exportFileName('Database', 'db');
+      if (action == _ExportAction.share) {
+        await _share(
+          bytes,
+          filename,
+          'application/octet-stream',
+          'MeshCore Database',
+        );
+      } else {
+        await _saveLocal(bytes, filename);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.l10n.dataExportFailed)));
+      }
+    } finally {
+      if (mounted) setState(() => _exportingDatabase = false);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Build
   // ---------------------------------------------------------------------------
   @override
@@ -919,6 +982,18 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
             loading: _exportingKml,
             importLoading: false,
             onExport: gpsCount == 0 ? null : _exportKml,
+            onImport: null,
+          ),
+          const SizedBox(height: 12),
+          _ExportCard(
+            icon: Icons.storage_outlined,
+            color: const Color(0xFFF59E0B),
+            title: context.l10n.dataExportDatabaseTitle,
+            description: context.l10n.dataExportDatabaseDesc,
+            format: 'SQLite',
+            loading: _exportingDatabase,
+            importLoading: false,
+            onExport: _exportDatabase,
             onImport: null,
           ),
           const SizedBox(height: 24),

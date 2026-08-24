@@ -1038,6 +1038,8 @@
       }
     }
   },
+  "dataExportDatabaseTitle": "Database",
+  "dataExportDatabaseDesc": "Full SQLite copy — messages, contacts and packet paths",
   "dataExportNote": "Files are exported directly to the share sheet.\nNo data leaves the device unless you choose to share it.",
   "dataExportNoContacts": "No contacts to export",
   "dataExportNoMessages": "No messages to export",

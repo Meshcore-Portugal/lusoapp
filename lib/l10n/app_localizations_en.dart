@@ -2827,6 +2827,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get dataExportDatabaseTitle => 'Database';
+
+  @override
+  String get dataExportDatabaseDesc =>
+      'Full SQLite copy — messages, contacts and packet paths';
+
+  @override
   String get dataExportNote =>
       'Files are exported directly to the share sheet.\nNo data leaves the device unless you choose to share it.';
 

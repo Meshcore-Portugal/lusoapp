@@ -1087,6 +1087,8 @@
       }
     }
   },
+  "dataExportDatabaseTitle": "Base de Dados",
+  "dataExportDatabaseDesc": "Copia completa SQLite — mensagens, contactos e trajetos",
   "dataExportNote": "Os ficheiros são exportados diretamente para o menu de partilha.\nNenhum dado sai do dispositivo sem a tua confirmação.",
   "dataExportNoContacts": "Sem contactos para exportar",
   "dataExportNoMessages": "Sem mensagens para exportar",

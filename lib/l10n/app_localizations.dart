@@ -5344,6 +5344,18 @@ abstract class AppLocalizations {
   /// **'{count} contactos com GPS'**
   String dataExportKmlDesc(int count);
 
+  /// No description provided for @dataExportDatabaseTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Base de Dados'**
+  String get dataExportDatabaseTitle;
+
+  /// No description provided for @dataExportDatabaseDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Copia completa SQLite — mensagens, contactos e trajetos'**
+  String get dataExportDatabaseDesc;
+
   /// No description provided for @dataExportNote.
   ///
   /// In pt, this message translates to:
