@@ -45,7 +45,7 @@ cmd_get() {
 
 cmd_gen() {
     log "Running code generation..."
-    flutter pub run build_runner build --delete-conflicting-outputs
+    flutter pub run build_runner build
 }
 
 cmd_l10n() {

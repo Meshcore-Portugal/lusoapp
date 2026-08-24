@@ -95,6 +95,12 @@ log "===================================================="
 
 log "Getting dependencies..."
 flutter pub get
+
+# The drift database is code-generated and *.g.dart is gitignored, so a
+# fresh checkout (CI included) has no app_database.g.dart until this runs.
+log "Running code generation..."
+flutter pub run build_runner build
+
 refresh_ios_pods_if_needed
 
 if command -v pod >/dev/null 2>&1; then

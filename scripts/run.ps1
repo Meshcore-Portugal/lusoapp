@@ -65,7 +65,7 @@ function Invoke-Get {
 
 function Invoke-Gen {
     Log "Running code generation..."
-    flutter pub run build_runner build --delete-conflicting-outputs
+    flutter pub run build_runner build
 }
 
 function Invoke-L10n {

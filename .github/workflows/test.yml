@@ -36,6 +36,11 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      # *.g.dart is gitignored, so the drift database has to be generated
+      # before anything can analyze or compile it.
+      - name: Run code generation
+        run: flutter pub run build_runner build
+
       - name: Run Flutter analysis
         run: flutter analyze --no-fatal-infos || exit 1
 
@@ -66,6 +71,11 @@ jobs:
 
       - name: Get Flutter dependencies
         run: flutter pub get
+
+      # *.g.dart is gitignored, so the drift database has to be generated
+      # before anything can analyze or compile it.
+      - name: Run code generation
+        run: flutter pub run build_runner build
 
       - name: Get iOS dependencies
         run: (cd ios; pod install)

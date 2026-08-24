@@ -159,6 +159,11 @@ try {
     Log "Getting dependencies..."
     flutter pub get
 
+    # The drift database is code-generated and *.g.dart is gitignored, so a
+    # fresh checkout has no app_database.g.dart until this runs.
+    Log "Running code generation..."
+    flutter pub run build_runner build
+
     # Analyze
     Log "Running analysis..."
     flutter analyze --no-fatal-infos 2>$null
