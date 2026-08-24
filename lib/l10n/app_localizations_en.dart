@@ -516,6 +516,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Automatically reconnect when the connection is lost';
 
   @override
+  String get settingsBatteryOptimization => 'Battery optimisation';
+
+  @override
+  String get settingsBatteryOptimizationWarn =>
+      'Restricted — Android may drop the connection in the background. Tap to allow.';
+
+  @override
   String get settingsRadioConfig => 'Radio Configuration';
 
   @override

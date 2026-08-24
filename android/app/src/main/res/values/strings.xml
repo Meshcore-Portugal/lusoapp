@@ -7,4 +7,6 @@
     <string name="radio_notification_channel_description">Notification for active radio connection via Bluetooth</string>
     <string name="radio_notification_title">Connected to %s</string>
     <string name="radio_notification_text">Connected via Bluetooth</string>
+    <string name="radio_notification_title_reconnecting">Reconnecting to %s</string>
+    <string name="radio_notification_reconnecting">Link lost — retrying…</string>
 </resources>

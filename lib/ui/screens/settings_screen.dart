@@ -72,15 +72,45 @@ class SettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen>
+    with WidgetsBindingObserver {
   String _version = '';
+
+  /// Whether Android battery optimisation is disabled for this app. Starts
+  /// optimistic so the warning tile never flashes on non-Android platforms or
+  /// before the first check returns.
+  bool _batteryUnrestricted = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     PackageInfo.fromPlatform().then((info) {
       if (mounted) setState(() => _version = info.version);
     });
+    _refreshBatteryOptimization();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Re-check after the user comes back from the system settings screen.
+    if (state == AppLifecycleState.resumed) {
+      _refreshBatteryOptimization();
+    }
+  }
+
+  Future<void> _refreshBatteryOptimization() async {
+    final ok =
+        await NotificationService.instance.isIgnoringBatteryOptimizations();
+    if (mounted && ok != _batteryUnrestricted) {
+      setState(() => _batteryUnrestricted = ok);
+    }
   }
 
   @override
@@ -217,6 +247,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     onChanged:
                         (v) => ref.read(autoReconnectProvider.notifier).set(v),
                   ),
+                  // Only surfaced while Android actually restricts us. The
+                  // foreground service is not enough on OEM skins that suspend
+                  // the process anyway, and that is the single most common
+                  // cause of "it disconnects when I put the phone away".
+                  if (!_batteryUnrestricted)
+                    ListTile(
+                      title: Text(context.l10n.settingsBatteryOptimization),
+                      subtitle: Text(
+                        context.l10n.settingsBatteryOptimizationWarn,
+                      ),
+                      leading: Icon(
+                        Icons.battery_alert,
+                        color: theme.colorScheme.error,
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () async {
+                        await NotificationService.instance
+                            .openBatteryOptimizationSettings();
+                      },
+                    ),
                   if (connectionState == TransportState.connected) ...[
                     ListTile(
                       title: Text(context.l10n.settingsRadioConfig),

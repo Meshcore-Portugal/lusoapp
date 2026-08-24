@@ -1054,6 +1054,18 @@ abstract class AppLocalizations {
   /// **'Reconecta automaticamente quando a ligação é perdida'**
   String get settingsAutoReconnectDesc;
 
+  /// No description provided for @settingsBatteryOptimization.
+  ///
+  /// In pt, this message translates to:
+  /// **'Otimização de bateria'**
+  String get settingsBatteryOptimization;
+
+  /// No description provided for @settingsBatteryOptimizationWarn.
+  ///
+  /// In pt, this message translates to:
+  /// **'Restringida — o Android pode cortar a ligação em segundo plano. Toca para permitir.'**
+  String get settingsBatteryOptimizationWarn;
+
   /// No description provided for @settingsRadioConfig.
   ///
   /// In pt, this message translates to:

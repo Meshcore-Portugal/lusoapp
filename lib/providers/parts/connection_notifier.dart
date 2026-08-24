@@ -249,14 +249,32 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         _pushWidget();
         return true;
       }
-      _ref.read(radioServiceProvider.notifier).state = null;
+      // Dispose rather than just dropping the reference: a half-open BLE
+      // transport keeps its Android GATT client allocated, and the reconnect
+      // loop retries forever. Leaked clients hit the per-process cap and then
+      // every subsequent connect fails with status 133.
+      await _disposeFailedService();
       state = TransportState.error;
       _setStep(0, '');
       return false;
     } catch (e) {
+      await _disposeFailedService();
       state = TransportState.error;
       _setStep(0, '');
       return false;
+    }
+  }
+
+  /// Tear down the in-flight [RadioService] after a failed connect attempt and
+  /// clear the provider. Safe to call when there is nothing to dispose.
+  Future<void> _disposeFailedService() async {
+    final svc = _ref.read(radioServiceProvider);
+    _ref.read(radioServiceProvider.notifier).state = null;
+    if (svc == null) return;
+    try {
+      await svc.dispose();
+    } catch (_) {
+      // Already torn down / transport never opened — nothing to salvage.
     }
   }
 
@@ -688,23 +706,38 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
     _connectionLostSub = service.connectionLost.listen((_) async {
       if (state != TransportState.connected) return;
 
-      // Stop the foreground service immediately when connection is lost
-      await NotificationService.instance.stopRadioForeground();
-
       _batteryPollTimer?.cancel();
       _batteryPollTimer = null;
       _keepaliveTimer?.cancel();
       _keepaliveTimer = null;
+      // Release the dead transport's resources. Without this the underlying
+      // GATT client stays open on Android and every retry below leaks another
+      // one, until the per-process client limit is hit and *all* connects fail
+      // with status 133 until the app is force-stopped.
+      final deadService = _ref.read(radioServiceProvider);
+      if (deadService != null) {
+        unawaited(deadService.dispose());
+      }
       _ref.read(radioServiceProvider.notifier).state = null;
       _reconnectCancelled = false;
 
       // If the user has disabled auto-reconnect, just go to disconnected.
       if (!_ref.read(autoReconnectProvider)) {
+        await NotificationService.instance.stopRadioForeground();
         state = TransportState.disconnected;
         _setStep(0, '');
         _pushWidget();
         return;
       }
+
+      // Keep the Android foreground service RUNNING for the whole retry loop
+      // and only re-label its notification. Stopping it here (as this code used
+      // to) demotes the process to a cached one at exactly the moment the
+      // Future.delayed backoff below needs to keep firing, so Doze throttles
+      // the retries and the link never comes back while the app is minimised.
+      unawaited(
+        NotificationService.instance.setRadioForegroundReconnecting(attempt: 1),
+      );
 
       const backoffSeconds = [2, 4, 8, 16, 30];
       var attempt = 0;
@@ -729,15 +762,23 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
 
         attempt++;
         _setStep(0, 'A reconectar... (tentativa $attempt)');
+        unawaited(
+          NotificationService.instance.setRadioForegroundReconnecting(
+            attempt: attempt,
+          ),
+        );
 
         final ok = await reconnector();
-        // reconnector sets state = connected and installs a fresh listener.
+        // reconnector sets state = connected and installs a fresh listener,
+        // and its startRadioForeground() call clears the reconnecting label.
         if (ok) return;
         if (_reconnectCancelled) break;
       }
 
-      // Reconnect loop ended without success.
+      // Reconnect loop ended without success. `_reconnectCancelled` means
+      // disconnect() ran, and that already stopped the foreground service.
       if (!_reconnectCancelled) {
+        await NotificationService.instance.stopRadioForeground();
         state = TransportState.error;
         _setStep(0, 'Reconexão falhou.');
         _pushWidget();

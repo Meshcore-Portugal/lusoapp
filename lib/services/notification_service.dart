@@ -432,11 +432,17 @@ class NotificationService {
 
   /// Update the Android foreground notification with latest radio metrics.
   /// No-op on non-Android platforms.
+  ///
+  /// [reconnecting] switches the notification between the "connected" and the
+  /// "reconnecting" wording *without* tearing the service down — see
+  /// [setRadioForegroundReconnecting].
   Future<void> updateRadioForeground({
     String? radioName,
     int? noiseFloor,
     int? lastRssi,
     double? lastSnrDb,
+    bool? reconnecting,
+    int? attempt,
   }) async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       return;
@@ -448,12 +454,27 @@ class NotificationService {
         if (noiseFloor != null) 'noiseFloor': noiseFloor,
         if (lastRssi != null) 'lastRssi': lastRssi,
         if (lastSnrDb != null) 'lastSnrDb': lastSnrDb,
+        if (reconnecting != null) 'reconnecting': reconnecting,
+        if (attempt != null) 'attempt': attempt,
       });
     } catch (e) {
       // Log but don't crash if the platform method fails
       print('Error updating radio foreground service: $e');
     }
   }
+
+  /// Flip the persistent notification into "reconnecting" mode.
+  ///
+  /// Critically this keeps the foreground service *running*. Stopping it while
+  /// the auto-reconnect backoff loop is still working demotes the process to a
+  /// cached one, and Doze then throttles the very timers driving the retries —
+  /// which is the failure users report as "it never comes back until I reopen
+  /// the app".
+  ///
+  /// [attempt] is shown in the notification so users can see progress; pass 0
+  /// to omit the counter.
+  Future<void> setRadioForegroundReconnecting({int attempt = 0}) =>
+      updateRadioForeground(reconnecting: true, attempt: attempt);
 
   /// Stop the Android foreground service and remove the persistent notification.
   /// Called when the BLE connection is lost or the user disconnects.
@@ -468,6 +489,46 @@ class NotificationService {
     } catch (e) {
       // Log but don't crash if the platform method fails
       print('Error stopping radio foreground service: $e');
+    }
+  }
+
+  /// Whether the user has exempted the app from Android battery optimisation.
+  ///
+  /// The foreground service alone is not enough on several OEM skins (Xiaomi,
+  /// Huawei, Samsung, OnePlus), which suspend BLE links regardless unless the
+  /// app is marked unrestricted. Returns true on non-Android platforms so
+  /// callers can treat it as "nothing to do here".
+  Future<bool> isIgnoringBatteryOptimizations() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return true;
+    }
+    try {
+      const channel = MethodChannel('pt.meshcore.lusoapp/radio_service');
+      final result = await channel.invokeMethod<bool>(
+        'isIgnoringBatteryOptimizations',
+      );
+      return result ?? true;
+    } catch (e) {
+      print('Error checking battery optimisation state: $e');
+      return true;
+    }
+  }
+
+  /// Open the system battery-optimisation screen so the user can mark the app
+  /// as unrestricted. No-op (returns false) on non-Android platforms.
+  Future<bool> openBatteryOptimizationSettings() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return false;
+    }
+    try {
+      const channel = MethodChannel('pt.meshcore.lusoapp/radio_service');
+      final result = await channel.invokeMethod<bool>(
+        'openBatteryOptimizationSettings',
+      );
+      return result ?? false;
+    } catch (e) {
+      print('Error opening battery optimisation settings: $e');
+      return false;
     }
   }
 

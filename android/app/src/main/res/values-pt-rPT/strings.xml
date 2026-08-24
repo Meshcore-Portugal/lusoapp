@@ -7,4 +7,6 @@
     <string name="radio_notification_channel_description">Notificação de ligação ativa a rádio MeshCore</string>
     <string name="radio_notification_title">Ligado a %s</string>
     <string name="radio_notification_text">Ligado via Bluetooth</string>
+    <string name="radio_notification_title_reconnecting">A reconectar a %s</string>
+    <string name="radio_notification_reconnecting">Ligação perdida — a tentar de novo…</string>
 </resources>

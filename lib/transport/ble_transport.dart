@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:logger/logger.dart';
 
+import '../protocol/commands.dart' show maxPayload;
 import 'radio_transport.dart';
 import 'win_ble_bridge.dart';
 
@@ -68,6 +69,14 @@ class BleTransport implements RadioTransport {
   final _connectionLostController = StreamController<void>.broadcast();
   bool _connected = false;
 
+  /// Largest single ATT write the negotiated MTU allows (MTU - 3 ATT header
+  /// bytes). Defaults to the BLE minimum until [connect] negotiates upwards.
+  int _maxWriteLen = _defaultMtu - 3;
+
+  /// ATT MTU every BLE peer must support; what we are stuck with if the
+  /// requestMtu() exchange fails or the peer refuses to grow.
+  static const _defaultMtu = 23;
+
   /// Set to true when disconnect() is called by the app, so the
   /// connectionState listener doesn't fire a spurious connectionLost event.
   bool _userDisconnected = false;
@@ -121,10 +130,28 @@ class BleTransport implements RadioTransport {
       // this silently — the system MTU is typically 247 bytes anyway on modern
       // Windows BLE stacks.
       if (!kIsWeb) {
+        var mtu = _defaultMtu;
         try {
-          await _device.requestMtu(247);
+          mtu = await _device.requestMtu(247);
         } catch (e) {
-          _log.d('MTU request skipped: $e');
+          // Windows returns the system-negotiated value instead of honouring
+          // the request; other stacks may reject the exchange outright. Fall
+          // back to whatever the platform reports rather than assuming 247.
+          mtu = _device.mtuNow;
+          _log.d('MTU request failed ($e) — using mtuNow=$mtu');
+        }
+        if (mtu < _defaultMtu) mtu = _defaultMtu;
+        _maxWriteLen = mtu - 3;
+        _log.i('BLE MTU=$mtu (max write $_maxWriteLen bytes)');
+        if (_maxWriteLen < maxPayload) {
+          // Frame boundaries are ATT write boundaries for the companion
+          // protocol, so a small MTU cannot be worked around by chunking —
+          // large commands simply will not fit. Say so once, loudly, instead
+          // of letting them fail as mysterious timeouts later.
+          _log.w(
+            'BLE MTU too small: commands over $_maxWriteLen bytes cannot be '
+            'sent (protocol needs up to $maxPayload)',
+          );
         }
       }
 
@@ -178,7 +205,19 @@ class BleTransport implements RadioTransport {
       _log.e('BLE connect failed: $e');
       await _notifySub?.cancel();
       _notifySub = null;
+      await _connStateSub?.cancel();
+      _connStateSub = null;
       _connected = false;
+      // A failure *after* _device.connect() succeeded (service discovery, the
+      // CCCD write, an MTU stall) leaves the OS-level GATT connection open.
+      // Android caps how many a process may hold, and the auto-reconnect loop
+      // retries indefinitely — so without this every later connect eventually
+      // fails with status 133 until the app is force-stopped.
+      try {
+        await _device.disconnect();
+      } catch (_) {
+        // Never connected, or already gone. Nothing to release.
+      }
       return false;
     }
   }
@@ -215,6 +254,16 @@ class BleTransport implements RadioTransport {
     // timeout is available for the firmware's notification reply.
     // We still get delivery confirmation implicitly: if the write is lost we
     // time out waiting for the response notification and can retry.
+    // Web Bluetooth fragments internally; native stacks do not, and an
+    // oversized write is silently truncated (Android) or thrown away. Since
+    // one ATT write is one protocol frame, a truncated write reaches the
+    // firmware as a corrupt frame and surfaces as an unexplained timeout.
+    if (!kIsWeb && data.length > _maxWriteLen) {
+      throw StateError(
+        'Frame of ${data.length} bytes exceeds the negotiated BLE MTU '
+        '(max $_maxWriteLen bytes)',
+      );
+    }
     final withoutResponse = _rxChar!.properties.writeWithoutResponse;
     await _rxChar!.write(data, withoutResponse: withoutResponse);
   }

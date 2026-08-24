@@ -203,6 +203,8 @@
   "settingsDisconnected": "Desligado",
   "settingsAutoReconnect": "Reconexão automática",
   "settingsAutoReconnectDesc": "Reconecta automaticamente quando a ligação é perdida",
+  "settingsBatteryOptimization": "Otimização de bateria",
+  "settingsBatteryOptimizationWarn": "Restringida — o Android pode cortar a ligação em segundo plano. Toca para permitir.",
   "settingsRadioConfig": "Configuração do Rádio",
   "settingsRadioConfigDesc": "LoRa, telemetria e dispositivo",
   "settingsReboot": "Reboot",

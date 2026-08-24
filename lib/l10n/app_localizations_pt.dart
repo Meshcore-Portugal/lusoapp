@@ -520,6 +520,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Reconecta automaticamente quando a ligação é perdida';
 
   @override
+  String get settingsBatteryOptimization => 'Otimização de bateria';
+
+  @override
+  String get settingsBatteryOptimizationWarn =>
+      'Restringida — o Android pode cortar a ligação em segundo plano. Toca para permitir.';
+
+  @override
   String get settingsRadioConfig => 'Configuração do Rádio';
 
   @override
