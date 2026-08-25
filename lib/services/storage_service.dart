@@ -87,15 +87,21 @@ class StorageService {
     _messages = null;
     _contacts = null;
     _paths = null;
+    _settings = null;
   }
 
   MessageStore? _messages;
   ContactStore? _contacts;
   PacketPathStore? _paths;
+  SettingsStore? _settings;
 
   MessageStore get messages => _messages ??= MessageStore(db);
   ContactStore get contacts => _contacts ??= ContactStore(db);
   PacketPathStore get packetPaths => _paths ??= PacketPathStore(db);
+
+  /// Durable key/value settings. Anything the user configured and expects to
+  /// find again after a restart belongs here rather than in prefs.
+  SettingsStore get settings => _settings ??= SettingsStore(db);
 
   // ---------------------------------------------------------------------------
   // Last connected device
@@ -555,24 +561,42 @@ class StorageService {
   }
 
   // ---------------------------------------------------------------------------
-  // Plan 3-3-3 settings
+  // Plan 3-3-3 settings + QSL log
+  //
+  // These live in the database, not SharedPreferences. Users reported their
+  // Plan 3-3-3 station config coming back empty after closing and reopening the
+  // app: prefs rewrites its entire file on every write, so a write interrupted
+  // by the OS killing the app can take unrelated keys down with it, and the
+  // whole file is lost as one unit. A row write here is committed by SQLite
+  // before the call returns.
+  //
+  // The key strings are unchanged so [migratePlan333Settings] is a plain copy.
   // ---------------------------------------------------------------------------
 
   static const _keyPlan333Enabled = 'plan333_enabled';
   static const _keyPlan333Config = 'plan333_config';
   static const _keyPlan333AutoSendState = 'plan333_auto_send_state';
+  static const _keyQslLog = 'plan333_qsl_log';
+  static const _keyQslLogSessionStart = 'plan333_qsl_log_session_start';
+
+  /// Every Plan 3-3-3 key, in the order [migratePlan333Settings] moves them.
+  static const List<String> plan333SettingKeys = [
+    _keyPlan333Enabled,
+    _keyPlan333Config,
+    _keyPlan333AutoSendState,
+    _keyQslLog,
+    _keyQslLogSessionStart,
+  ];
 
   Future<void> savePlan333Enabled(bool enabled) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_keyPlan333Enabled, enabled);
+      await settings.setBool(_keyPlan333Enabled, value: enabled);
     } catch (_) {}
   }
 
   Future<bool> loadPlan333Enabled() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool(_keyPlan333Enabled) ?? false;
+      return await settings.getBool(_keyPlan333Enabled) ?? false;
     } catch (_) {
       return false;
     }
@@ -581,16 +605,14 @@ class StorageService {
   /// Stores Plan333Config as a raw JSON string (caller handles encoding).
   Future<void> savePlan333Config(String json) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_keyPlan333Config, json);
+      await settings.setString(_keyPlan333Config, json);
     } catch (_) {}
   }
 
   /// Returns the stored Plan333Config JSON string, or null if not set.
   Future<String?> loadPlan333Config() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_keyPlan333Config);
+      return await settings.getString(_keyPlan333Config);
     } catch (_) {
       return null;
     }
@@ -599,39 +621,28 @@ class StorageService {
   /// Stores Plan333AutoSendState as a raw JSON string (caller handles encoding).
   Future<void> savePlan333AutoSendState(String json) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_keyPlan333AutoSendState, json);
+      await settings.setString(_keyPlan333AutoSendState, json);
     } catch (_) {}
   }
 
   /// Returns the stored Plan333AutoSendState JSON string, or null if not set.
   Future<String?> loadPlan333AutoSendState() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_keyPlan333AutoSendState);
+      return await settings.getString(_keyPlan333AutoSendState);
     } catch (_) {
       return null;
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // QSL log
-  // ---------------------------------------------------------------------------
-
-  static const _keyQslLog = 'plan333_qsl_log';
-  static const _keyQslLogSessionStart = 'plan333_qsl_log_session_start';
-
   Future<void> saveQslLog(String json) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_keyQslLog, json);
+      await settings.setString(_keyQslLog, json);
     } catch (_) {}
   }
 
   Future<String?> loadQslLog() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_keyQslLog);
+      return await settings.getString(_keyQslLog);
     } catch (_) {
       return null;
     }
@@ -639,22 +650,95 @@ class StorageService {
 
   Future<void> saveQslLogSessionStart(int? epochMillis) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       if (epochMillis == null) {
-        await prefs.remove(_keyQslLogSessionStart);
+        await settings.remove(_keyQslLogSessionStart);
       } else {
-        await prefs.setInt(_keyQslLogSessionStart, epochMillis);
+        await settings.setInt(_keyQslLogSessionStart, epochMillis);
       }
     } catch (_) {}
   }
 
   Future<int?> loadQslLogSessionStart() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getInt(_keyQslLogSessionStart);
+      return await settings.getInt(_keyQslLogSessionStart);
     } catch (_) {
       return null;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // One-time move of Plan 3-3-3 settings out of SharedPreferences
+  // ---------------------------------------------------------------------------
+
+  static const _keyPlan333SettingsMigrated = 'plan333_settings_migrated_v1';
+
+  /// Copy any Plan 3-3-3 keys still sitting in SharedPreferences into the
+  /// database, then delete the prefs originals.
+  ///
+  /// The done-flag lives in the database, not in prefs: a prefs-side flag would
+  /// be lost by exactly the failure this migration exists to escape, and the
+  /// migration would then re-run against keys it had already deleted.
+  ///
+  /// A key is only copied when the database has no value for it, so a partial
+  /// run is safe to repeat and can never overwrite newer data. Each prefs key
+  /// is removed only after its value is confirmed readable from the database.
+  ///
+  /// Returns the number of keys actually moved.
+  Future<int> migratePlan333Settings() async {
+    try {
+      if (await settings.getBool(_keyPlan333SettingsMigrated) ?? false) {
+        return 0;
+      }
+    } catch (_) {
+      // Database unreadable — leave the prefs values where they are.
+      return 0;
+    }
+
+    final SharedPreferences prefs;
+    try {
+      prefs = await SharedPreferences.getInstance();
+    } catch (_) {
+      return 0;
+    }
+
+    var moved = 0;
+    var failed = 0;
+    for (final key in plan333SettingKeys) {
+      try {
+        final legacy = prefs.get(key);
+        if (legacy == null) continue;
+
+        // Never clobber a value already written through the new path.
+        if (await settings.getString(key) == null) {
+          if (legacy is bool) {
+            await settings.setBool(key, value: legacy);
+          } else if (legacy is int) {
+            await settings.setInt(key, legacy);
+          } else {
+            await settings.setString(key, legacy.toString());
+          }
+          // Confirm the row landed before dropping the only other copy.
+          if (await settings.getString(key) == null) {
+            failed++;
+            continue;
+          }
+          moved++;
+        }
+        await prefs.remove(key);
+      } catch (_) {
+        failed++;
+      }
+    }
+
+    // Only close the door once every key made it across; otherwise the next
+    // launch retries the ones that did not.
+    if (failed == 0) {
+      try {
+        await settings.setBool(_keyPlan333SettingsMigrated, value: true);
+      } catch (_) {}
+    }
+
+    return moved;
   }
 
   // ---------------------------------------------------------------------------

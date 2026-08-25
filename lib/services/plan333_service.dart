@@ -542,8 +542,23 @@ final plan333ConfigProvider =
     );
 
 class Plan333ConfigNotifier extends StateNotifier<Plan333Config> {
-  Plan333ConfigNotifier() : super(const Plan333Config());
+  Plan333ConfigNotifier() : super(const Plan333Config()) {
+    initialLoad = loadFromStorage();
+  }
 
+  /// Completes once the first read from storage has been applied.
+  ///
+  /// The notifier starts its own load instead of waiting to be told to, so the
+  /// config is restored even when app startup does not reach its explicit
+  /// `loadFromStorage()` call. [update] waits on this before writing, so a save
+  /// issued while the stored config was still in flight cannot persist the
+  /// empty defaults over it — that is how a configured station came back blank
+  /// after closing and reopening the app.
+  late final Future<void> initialLoad;
+
+  /// Re-reads the stored config. Safe to call repeatedly: when the store holds
+  /// nothing the in-memory config is left as-is rather than reset to defaults,
+  /// so a second call after the prefs→database migration only ever fills in.
   Future<void> loadFromStorage() async {
     final raw = await StorageService.instance.loadPlan333Config();
     if (raw == null) return;
@@ -553,6 +568,7 @@ class Plan333ConfigNotifier extends StateNotifier<Plan333Config> {
   }
 
   Future<void> update(Plan333Config config) async {
+    await initialLoad;
     state = config;
     await StorageService.instance.savePlan333Config(
       jsonEncode(config.toJson()),

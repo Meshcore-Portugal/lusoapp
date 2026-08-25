@@ -317,3 +317,65 @@ class PacketPathStore {
     return row.read<int>('c');
   }
 }
+
+// ---------------------------------------------------------------------------
+// App settings (key/value)
+// ---------------------------------------------------------------------------
+
+/// Typed accessors over the `app_settings` table.
+///
+/// Mirrors the slice of the SharedPreferences API the app actually used
+/// (string / bool / int, plus remove), so callers migrate by swapping the
+/// backing call and nothing else. Values are stored as text; `bool` round-trips
+/// as `'true'`/`'false'` and `int` via [int.parse].
+class SettingsStore {
+  const SettingsStore(this._db);
+  final AppDatabase _db;
+
+  Future<String?> getString(String key) async {
+    final row =
+        await (_db.select(_db.appSettings)
+          ..where((t) => t.settingKey.equals(key))).getSingleOrNull();
+    return row?.settingValue;
+  }
+
+  Future<void> setString(String key, String value) async {
+    await _db
+        .into(_db.appSettings)
+        .insertOnConflictUpdate(
+          AppSettingsCompanion.insert(
+            settingKey: key,
+            settingValue: value,
+            updatedAt: DateTime.now().millisecondsSinceEpoch,
+          ),
+        );
+  }
+
+  Future<bool?> getBool(String key) async {
+    final raw = await getString(key);
+    if (raw == null) return null;
+    return raw == 'true';
+  }
+
+  Future<void> setBool(String key, {required bool value}) =>
+      setString(key, value ? 'true' : 'false');
+
+  Future<int?> getInt(String key) async {
+    final raw = await getString(key);
+    if (raw == null) return null;
+    return int.tryParse(raw);
+  }
+
+  Future<void> setInt(String key, int value) => setString(key, '$value');
+
+  Future<void> remove(String key) async {
+    await (_db.delete(_db.appSettings)
+      ..where((t) => t.settingKey.equals(key))).go();
+  }
+
+  /// Every stored setting, for diagnostics and tests.
+  Future<Map<String, String>> loadAll() async {
+    final rows = await _db.select(_db.appSettings).get();
+    return {for (final r in rows) r.settingKey: r.settingValue};
+  }
+}

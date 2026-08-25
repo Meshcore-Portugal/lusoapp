@@ -141,6 +141,15 @@ class _McAppPtState extends ConsumerState<McAppPt> {
       debugPrint('[Storage] migration failed: $e');
     }
 
+    // Plan 3-3-3 settings moved from prefs into the database (they were being
+    // lost across restarts). Must run before the providers below read them.
+    try {
+      final moved = await StorageService.instance.migratePlan333Settings();
+      if (moved > 0) debugPrint('[Storage] plan333 settings migrated: $moved');
+    } catch (e) {
+      debugPrint('[Storage] plan333 settings migration failed: $e');
+    }
+
     // Retention runs once per launch, after migration, so a long-running
     // install cannot grow without bound. Two SQL statements, nothing loaded
     // into Dart, so it does not delay the first frame meaningfully.

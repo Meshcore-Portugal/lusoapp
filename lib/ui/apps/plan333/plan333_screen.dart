@@ -48,12 +48,23 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _now = DateTime.now());
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncControllers());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _syncControllers(ref.read(plan333ConfigProvider)),
+    );
   }
 
-  /// Populate text-field controllers from stored config (runs once after build).
-  void _syncControllers() {
-    final cfg = ref.read(plan333ConfigProvider);
+  /// Populate the text-field controllers from [cfg].
+  ///
+  /// This screen can be built before the stored config has finished loading, in
+  /// which case the first sync sees the empty defaults. The [ref.listen] in
+  /// [build] calls this again when the real config arrives, so the fields fill
+  /// in rather than staying blank and being saved back over the stored values.
+  void _syncControllers(Plan333Config cfg) {
+    if (_nameCtrl.text == cfg.stationName &&
+        _cityCtrl.text == cfg.city &&
+        _localityCtrl.text == cfg.locality) {
+      return;
+    }
     _nameCtrl.text = cfg.stationName;
     _cityCtrl.text = cfg.city;
     _localityCtrl.text = cfg.locality;
@@ -82,6 +93,12 @@ class _Plan333ScreenState extends ConsumerState<Plan333Screen> {
 
   @override
   Widget build(BuildContext context) {
+    // Fill the fields once the stored config lands, unless the user is
+    // mid-edit — overwriting their typing would be worse than a late sync.
+    ref.listen<Plan333Config>(plan333ConfigProvider, (_, next) {
+      if (!_configDirty) _syncControllers(next);
+    });
+
     final config = ref.watch(plan333ConfigProvider);
     final autoState = ref.watch(plan333AutoSendProvider);
     final connState = ref.watch(connectionProvider);

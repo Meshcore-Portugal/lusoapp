@@ -87,7 +87,34 @@ class PacketPaths extends Table {
   IntColumn get recordedAt => integer()();
 }
 
-@DriftDatabase(tables: [Messages, ContactRows, PacketPaths])
+/// Small key/value settings that must survive app restarts.
+///
+/// SharedPreferences is a whole-file store: every write rewrites the file, and
+/// a write interrupted by a kill can lose unrelated keys along with it. That is
+/// what made Plan 3-3-3 config go missing between launches. These rows go
+/// through the same transactional SQLite database as messages and contacts, so
+/// a settings write is durable the moment it returns.
+@DataClassName('AppSettingRow')
+class AppSettings extends Table {
+  @override
+  String get tableName => 'app_settings';
+
+  /// Setting name. Reuses the old SharedPreferences key strings so the
+  /// one-time migration is a straight copy.
+  TextColumn get settingKey => text().named('key')();
+
+  /// Value, encoded as text. Non-string settings are stored as their JSON /
+  /// `toString()` form and parsed back by the typed accessors.
+  TextColumn get settingValue => text().named('value')();
+
+  /// Epoch milliseconds of the last write — diagnostics only.
+  IntColumn get updatedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {settingKey};
+}
+
+@DriftDatabase(tables: [Messages, ContactRows, PacketPaths, AppSettings])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
@@ -95,12 +122,19 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
+    },
+    onUpgrade: (m, from, to) async {
+      // v2 added `app_settings`, moving durable settings out of
+      // SharedPreferences. Existing installs only need the new table.
+      if (from < 2) {
+        await m.createTable(appSettings);
+      }
     },
   );
 
