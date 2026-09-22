@@ -30,6 +30,21 @@ class NotificationService {
   static const _plan333ChannelDesc =
       'Lembretes das janelas de escuta do Plano 3-3-3';
 
+  static const _meshRingChannelId = 'mesh_ring_alerts';
+  static const _meshRingChannelName = 'MeshRing';
+  static const _meshRingChannelDesc =
+      'Alertas sonoros para mensagens de contactos prioritarios';
+  // Long, distinct pattern (ms): wait, buzz, pause, buzz, pause, buzz —
+  // meant to stand out from the short default vibration of a normal message.
+  static final _meshRingVibrationPattern = Int64List.fromList([
+    0,
+    1000,
+    500,
+    1000,
+    500,
+    1000,
+  ]);
+
   // Notification IDs for Saturday Mesh 3-3-3 reminders.
   static const _plan333Remind10Id = 1008; // 10 min before (20:50)
   static const _plan333Remind5Id = 1009; //  5 min before (20:55)
@@ -51,6 +66,12 @@ class NotificationService {
   NotificationSettings _settings = const NotificationSettings();
 
   set settings(NotificationSettings s) => _settings = s;
+
+  /// MeshRing settings, loaded from storage and kept in sync by
+  /// [MeshRingSettingsNotifier].  Updated externally via [meshRingSettings].
+  MeshRingSettings _meshRingSettings = const MeshRingSettings();
+
+  set meshRingSettings(MeshRingSettings s) => _meshRingSettings = s;
 
   /// Initialise the plugin.  Must be called once, before any `show*` call.
   Future<void> init() async {
@@ -131,6 +152,23 @@ class NotificationService {
           description: _plan333ChannelDesc,
           importance: Importance.high,
           playSound: true,
+        ),
+      );
+      // MeshRing: max importance + the device's default ringtone (instead of
+      // the default notification sound) + a longer vibration pattern, so a
+      // priority contact's message stands out from the rest.
+      await android?.createNotificationChannel(
+        AndroidNotificationChannel(
+          _meshRingChannelId,
+          _meshRingChannelName,
+          description: _meshRingChannelDesc,
+          importance: Importance.max,
+          playSound: true,
+          sound: const UriAndroidNotificationSound(
+            'content://settings/system/ringtone',
+          ),
+          enableVibration: true,
+          vibrationPattern: _meshRingVibrationPattern,
         ),
       );
     }
@@ -536,25 +574,63 @@ class NotificationService {
     required String title,
     required String body,
     String? payload,
+    String androidChannelId = _androidChannelId,
+    String androidChannelName = _androidChannelName,
+    String androidChannelDesc = _androidChannelDesc,
+    Importance androidImportance = Importance.high,
+    Int64List? vibrationPattern,
   }) async {
-    const androidDetails = AndroidNotificationDetails(
-      _androidChannelId,
-      _androidChannelName,
-      channelDescription: _androidChannelDesc,
-      importance: Importance.high,
+    final androidDetails = AndroidNotificationDetails(
+      androidChannelId,
+      androidChannelName,
+      channelDescription: androidChannelDesc,
+      importance: androidImportance,
       priority: Priority.high,
+      enableVibration: vibrationPattern != null,
+      vibrationPattern: vibrationPattern,
     );
     const iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentSound: true,
     );
-    const details = NotificationDetails(
+    final details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
       macOS: iosDetails,
     );
 
     await _plugin.show(_nextId++, title, body, details, payload: payload);
+  }
+
+  /// Show the escalated "MeshRing" alert for a message from a priority
+  /// contact — a louder/longer alternative to [showPrivateMessage], fired
+  /// instead of it (not in addition) when the ring conditions in
+  /// [ConnectionNotifier] decide this message should ring.
+  ///
+  /// Always requires the app to be backgrounded, per the feature request:
+  /// this should never interrupt an already-open conversation with the same
+  /// contact, unlike the general "only when background" setting which is
+  /// user-configurable for normal notifications.
+  Future<void> showMeshRingAlert({
+    required String senderName,
+    required String text,
+    String? senderKeyHex,
+    bool isAppInForeground = false,
+  }) async {
+    if (!_initialized || kIsWeb) return;
+    if (!_meshRingSettings.enabled) return;
+    if (isAppInForeground) return;
+
+    await _show(
+      title: '📞 $senderName',
+      body: text.isNotEmpty ? text : '(mensagem recebida)',
+      payload: senderKeyHex != null ? 'private:$senderKeyHex' : null,
+      androidChannelId: _meshRingChannelId,
+      androidChannelName: _meshRingChannelName,
+      androidChannelDesc: _meshRingChannelDesc,
+      androidImportance: Importance.max,
+      vibrationPattern: _meshRingVibrationPattern,
+    );
   }
 }
 

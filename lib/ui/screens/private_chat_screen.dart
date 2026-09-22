@@ -101,6 +101,34 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     _scrollToBottom();
   }
 
+  /// MeshRing (issue #58) "call" button. Sends the recognizable
+  /// [kMeshRingCallMagic] payload as a plain private message — same wire
+  /// format as any other text message, no new protocol framing — so the
+  /// recipient's app can force a re-ring alert if they've marked us as a
+  /// priority contact (subject to their own cooldown; see
+  /// [ConnectionNotifier]'s MeshRing handling).
+  void _sendMeshRingCall() {
+    final service = ref.read(radioServiceProvider);
+    if (service == null) return;
+
+    final keyPrefix =
+        _contactKey.length >= 6 ? _contactKey.sublist(0, 6) : _contactKey;
+
+    ref
+        .read(messagesProvider.notifier)
+        .addOutgoing(
+          ChatMessage(
+            text: kMeshRingCallMagic,
+            timestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            isOutgoing: true,
+            senderKey: _contactKey,
+          ),
+        );
+
+    service.sendPrivateMessage(keyPrefix, kMeshRingCallMagic);
+    _scrollToBottom();
+  }
+
   /// Retries a failed message, automatically switching to flood routing by
   /// delegating delivery policy to the notifier.
   Future<void> _retryMessageAsync(ChatMessage msg) async {
@@ -415,6 +443,10 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
               _replyingTo != null
                   ? () => setState(() => _replyingTo = null)
                   : null,
+          onCall:
+              ref.watch(radioServiceProvider) != null
+                  ? _sendMeshRingCall
+                  : null,
         ),
       ],
     );
@@ -709,6 +741,7 @@ class _ChatInputBar extends StatelessWidget {
     this.hintText = 'Escreva uma mensagem...',
     this.replyTo,
     this.onCancelReply,
+    this.onCall,
   });
 
   final TextEditingController controller;
@@ -716,6 +749,11 @@ class _ChatInputBar extends StatelessWidget {
   final String hintText;
   final ChatMessage? replyTo;
   final VoidCallback? onCancelReply;
+
+  /// MeshRing (issue #58) "call" button — sends [kMeshRingCallMagic] to force
+  /// a re-ring alert on the recipient's side, if they've marked us priority.
+  /// Null hides the button (e.g. while the radio isn't connected).
+  final VoidCallback? onCall;
 
   @override
   Widget build(BuildContext context) {
@@ -776,6 +814,12 @@ class _ChatInputBar extends StatelessWidget {
                     );
                   },
                 ),
+                if (onCall != null)
+                  IconButton(
+                    tooltip: context.l10n.chatMeshRingCallButtonTooltip,
+                    onPressed: onCall,
+                    icon: const Icon(Icons.phone_in_talk),
+                  ),
                 IconButton.filled(
                   onPressed: onSend,
                   icon: const Icon(Icons.send),

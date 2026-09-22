@@ -663,6 +663,156 @@ final unreadCountsProvider =
     );
 
 // ---------------------------------------------------------------------------
+// MeshRing — priority contacts (local-only, radio-scoped, issue #58)
+// ---------------------------------------------------------------------------
+
+/// Set of 6-byte sender-key hex prefixes marked as "MeshRing priority" by the
+/// user. Local-only: never pushed to the radio's `flags` byte, so it survives
+/// independently of [ContactsNotifier.refresh] overwriting contact flags from
+/// the radio on every reconnect. Scoped per radio device, same as
+/// [BlockedSendersNotifier]/[MutedChannelsNotifier].
+class PriorityContactsNotifier extends StateNotifier<Set<String>> {
+  PriorityContactsNotifier() : super(const {});
+
+  static const _prefsKeyPrefix = 'mesh_ring_priority_';
+  String? _activeDeviceId;
+
+  Future<void> loadForRadio(String deviceId) async {
+    _activeDeviceId = deviceId;
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList('$_prefsKeyPrefix$deviceId') ?? [];
+    state = raw.toSet();
+  }
+
+  void _clearForDisconnect() {
+    _activeDeviceId = null;
+    state = const {};
+  }
+
+  bool isPriority(String hex6) => state.contains(hex6);
+
+  Future<void> toggle(String hex6) async {
+    final next = Set<String>.from(state);
+    if (!next.remove(hex6)) next.add(hex6);
+    state = next;
+    await _save();
+  }
+
+  Future<void> _save() async {
+    if (_activeDeviceId == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      '$_prefsKeyPrefix$_activeDeviceId',
+      state.toList(),
+    );
+  }
+}
+
+final priorityContactsProvider =
+    StateNotifierProvider<PriorityContactsNotifier, Set<String>>(
+      (ref) => PriorityContactsNotifier(),
+    );
+
+/// Tracks the last time a MeshRing alert actually fired for each contact, so
+/// the "ring again after X minutes" cooldown survives app restarts.
+/// Keyed by 6-byte sender-key hex prefix, global (not radio-scoped) —
+/// mirrors [UnreadCountsNotifier]'s persistence style.
+class MeshRingCooldownNotifier extends StateNotifier<Map<String, int>> {
+  MeshRingCooldownNotifier() : super(const {});
+
+  static const _key = 'mesh_ring_last_rung_v1';
+
+  Future<void> loadFromStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_key);
+    final next = <String, int>{};
+    if (raw != null) {
+      for (final part in raw.split(',')) {
+        final kv = part.split(':');
+        if (kv.length == 2 && kv[0].isNotEmpty) {
+          final v = int.tryParse(kv[1]);
+          if (v != null) next[kv[0]] = v;
+        }
+      }
+    }
+    state = next;
+  }
+
+  Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _key,
+      state.entries.map((e) => '${e.key}:${e.value}').join(','),
+    );
+  }
+
+  int? lastRingEpochFor(String hex6) => state[hex6];
+
+  Future<void> markRung(String hex6) async {
+    final next = Map<String, int>.from(state);
+    next[hex6] = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    state = next;
+    await _save();
+  }
+}
+
+final meshRingCooldownProvider =
+    StateNotifierProvider<MeshRingCooldownNotifier, Map<String, int>>(
+      (ref) => MeshRingCooldownNotifier(),
+    );
+
+/// Pure decision function for whether an incoming private message from a
+/// MeshRing priority contact should trigger the escalated ring alert
+/// (issue #58). Extracted from [ConnectionNotifier] so the three documented
+/// behaviors can be unit-tested without a full radio/provider setup:
+///
+/// - First unread message from the contact (`!hadUnreadBefore`) → rings.
+/// - Otherwise, rings again once [minIntervalMinutes] have passed since
+///   [lastRingEpoch] (`null` means "never rung" — treated as elapsed).
+/// - An explicit "call" message ([isCallMessage]) ignores [hadUnreadBefore]
+///   entirely and forces a re-check against the same cooldown, so it can
+///   nudge a contact who already has unread messages — but it cannot bypass
+///   the cooldown itself, which is what keeps the button from being spammed.
+bool meshRingShouldRing({
+  required bool isCallMessage,
+  required bool hadUnreadBefore,
+  required int? lastRingEpoch,
+  required int nowEpoch,
+  required int minIntervalMinutes,
+}) {
+  final cooldownElapsed =
+      lastRingEpoch == null ||
+      (nowEpoch - lastRingEpoch) >= minIntervalMinutes * 60;
+  if (isCallMessage) return cooldownElapsed;
+  return !hadUnreadBefore || cooldownElapsed;
+}
+
+// ---------------------------------------------------------------------------
+// MeshRing settings
+// ---------------------------------------------------------------------------
+
+class MeshRingSettingsNotifier extends StateNotifier<MeshRingSettings> {
+  MeshRingSettingsNotifier() : super(const MeshRingSettings());
+
+  Future<void> loadFromStorage() async {
+    final s = await StorageService.instance.loadMeshRingSettings();
+    state = s;
+    NotificationService.instance.meshRingSettings = s;
+  }
+
+  void update(MeshRingSettings settings) {
+    state = settings;
+    NotificationService.instance.meshRingSettings = settings;
+    StorageService.instance.saveMeshRingSettings(settings);
+  }
+}
+
+final meshRingSettingsProvider =
+    StateNotifierProvider<MeshRingSettingsNotifier, MeshRingSettings>(
+      (ref) => MeshRingSettingsNotifier(),
+    );
+
+// ---------------------------------------------------------------------------
 // Notification settings
 // ---------------------------------------------------------------------------
 

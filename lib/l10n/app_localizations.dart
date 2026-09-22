@@ -1282,6 +1282,36 @@ abstract class AppLocalizations {
   /// **'Só notificar quando a app não está em primeiro plano'**
   String get settingsBackgroundOnlyDesc;
 
+  /// No description provided for @settingsMeshRing.
+  ///
+  /// In pt, this message translates to:
+  /// **'MeshRing'**
+  String get settingsMeshRing;
+
+  /// No description provided for @settingsMeshRingEnable.
+  ///
+  /// In pt, this message translates to:
+  /// **'Activar alertas MeshRing'**
+  String get settingsMeshRingEnable;
+
+  /// No description provided for @settingsMeshRingEnableDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Toca um alerta sonoro mais audível para mensagens de contactos prioritários (marca contactos como prioritários no ecrã de contactos)'**
+  String get settingsMeshRingEnableDesc;
+
+  /// No description provided for @settingsMeshRingInterval.
+  ///
+  /// In pt, this message translates to:
+  /// **'Intervalo mínimo entre toques'**
+  String get settingsMeshRingInterval;
+
+  /// No description provided for @settingsMeshRingIntervalDesc.
+  ///
+  /// In pt, this message translates to:
+  /// **'Tempo mínimo, em minutos, antes de voltar a tocar para o mesmo contacto'**
+  String get settingsMeshRingIntervalDesc;
+
   /// No description provided for @settingsSosDesc.
   ///
   /// In pt, this message translates to:
@@ -2985,6 +3015,12 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'!ping'**
   String get chatPingButton;
+
+  /// No description provided for @chatMeshRingCallButtonTooltip.
+  ///
+  /// In pt, this message translates to:
+  /// **'Chamar (MeshRing)'**
+  String get chatMeshRingCallButtonTooltip;
 
   /// No description provided for @chatViewResultOnline.
   ///

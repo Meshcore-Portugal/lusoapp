@@ -26,6 +26,7 @@ part 'parts/settings_canned_messages.dart';
 part 'parts/settings_sos.dart';
 part 'parts/settings_gps_sharing.dart';
 part 'parts/settings_notifications.dart';
+part 'parts/settings_meshring.dart';
 part 'parts/settings_keybackup.dart';
 part 'parts/settings_prune_config.dart';
 
@@ -312,6 +313,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
           // Notifications
           const _NotificationsCard(),
+          const SizedBox(height: 16),
+
+          // MeshRing (issue #58) — priority-contact alerts
+          const _MeshRingCard(),
           const SizedBox(height: 16),
 
           // Appearance

@@ -205,6 +205,9 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         await _ref.read(mutedChannelsProvider.notifier).loadForRadio(deviceId);
         await _ref.read(blockedSendersProvider.notifier).loadForRadio(deviceId);
         await _ref.read(advertAutoAddProvider.notifier).loadForRadio(deviceId);
+        await _ref
+            .read(priorityContactsProvider.notifier)
+            .loadForRadio(deviceId);
         _ref.read(knownRegionsProvider.notifier).state = await StorageService
             .instance
             .loadKnownRegionsForRadio(deviceId);
@@ -321,6 +324,9 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         await _ref.read(mutedChannelsProvider.notifier).loadForRadio(deviceId);
         await _ref.read(blockedSendersProvider.notifier).loadForRadio(deviceId);
         await _ref.read(advertAutoAddProvider.notifier).loadForRadio(deviceId);
+        await _ref
+            .read(priorityContactsProvider.notifier)
+            .loadForRadio(deviceId);
         _ref.read(knownRegionsProvider.notifier).state = await StorageService
             .instance
             .loadKnownRegionsForRadio(deviceId);
@@ -456,6 +462,9 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
         await _ref.read(mutedChannelsProvider.notifier).loadForRadio(deviceId);
         await _ref.read(blockedSendersProvider.notifier).loadForRadio(deviceId);
         await _ref.read(advertAutoAddProvider.notifier).loadForRadio(deviceId);
+        await _ref
+            .read(priorityContactsProvider.notifier)
+            .loadForRadio(deviceId);
         _ref.read(knownRegionsProvider.notifier).state = await StorageService
             .instance
             .loadKnownRegionsForRadio(deviceId);
@@ -854,13 +863,19 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
           }
           // Unread badge + notification only for real chat messages.
           if (!message.isOutgoing && !message.isCliResponse) {
-            if (message.senderKey != null) {
-              _ref
-                  .read(unreadCountsProvider.notifier)
-                  .incrementContact(_hex6(message.senderKey!));
-            }
             final senderHex6 =
                 message.senderKey != null ? _hex6(message.senderKey!) : null;
+            // Snapshot the unread state *before* incrementing, so MeshRing
+            // can tell whether this is the first unread message from this
+            // contact (see the ring-decision logic below).
+            final hadUnreadBefore =
+                senderHex6 != null &&
+                _ref.read(unreadCountsProvider).forContact(senderHex6) > 0;
+            if (senderHex6 != null) {
+              _ref
+                  .read(unreadCountsProvider.notifier)
+                  .incrementContact(senderHex6);
+            }
             // O(1) lookup via the internal index instead of O(n) list scan.
             final contact =
                 senderHex6 != null
@@ -869,12 +884,52 @@ class ConnectionNotifier extends StateNotifier<TransportState> {
                         .lookupByHex6(senderHex6)
                     : null;
             final senderName = contact?.name ?? senderHex6 ?? 'Desconhecido';
-            NotificationService.instance.showPrivateMessage(
-              senderName: senderName,
-              text: message.text,
-              senderKeyHex: senderHex6,
-              isAppInForeground: AppLifecycleObserver.isInForeground,
-            );
+
+            // MeshRing (issue #58): for contacts marked "priority", escalate
+            // to a louder/longer alert instead of the normal notification,
+            // when: this is the first unread message from them, the cooldown
+            // (minIntervalMinutes) since the last ring has elapsed, or the
+            // sender explicitly sent the "call" magic string (still subject
+            // to the same cooldown, to prevent abuse).
+            var meshRingHandled = false;
+            if (senderHex6 != null && !AppLifecycleObserver.isInForeground) {
+              final meshRingSettings = _ref.read(meshRingSettingsProvider);
+              final isPriority = _ref
+                  .read(priorityContactsProvider)
+                  .contains(senderHex6);
+              if (meshRingSettings.enabled && isPriority) {
+                final lastRung = _ref
+                    .read(meshRingCooldownProvider.notifier)
+                    .lastRingEpochFor(senderHex6);
+                final shouldRing = meshRingShouldRing(
+                  isCallMessage: message.text.trim() == kMeshRingCallMagic,
+                  hadUnreadBefore: hadUnreadBefore,
+                  lastRingEpoch: lastRung,
+                  nowEpoch: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+                  minIntervalMinutes: meshRingSettings.minIntervalMinutes,
+                );
+                if (shouldRing) {
+                  NotificationService.instance.showMeshRingAlert(
+                    senderName: senderName,
+                    text: message.text,
+                    senderKeyHex: senderHex6,
+                    isAppInForeground: AppLifecycleObserver.isInForeground,
+                  );
+                  _ref
+                      .read(meshRingCooldownProvider.notifier)
+                      .markRung(senderHex6);
+                  meshRingHandled = true;
+                }
+              }
+            }
+            if (!meshRingHandled) {
+              NotificationService.instance.showPrivateMessage(
+                senderName: senderName,
+                text: message.text,
+                senderKeyHex: senderHex6,
+                isAppInForeground: AppLifecycleObserver.isInForeground,
+              );
+            }
           }
         case ChannelMessageResponse(:final message):
           // Channel messages arrive via CMD_SYNC_NEXT_MESSAGE.

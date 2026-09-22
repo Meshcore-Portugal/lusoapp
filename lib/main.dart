@@ -162,6 +162,10 @@ class _McAppPtState extends ConsumerState<McAppPt> {
     // Restore persisted unread counts so badges survive app restarts.
     await ref.read(unreadCountsProvider.notifier).loadFromStorage();
 
+    // Restore MeshRing cooldown timestamps (issue #58) so the "ring again
+    // after X minutes" rule survives app restarts.
+    await ref.read(meshRingCooldownProvider.notifier).loadFromStorage();
+
     // Restore persisted message paths so path details are available after reboot.
     await ref.read(packetHeardProvider.notifier).loadFromStorage();
 
@@ -218,6 +222,7 @@ class _McAppPtState extends ConsumerState<McAppPt> {
 
     if (mounted) {
       await ref.read(notificationSettingsProvider.notifier).loadFromStorage();
+      await ref.read(meshRingSettingsProvider.notifier).loadFromStorage();
       await ref.read(plan333EnabledProvider.notifier).loadFromStorage();
       await ref.read(plan333ConfigProvider.notifier).loadFromStorage();
       await ref.read(qslLogProvider.notifier).loadFromStorage();

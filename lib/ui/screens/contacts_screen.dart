@@ -1130,6 +1130,18 @@ class _ContactTile extends ConsumerWidget {
     unawaited(service.addUpdateContact(updated).catchError((_) {}));
   }
 
+  /// Toggle the MeshRing "priority contact" marker (issue #58). Unlike
+  /// favourite/private-location, this is local-only state — never pushed to
+  /// the radio's `flags` byte, see [priorityContactsProvider].
+  void _toggleMeshRingPriority(WidgetRef ref) {
+    final hex6 =
+        contact.publicKey
+            .take(6)
+            .map((b) => b.toRadixString(16).padLeft(2, '0'))
+            .join();
+    ref.read(priorityContactsProvider.notifier).toggle(hex6);
+  }
+
   int _setTelemetryModeField(int current, int shift, int mode) {
     final mask = 0x03 << shift;
     return (current & ~mask) | ((mode & 0x03) << shift);
@@ -1283,6 +1295,13 @@ class _ContactTile extends ConsumerWidget {
   ) {
     final theme = Theme.of(context);
 
+    final hex6 =
+        contact.publicKey
+            .take(6)
+            .map((b) => b.toRadixString(16).padLeft(2, '0'))
+            .join();
+    final isPriority = ref.read(priorityContactsProvider).contains(hex6);
+
     // A contact is "on radio" when the radio's contact table holds it. Once a
     // full sync has completed the caller knows this ([storageKnown]); before
     // that, fall back to the service's last received contact list.
@@ -1400,6 +1419,28 @@ class _ContactTile extends ConsumerWidget {
                     onTap: () {
                       Navigator.pop(ctx);
                       _toggleFavorite(ref);
+                    },
+                  ),
+                  // MeshRing priority contact (issue #58) — local-only, never
+                  // pushed to the radio.
+                  ListTile(
+                    leading: Icon(
+                      isPriority
+                          ? Icons.notifications_active
+                          : Icons.notifications_none,
+                      color: isPriority ? Colors.redAccent : null,
+                    ),
+                    title: Text(
+                      isPriority
+                          ? 'Remover MeshRing prioritario'
+                          : 'Marcar como MeshRing prioritario',
+                    ),
+                    subtitle: const Text(
+                      'Mensagens deste contacto tocam um alerta sonoro mais audivel quando a app esta em segundo plano.',
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _toggleMeshRingPriority(ref);
                     },
                   ),
                   ListTile(

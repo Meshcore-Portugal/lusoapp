@@ -46,6 +46,13 @@ String _san(String s) {
 
 String? _sanOpt(String? s) => s == null ? null : _san(s);
 
+/// MeshRing (issue #58) "call" magic string. Sent as a plain private text
+/// message — like the existing `!ping` channel convention, it carries no
+/// special protocol framing — but recognized on receipt to force a re-ring
+/// alert for contacts the *receiver* has marked as priority, even while
+/// unread messages from them already exist.
+const String kMeshRingCallMagic = '📞';
+
 /// Derives the 16-byte hashtag channel key used by MeshCore firmware.
 /// Key = first 16 bytes of SHA-256("#name"), where [name] gets a '#' prefix
 /// if it does not already start with one.

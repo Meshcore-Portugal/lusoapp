@@ -561,6 +561,33 @@ class StorageService {
   }
 
   // ---------------------------------------------------------------------------
+  // MeshRing settings (issue #58)
+  // ---------------------------------------------------------------------------
+
+  static const _keyMeshRingSettings = 'mesh_ring_settings_v1';
+
+  Future<void> saveMeshRingSettings(MeshRingSettings settings) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _keyMeshRingSettings,
+        jsonEncode(settings.toJson()),
+      );
+    } catch (_) {}
+  }
+
+  Future<MeshRingSettings> loadMeshRingSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_keyMeshRingSettings);
+      if (raw == null) return const MeshRingSettings();
+      return MeshRingSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      return const MeshRingSettings();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Plan 3-3-3 settings + QSL log
   //
   // These live in the database, not SharedPreferences. Users reported their
@@ -1089,6 +1116,41 @@ class NotificationSettings {
     'channel_messages': channelMessages,
     'only_when_background': onlyWhenBackground,
     'channel_mentions_only': channelMentionsOnly,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// MeshRing settings model (issue #58)
+// ---------------------------------------------------------------------------
+
+/// User-configurable MeshRing ("priority contact ringtone") preferences.
+/// Membership (which contacts are priority) is stored separately, in
+/// [PriorityContactsNotifier] — this model only holds the on/off switch and
+/// the cooldown interval.
+class MeshRingSettings {
+  factory MeshRingSettings.fromJson(Map<String, dynamic> json) =>
+      MeshRingSettings(
+        enabled: (json['enabled'] as bool?) ?? false,
+        minIntervalMinutes: (json['min_interval_minutes'] as int?) ?? 5,
+      );
+  const MeshRingSettings({this.enabled = false, this.minIntervalMinutes = 5});
+
+  /// Master switch — off by default, opt-in.
+  final bool enabled;
+
+  /// Minimum minutes between two MeshRing alerts for the same contact.
+  final int minIntervalMinutes;
+
+  MeshRingSettings copyWith({bool? enabled, int? minIntervalMinutes}) {
+    return MeshRingSettings(
+      enabled: enabled ?? this.enabled,
+      minIntervalMinutes: minIntervalMinutes ?? this.minIntervalMinutes,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'enabled': enabled,
+    'min_interval_minutes': minIntervalMinutes,
   };
 }
 

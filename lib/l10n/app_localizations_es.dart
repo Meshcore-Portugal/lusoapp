@@ -644,6 +644,23 @@ class AppLocalizationsEs extends AppLocalizations {
       'Notificar solo cuando la app no esté en primer plano';
 
   @override
+  String get settingsMeshRing => 'MeshRing';
+
+  @override
+  String get settingsMeshRingEnable => 'Activar alertas MeshRing';
+
+  @override
+  String get settingsMeshRingEnableDesc =>
+      'Reproduce una alerta más audible para mensajes de contactos prioritarios (marca contactos como prioritarios en la pantalla de contactos)';
+
+  @override
+  String get settingsMeshRingInterval => 'Intervalo mínimo entre avisos';
+
+  @override
+  String get settingsMeshRingIntervalDesc =>
+      'Tiempo mínimo, en minutos, antes de volver a avisar para el mismo contacto';
+
+  @override
   String settingsSosDesc(Object gps) {
     return 'Configura el destino y el mensaje de emergencia. Usa \'$gps\' en el texto para insertar coordenadas.';
   }
@@ -1549,6 +1566,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get chatPingButton => '!ping';
+
+  @override
+  String get chatMeshRingCallButtonTooltip => 'Llamar (MeshRing)';
 
   @override
   String get chatViewResultOnline => 'ver resultado online';
